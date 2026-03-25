@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "EPANET SWMM5 Generator"
+version = "1.0.0"
+id = "artifacts/epanet-swmm-generator"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19037
+
+[services.development]
+run = "pnpm --filter @workspace/epanet-swmm-generator run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/epanet-swmm-generator", "run", "build" ]
+publicDir = "artifacts/epanet-swmm-generator/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19037"
+BASE_PATH = "/"

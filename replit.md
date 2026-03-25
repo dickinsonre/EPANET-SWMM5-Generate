@@ -91,6 +91,22 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
+### `artifacts/epanet-swmm-generator`
+
+Self-contained EPANET 2.3 & SWMM 5.2.4 Network Generator web application. Generates hydraulically valid water distribution and stormwater network models with interactive canvas city map visualization. The app is a single `index.html` file (4910 lines of vanilla JS/CSS/HTML) served by Vite dev server. No React components or backend needed — all logic runs client-side.
+
+Key features:
+- EPANET 2.3 / SWMM 5.2.4 mode toggle
+- US Customary / SI Metric units
+- Quick presets (Tiny 50 → City 100K nodes)
+- Interactive canvas city map with terrain, streets, zones, parks
+- INP file generation and download
+- DEM and GeoJSON export
+- Config save/load (JSON)
+- WASM solver engine integration (EPANET/SWMM)
+- Multiple tabs: Map, Stats, INP, Docs, HGL, RPT, Results
+- Results visualization with time slider animation
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
