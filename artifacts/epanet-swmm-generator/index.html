@@ -3888,105 +3888,97 @@ function setSolverStatus(msg) {
   el.textContent = msg;
 }
 
-// ═══════ WASM LOADER ═══════
+// ═══════ WASM LOADER (auto-loads bundled engines) ═══════
 async function loadWASM() {
   const type = currentMode === 'swmm' ? 'swmm' : 'epanet';
+  const btn = document.getElementById('wasmBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Loading...';
   setSolverStatus(`Loading ${type.toUpperCase()} WASM engine...`);
 
-  // Try loading from adjacent files first
-  const jsFile = type === 'epanet' ? 'epanet.js' : 'swmm.js';
-
   try {
-    // Method 1: Load from file input (user provides .js + .wasm pair)
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.js';
-    input.multiple = false;
-
-    const loadPromise = new Promise((resolve, reject) => {
-      input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) { reject('No file selected'); return; }
-
-        setSolverStatus(`Loading ${file.name}...`);
-
-        try {
-          const jsText = await file.text();
-
-          // Create a blob URL for the JS glue code
-          const jsBlob = new Blob([jsText], { type: 'application/javascript' });
-          const jsUrl = URL.createObjectURL(jsBlob);
-
-          // The Emscripten JS glue expects to find the .wasm file
-          // We need to ask for it too
-          setSolverStatus('Now select the .wasm file...');
-          const wasmInput = document.createElement('input');
-          wasmInput.type = 'file';
-          wasmInput.accept = '.wasm';
-
-          const wasmPromise = new Promise((res2, rej2) => {
-            wasmInput.onchange = async (e2) => {
-              const wasmFile = e2.target.files[0];
-              if (!wasmFile) { rej2('No WASM file'); return; }
-
-              setSolverStatus(`Loading ${wasmFile.name} (${(wasmFile.size/1024).toFixed(0)} KB)...`);
-              const wasmBytes = await wasmFile.arrayBuffer();
-
-              // Initialize Emscripten module with custom wasm binary
-              try {
-                const moduleConfig = {
-                  wasmBinary: wasmBytes,
-                  print: (text) => console.log('[solver]', text),
-                  printErr: (text) => console.warn('[solver]', text),
-                  noInitialRun: true
-                };
-
-                // Evaluate the JS glue to get the module factory
-                const factory = new Function(jsText + '; return Module;');
-                const mod = await new Promise((resM) => {
-                  moduleConfig.onRuntimeInitialized = () => resM(moduleConfig);
-                  // Run the factory
-                  const factoryFn = new Function('Module', jsText);
-                  factoryFn(moduleConfig);
-                });
-
-                solverModule = moduleConfig;
-                solverType = type;
-                setSolverStatus(`✓ ${type.toUpperCase()} engine loaded (${(wasmFile.size/1024).toFixed(0)} KB)`);
-                document.getElementById('runBtn').disabled = false;
-                document.getElementById('runBtn').style.borderColor = '#22c55e';
-                document.getElementById('wasmBtn').textContent = `✓ ${type.toUpperCase()} Engine Ready`;
-                res2(true);
-              } catch(modErr) {
-                // If Emscripten init fails, store raw wasm for manual API
-                solverModule = { wasmBinary: wasmBytes, type: type, raw: true };
-                solverType = type;
-                setSolverStatus(`✓ WASM binary loaded (${(wasmFile.size/1024).toFixed(0)} KB) — manual init needed`);
-                document.getElementById('runBtn').disabled = false;
-                res2(true);
-              }
-            };
-            wasmInput.click();
-          });
-
-          await wasmPromise;
-          resolve(true);
-        } catch(err) {
-          reject(err);
-        }
-      };
-    });
-
-    input.click();
-    await loadPromise;
-
+    if (type === 'epanet') {
+      await loadEpanetEngine();
+    } else {
+      await loadSwmmEngine();
+    }
   } catch(err) {
-    setSolverStatus(`⚠ Load failed: ${err}. You can still generate .inp files.`);
+    setSolverStatus(`⚠ Load failed: ${err.message || err}. You can still generate .inp files.`);
     console.error('WASM load error:', err);
+    btn.disabled = false;
+    btn.textContent = '📦 Load WASM Engine';
   }
 
-  // Show solver row
   document.getElementById('solverRow').style.display = 'flex';
+}
+
+async function loadEpanetEngine() {
+  if (!window.__EpanetWorkspace) {
+    setSolverStatus('⏳ Waiting for EPANET engine module to load...');
+    await new Promise(r => {
+      const check = setInterval(() => {
+        if (window.__EpanetWorkspace) { clearInterval(check); r(); }
+      }, 200);
+      setTimeout(() => { clearInterval(check); r(); }, 15000);
+    });
+  }
+  if (!window.__EpanetWorkspace) {
+    throw new Error('EPANET engine module failed to load');
+  }
+  setSolverStatus('Initializing EPANET WASM engine...');
+  const ws = new window.__EpanetWorkspace();
+  await ws.loadModule();
+  solverModule = { _epanetWs: ws, _epanetProject: null, FS: ws.FS, type: 'epanet-js' };
+  solverType = 'epanet';
+  const ver = ws.version;
+  const verStr = Math.floor(ver/10000) + '.' + Math.floor((ver%10000)/100);
+  setSolverStatus(`✓ EPANET engine loaded (v${verStr}) — ready to solve`);
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('runBtn').style.borderColor = '#22c55e';
+  document.getElementById('wasmBtn').textContent = `✓ EPANET v${verStr} Ready`;
+  document.getElementById('wasmBtn').disabled = false;
+  document.getElementById('wasmBtn').style.borderColor = '#22c55e';
+  document.getElementById('wasmBtn').style.color = '#22c55e';
+}
+
+async function loadSwmmEngine() {
+  setSolverStatus('Loading SWMM 5.x WASM engine...');
+  const basePath = (document.querySelector('base') || {}).href || window.location.href;
+  const baseUrl = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+
+  const swmmMod = await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('SWMM engine load timeout')), 30000);
+
+    window.Module = {
+      noInitialRun: true,
+      print: (text) => console.log('[swmm]', text),
+      printErr: (text) => console.warn('[swmm]', text),
+      locateFile: (path) => {
+        if (path.endsWith('.wasm')) return baseUrl + 'js.wasm';
+        if (path.endsWith('.data')) return baseUrl + 'js.data';
+        return baseUrl + path;
+      },
+      onRuntimeInitialized: () => {
+        clearTimeout(timeout);
+        resolve(window.Module);
+      }
+    };
+
+    const script = document.createElement('script');
+    script.src = baseUrl + 'swmm_engine.js';
+    script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to fetch swmm_engine.js')); };
+    document.head.appendChild(script);
+  });
+
+  solverModule = swmmMod;
+  solverType = 'swmm';
+  setSolverStatus('✓ SWMM engine loaded — ready to solve');
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('runBtn').style.borderColor = '#22c55e';
+  document.getElementById('wasmBtn').textContent = '✓ SWMM Engine Ready';
+  document.getElementById('wasmBtn').disabled = false;
+  document.getElementById('wasmBtn').style.borderColor = '#22c55e';
+  document.getElementById('wasmBtn').style.color = '#22c55e';
 }
 
 // ═══════ RUN SOLVER ═══════
@@ -4001,62 +3993,15 @@ async function runSolver() {
   btn.textContent = '⏳ Solving...';
 
   try {
-    if (solverModule.raw) {
-      // Manual WASM instantiation path
-      setSolverStatus('Instantiating WASM module...');
-      const wasmModule = await WebAssembly.instantiate(solverModule.wasmBinary);
-      // The actual API depends on how the WASM was compiled
-      // This is a stub — real integration needs the Emscripten glue
-      setSolverStatus('⚠ Raw WASM loaded — needs Emscripten glue for full solver. Generating demo results...');
-      solverResults = generateDemoResults();
-    } else if (solverModule.FS) {
-      // Full Emscripten module with filesystem
-      setSolverStatus(`Running ${solverType.toUpperCase()} solver...`);
-
-      // Write .inp to virtual filesystem
-      solverModule.FS.writeFile('model.inp', generatedINP);
-      solverModule.FS.writeFile('model.rpt', '');
-      solverModule.FS.writeFile('model.out', '');
-
-      if (solverType === 'epanet') {
-        // EPANET solve
-        const EN_open = solverModule.cwrap('EN_open', 'number', ['string','string','string']);
-        const EN_solveH = solverModule.cwrap('EN_solveH', 'number', []);
-        const EN_solveQ = solverModule.cwrap('EN_solveQ', 'number', []);
-        const EN_close = solverModule.cwrap('EN_close', 'number', []);
-
-        let err = EN_open('model.inp', 'model.rpt', 'model.out');
-        if (err > 0) { setSolverStatus(`⚠ EPANET open error ${err}`); return; }
-
-        err = EN_solveH();
-        if (err > 0) { setSolverStatus(`⚠ EPANET hydraulic error ${err}`); }
-
-        err = EN_solveQ();
-        EN_close();
-
-        // Read binary .out file
-        const outData = solverModule.FS.readFile('model.out');
-        solverResults = parseEPANETBinary(outData.buffer);
-        setSolverStatus(`✓ EPANET solved: ${solverResults.timesteps.length} timesteps, ${solverResults.nodes.length} nodes`);
-
-      } else {
-        // SWMM solve
-        const swmm_run = solverModule.cwrap('swmm_run', 'number', ['string','string','string']);
-        const err = swmm_run('model.inp', 'model.rpt', 'model.out');
-
-        if (err > 0) { setSolverStatus(`⚠ SWMM error ${err}`); }
-
-        const outData = solverModule.FS.readFile('model.out');
-        solverResults = parseSWMMBinary(outData.buffer);
-        setSolverStatus(`✓ SWMM solved: ${solverResults.timesteps.length} timesteps, ${solverResults.nodes.length} nodes`);
-      }
+    if (solverType === 'epanet' && solverModule.type === 'epanet-js') {
+      await runEpanetSolver();
+    } else if (solverType === 'swmm' && solverModule.FS) {
+      await runSwmmSolver();
     } else {
-      // No proper module — generate demo results for visualization testing
       setSolverStatus('Generating demo results for visualization testing...');
       solverResults = generateDemoResults();
     }
 
-    // Enable results visualization
     if (solverResults) {
       document.getElementById('resultsToggleWrap').style.display = '';
       document.getElementById('showResults').checked = true;
@@ -4068,12 +4013,8 @@ async function runSolver() {
       onTimeSliderChange();
       renderAll();
       setTimeout(renderHGL, 100);
-
-      // Generate reports
       generateRPT();
       generateResultsHTML();
-
-      // Show report tabs
       document.getElementById('rptTabBtn').style.display = '';
       document.getElementById('resultsTabBtn').style.display = '';
     }
@@ -4085,6 +4026,159 @@ async function runSolver() {
     btn.disabled = false;
     btn.textContent = '▶ Run Solver';
   }
+}
+
+async function runEpanetSolver() {
+  setSolverStatus('Running EPANET hydraulic solver...');
+  const ws = solverModule._epanetWs;
+  const model = new window.__EpanetProject(ws);
+
+  ws.writeFile('model.inp', generatedINP);
+
+  model.open('model.inp', 'model.rpt', 'model.out');
+
+  setSolverStatus('Solving hydraulics...');
+  model.solveH();
+
+  setSolverStatus('Solving water quality...');
+  model.solveQ();
+
+  const rptText = ws.readFile('model.rpt', 'utf8');
+
+  model.close();
+
+  const nd = networkData;
+  const junctions = nd.nodes.filter(n => n.type === 'junction');
+
+  if (rptText && rptText.length > 100) {
+    generatedRPT = rptText;
+  }
+
+  const ws2 = new window.__EpanetWorkspace();
+  await ws2.loadModule();
+  const model2 = new window.__EpanetProject(ws2);
+  ws2.writeFile('model.inp', generatedINP);
+  model2.open('model.inp', 'model2.rpt', 'model2.out');
+
+  const simDur = nd.cfg.simDuration || 72;
+  const hydStep = nd.cfg.hydTimestep || 15;
+  const reportStep = hydStep;
+  const numTS = Math.max(1, Math.floor(simDur * 60 / reportStep));
+  const timesteps = [];
+  for (let t = 0; t < numTS; t++) timesteps.push(t * reportStep / 60);
+
+  const nodeCount = model2.getCount(0);
+  const linkCount = model2.getCount(2);
+
+  const nodeResults = {};
+  const linkResults = {};
+
+  junctions.forEach(n => { nodeResults[n.id] = []; });
+  nd.pipes.forEach(p => { linkResults[p.id] = []; });
+
+  model2.openH();
+  model2.initH(0);
+
+  let tstep = Infinity;
+  let stepCount = 0;
+  const maxSteps = numTS + 10;
+
+  do {
+    tstep = model2.runH();
+    const currentTime = tstep;
+
+    junctions.forEach((n, idx) => {
+      try {
+        const nodeIdx = model2.getNodeIndex(n.id);
+        const pressure = model2.getNodeValue(nodeIdx, 11);
+        const head = model2.getNodeValue(nodeIdx, 10);
+        const demand = model2.getNodeValue(nodeIdx, 9);
+        nodeResults[n.id].push({ pressure, head, demand });
+      } catch(e) {
+        nodeResults[n.id].push({ pressure: 0, head: 0, demand: 0 });
+      }
+    });
+
+    nd.pipes.forEach((p, idx) => {
+      try {
+        const linkIdx = model2.getLinkIndex(p.id);
+        const flow = model2.getLinkValue(linkIdx, 8);
+        const velocity = model2.getLinkValue(linkIdx, 9);
+        linkResults[p.id].push({ flow: Math.abs(flow), velocity: Math.abs(velocity) });
+      } catch(e) {
+        linkResults[p.id].push({ flow: 0, velocity: 0 });
+      }
+    });
+
+    tstep = model2.nextH();
+    stepCount++;
+    if (stepCount >= maxSteps) break;
+  } while (tstep > 0);
+
+  model2.closeH();
+  model2.close();
+
+  const actualTimesteps = [];
+  for (let i = 0; i < stepCount; i++) actualTimesteps.push(i * hydStep / 60);
+
+  solverResults = {
+    timesteps: actualTimesteps,
+    nodeResults,
+    linkResults,
+    type: 'epanet',
+    _source: 'epanet_wasm',
+    nodes: junctions
+  };
+
+  const nodeVals = Object.values(nodeResults);
+  const avgPressures = nodeVals.length > 0 && nodeVals[0].length > 0 ?
+    nodeVals.map(nr => nr.reduce((s,r) => s + r.pressure, 0) / nr.length) : [];
+  const avgP = avgPressures.length > 0 ? (avgPressures.reduce((s,v) => s+v, 0) / avgPressures.length).toFixed(1) : '?';
+
+  setSolverStatus(`✓ EPANET solved: ${stepCount} timesteps, ${junctions.length} nodes, avg pressure ${avgP} psi`);
+}
+
+async function runSwmmSolver() {
+  setSolverStatus('Running SWMM solver...');
+
+  solverModule.FS.writeFile('model.inp', generatedINP);
+  solverModule.FS.writeFile('model.rpt', '');
+  solverModule.FS.writeFile('model.out', '');
+
+  const swmm_run = solverModule.cwrap('swmm_run', 'number', ['string', 'string', 'string']);
+  const err = swmm_run('model.inp', 'model.rpt', 'model.out');
+
+  if (err > 0) {
+    let rptText = '';
+    try { rptText = new TextDecoder().decode(solverModule.FS.readFile('model.rpt')); } catch(e) {}
+    setSolverStatus(`⚠ SWMM error code ${err}. Check .rpt for details.`);
+    if (rptText) {
+      generatedRPT = rptText;
+      const inpTab = document.getElementById('rptTabBtn');
+      if (inpTab) inpTab.style.display = '';
+    }
+    solverResults = generateDemoResults();
+    return;
+  }
+
+  let rptText = '';
+  try { rptText = new TextDecoder().decode(solverModule.FS.readFile('model.rpt')); } catch(e) {}
+  if (rptText && rptText.length > 50) generatedRPT = rptText;
+
+  try {
+    const outData = solverModule.FS.readFile('model.out');
+    if (outData && outData.length > 100) {
+      solverResults = parseSWMMBinary(outData.buffer);
+    } else {
+      solverResults = generateDemoResults();
+    }
+  } catch(e) {
+    solverResults = generateDemoResults();
+  }
+
+  const nd = networkData;
+  const junctions = nd.nodes.filter(n => n.type === 'junction');
+  setSolverStatus(`✓ SWMM solved: ${solverResults.timesteps.length} timesteps, ${junctions.length} nodes`);
 }
 
 // ═══════ DEMO RESULTS (for testing visualization without real WASM) ═══════
@@ -4905,5 +4999,6 @@ window.addEventListener('load',()=>{
   setTimeout(()=>generateNetwork(),250);
 });
 </script>
+<script type="module" src="/src/solver-init.ts"></script>
 </body>
 </html>

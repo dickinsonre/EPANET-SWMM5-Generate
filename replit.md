@@ -103,7 +103,7 @@ Key features:
 - INP file generation and download
 - DEM and GeoJSON export
 - Config save/load (JSON)
-- WASM solver engine integration (EPANET/SWMM)
+- WASM solver engine integration (EPANET 2.3 via epanet-js + @model-create/epanet-engine@0.9.0-alpha.1, SWMM via ikegdivs/swmm-js)
 - Multiple tabs: Map, Stats, INP, Docs, HGL, RPT, Results
 - Results visualization with time slider animation
 

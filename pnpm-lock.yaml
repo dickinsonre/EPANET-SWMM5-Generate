@@ -152,6 +152,7 @@ overrides:
   '@expo/ngrok-bin>@expo/ngrok-bin-win32-x64': '-'
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   esbuild: 0.27.3
+  '@model-create/epanet-engine': 0.9.0-alpha.1
 
 importers:
 
@@ -217,6 +218,13 @@ importers:
         version: 3.1.0
 
   artifacts/epanet-swmm-generator:
+    dependencies:
+      '@model-create/epanet-engine':
+        specifier: 0.9.0-alpha.1
+        version: 0.9.0-alpha.1
+      epanet-js:
+        specifier: ^0.8.0
+        version: 0.8.0
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -787,6 +795,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@model-create/epanet-engine@0.9.0-alpha.1':
+    resolution: {integrity: sha512-xqet3rFTex0/kKTmsxvG9PSfE/g3Z4U7xvM8n+dfdYNyshwNBpCEaHBVufshJZZPwF6hcBjGLqwMkFuVey7ybA==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -2092,6 +2103,9 @@ packages:
     resolution: {integrity: sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==}
     engines: {node: '>=0.12'}
 
+  epanet-js@0.8.0:
+    resolution: {integrity: sha512-Qx6Lr6sSdxaRYWM4GZ9jkJfvVJDUJgso35D+25ZeHl1NfVddH3kE/gj86Q+K7U543SoxQnMBWPmrJ4/CKQjpHQ==}
+
   es-define-property@1.0.1:
     resolution: {integrity: sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==}
     engines: {node: '>= 0.4'}
@@ -3341,6 +3355,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@model-create/epanet-engine@0.9.0-alpha.1': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -4674,6 +4690,10 @@ snapshots:
       strip-ansi: 6.0.1
 
   entities@4.5.0: {}
+
+  epanet-js@0.8.0:
+    dependencies:
+      '@model-create/epanet-engine': 0.9.0-alpha.1
 
   es-define-property@1.0.1: {}
 
