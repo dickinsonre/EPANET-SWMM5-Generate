@@ -346,8 +346,25 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 .inp-preview .section-tag { color: var(--accent-cyan); font-weight: 700; }
 .inp-preview .comment { color: var(--text-dim); }
 
-.progress-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
-.progress-fill { height: 100%; background: var(--water-gradient); border-radius: 2px; transition: width 0.3s; }
+.progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--water-gradient); border-radius: 3px; transition: width 0.3s; }
+.progress-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-cyan); margin-top: 4px; min-height: 16px; }
+
+.seed-display {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; font-family: 'JetBrains Mono', monospace;
+}
+.seed-display .seed-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.seed-display .seed-value { font-size: 14px; color: var(--accent-cyan); font-weight: 700; flex: 1; }
+.seed-display button {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 4px 8px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card);
+  color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+}
+.seed-display button:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+.seed-lock { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.seed-lock input { accent-color: var(--accent-amber); width: 16px; height: 16px; }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -782,8 +799,8 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <div class="preset-row">
         <button class="preset-btn" onclick="applyPreset('tiny',this)">Tiny (50)</button>
         <button class="preset-btn" onclick="applyPreset('small',this)">Small (150)</button>
-        <button class="preset-btn active" onclick="applyPreset('medium',this)">Medium (750)</button>
-        <button class="preset-btn" onclick="applyPreset('standard',this)">Standard (1K)</button>
+        <button class="preset-btn" onclick="applyPreset('medium',this)">Medium (750)</button>
+        <button class="preset-btn active" onclick="applyPreset('standard',this)">Standard (1K)</button>
         <button class="preset-btn" onclick="applyPreset('large',this)">Large (2500)</button>
         <button class="preset-btn" onclick="applyPreset('xlarge',this)">XL (5000)</button>
         <button class="preset-btn" onclick="applyPreset('mega',this)">Mega (10K)</button>
@@ -801,13 +818,22 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     </div>
     <div class="section-body hidden">
       <div class="input-row">
-        <div class="input-group"><label title="Number of rows in the junction grid">Grid Rows</label><input type="number" id="gridRows" value="25" min="3" max="400" inputmode="numeric" oninput="updateCountPreview()"></div>
-        <div class="input-group"><label title="Number of columns in the junction grid">Grid Columns</label><input type="number" id="gridCols" value="30" min="3" max="400" inputmode="numeric" oninput="updateCountPreview()"></div>
+        <div class="input-group"><label title="Number of rows in the junction grid">Grid Rows</label><input type="number" id="gridRows" value="32" min="3" max="400" inputmode="numeric" oninput="updateCountPreview()"></div>
+        <div class="input-group"><label title="Number of columns in the junction grid">Grid Columns</label><input type="number" id="gridCols" value="32" min="3" max="400" inputmode="numeric" oninput="updateCountPreview()"></div>
       </div>
-      <div style="font-size:11px;color:var(--text-dim);padding:2px 0 8px;font-family:'JetBrains Mono',monospace;" id="countPreview">≈ 750 nodes, ~1,400 links</div>
+      <div style="font-size:11px;color:var(--text-dim);padding:2px 0 8px;font-family:'JetBrains Mono',monospace;" id="countPreview">≈ 1,024 nodes, ~1,900 links</div>
       <div class="input-row">
-        <div class="input-group"><label title="Distance between adjacent nodes (ft or m)">Node Spacing (ft)</label><input type="number" id="nodeSpacing" value="500" min="50" max="5000" inputmode="numeric"></div>
+        <div class="input-group"><label title="Distance between adjacent nodes (ft or m)">Node Spacing (ft)</label><input type="number" id="nodeSpacing" value="450" min="50" max="5000" inputmode="numeric"></div>
         <div class="input-group"><label title="Random seed for reproducible generation. Change to get a different network with the same parameters.">Random Seed</label><input type="number" id="randomSeed" value="42" min="1" max="999999" inputmode="numeric"></div>
+      </div>
+      <div class="seed-display" id="seedDisplay" style="display:none;">
+        <div><span class="seed-label">SEED</span><br><span class="seed-value" id="seedValueDisplay">42</span></div>
+        <button onclick="copySeed()" title="Copy seed to clipboard">Copy</button>
+        <button onclick="randomizeSeed()" title="Generate new random seed">Dice</button>
+        <button onclick="copyConfigToClipboard()" title="Copy all settings + seed as JSON">Copy Config</button>
+      </div>
+      <div class="seed-lock">
+        <input type="checkbox" id="lockSeed"><label for="lockSeed">Lock seed between generations</label>
       </div>
       <div class="input-group">
         <label title="Random displacement of node positions. Higher = more organic/irregular street layout.">Position Jitter: <span id="jitterVal">15%</span></label>
@@ -817,7 +843,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         <label title="Percentage of grid cells with diagonal pipe connections. Creates looped network topology.">Diagonal Connections: <span id="diagVal">20%</span></label>
         <input type="range" id="diagonalPct" value="20" min="0" max="60">
       </div>
-      <div class="input-group"><label title="Number of dead-end pipe stubs extending from random junctions. Models cul-de-sacs.">Dead-end Branches</label><input type="number" id="deadEnds" value="12" min="0" max="100" inputmode="numeric"></div>
+      <div class="input-group"><label title="Number of dead-end pipe stubs extending from random junctions. Models cul-de-sacs.">Dead-end Branches</label><input type="number" id="deadEnds" value="18" min="0" max="100" inputmode="numeric"></div>
     </div>
   </div>
 
@@ -858,9 +884,9 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     </div>
     <div class="section-body hidden">
       <div class="input-row-3">
-        <div class="input-group"><label title="Fixed-head water sources (treatment plants, lakes). Placed at grid perimeter.">Reservoirs</label><input type="number" id="numReservoirs" value="3" min="1" max="20" inputmode="numeric"></div>
-        <div class="input-group"><label title="Variable-level storage tanks. Placed in the distribution field at computed pressure zone elevations.">Tanks</label><input type="number" id="numTanks" value="6" min="0" max="50" inputmode="numeric"></div>
-        <div class="input-group"><label title="Total pump count (source + boosters). Source pumps sized via BFS friction analysis.">Pumps</label><input type="number" id="numPumps" value="8" min="1" max="50" inputmode="numeric"></div>
+        <div class="input-group"><label title="Fixed-head water sources (treatment plants, lakes). Placed at grid perimeter.">Reservoirs</label><input type="number" id="numReservoirs" value="4" min="1" max="20" inputmode="numeric"></div>
+        <div class="input-group"><label title="Variable-level storage tanks. Placed in the distribution field at computed pressure zone elevations.">Tanks</label><input type="number" id="numTanks" value="8" min="0" max="50" inputmode="numeric"></div>
+        <div class="input-group"><label title="Total pump count (source + boosters). Source pumps sized via BFS friction analysis.">Pumps</label><input type="number" id="numPumps" value="10" min="1" max="50" inputmode="numeric"></div>
       </div>
       <div class="input-row">
         <div class="input-group"><label title="Hydraulic grade line at reservoir. Must exceed system elevation + required pressure.">Reservoir Head (ft)</label><input type="number" id="reservoirHead" value="300" min="50" max="1000" inputmode="numeric"></div>
@@ -885,9 +911,9 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         <div class="input-group"><label title="Hazen-Williams roughness coefficient. Higher = smoother/newer pipe. Typical: 80-130.">C-factor Max</label><input type="number" id="cMax" value="130" min="50" max="150" inputmode="numeric"></div>
       </div>
       <div class="input-row-3">
-        <div class="input-group"><label title="Pressure Reducing Valves. Auto-placed at elevation zone boundaries; extras placed randomly.">PRVs</label><input type="number" id="numPRV" value="3" min="0" max="20" inputmode="numeric"></div>
+        <div class="input-group"><label title="Pressure Reducing Valves. Auto-placed at elevation zone boundaries; extras placed randomly.">PRVs</label><input type="number" id="numPRV" value="4" min="0" max="20" inputmode="numeric"></div>
         <div class="input-group"><label title="Flow Control Valves. Limit maximum flow through a pipe. Placed by splitting existing pipes.">FCVs</label><input type="number" id="numFCV" value="1" min="0" max="20" inputmode="numeric"></div>
-        <div class="input-group"><label title="Number of pipes set to Closed status. Models isolation valves or abandoned mains.">Closed</label><input type="number" id="closedPipes" value="8" min="0" max="50" inputmode="numeric"></div>
+        <div class="input-group"><label title="Number of pipes set to Closed status. Models isolation valves or abandoned mains.">Closed</label><input type="number" id="closedPipes" value="10" min="0" max="50" inputmode="numeric"></div>
       </div>
     </div>
   </div>
@@ -923,7 +949,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <h3>Calibration</h3><span class="section-toggle collapsed">▼</span>
     </div>
     <div class="section-body hidden">
-      <div class="input-group"><label title="Nodes with pressure-dependent leakage. Models leaks, hydrants, or unaccounted-for water.">Emitter Nodes</label><input type="number" id="numEmitters" value="25" min="0" max="200" inputmode="numeric"></div>
+      <div class="input-group"><label title="Nodes with pressure-dependent leakage. Models leaks, hydrants, or unaccounted-for water.">Emitter Nodes</label><input type="number" id="numEmitters" value="35" min="0" max="200" inputmode="numeric"></div>
       <div class="checkbox-row"><input type="checkbox" id="chkWaterQuality" checked><label for="chkWaterQuality">Chlorine Water Quality</label></div>
       <div class="checkbox-row"><input type="checkbox" id="chkSecondaryDemands" checked><label for="chkSecondaryDemands">Secondary Demands</label></div>
       <div class="checkbox-row"><input type="checkbox" id="chkTags" checked><label for="chkTags">Node/Pipe Tags</label></div>
@@ -1333,7 +1359,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="section-body hidden">
       <div class="input-group"><label title="Name displayed on the city map and used in export filenames.">City Name</label><input type="text" id="cityName" value="Clearwater Springs"></div>
       <div class="input-row">
-        <div class="input-group"><label title="Number of park/green space features on the city map backdrop.">Parks</label><input type="number" id="numParks" value="6" min="0" max="30" inputmode="numeric"></div>
+        <div class="input-group"><label title="Number of park/green space features on the city map backdrop.">Parks</label><input type="number" id="numParks" value="8" min="0" max="30" inputmode="numeric"></div>
         <div class="input-group"><label title="Number of lake/pond features on the city map backdrop.">Lakes</label><input type="number" id="numLakes" value="2" min="0" max="10" inputmode="numeric"></div>
       </div>
       <div class="checkbox-row"><input type="checkbox" id="chkRiver" checked><label for="chkRiver">River / Creek</label></div>
@@ -1353,6 +1379,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   <div class="generate-section">
     <button class="generate-btn" id="genBtn" onclick="generateNetwork()">⚡ GENERATE NETWORK + MAP</button>
     <div class="progress-bar" id="progressBar" style="display:none;"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-label" id="progressLabel" style="display:none;"></div>
     <div class="dl-row" id="dlRow" style="display:none;">
       <button class="download-btn" onclick="downloadINP()">↓ .inp</button>
       <button class="download-btn" onclick="copyINP()" id="copyBtn" style="border-color:var(--accent-cyan);color:var(--accent-cyan);">📋 Copy INP</button>
@@ -2036,6 +2063,52 @@ function mulberry32(a) {
   };
 }
 
+// ═══════ SEED MANAGEMENT ═══════
+function updateSeedDisplay(seed) {
+  const disp = document.getElementById('seedDisplay');
+  const valEl = document.getElementById('seedValueDisplay');
+  if (disp) disp.style.display = 'flex';
+  if (valEl) valEl.textContent = seed;
+}
+
+function copySeed() {
+  const seed = document.getElementById('randomSeed').value;
+  navigator.clipboard.writeText(seed).then(() => showToast('Seed copied: ' + seed, 'success', 1500));
+}
+
+function randomizeSeed() {
+  const newSeed = Math.floor(Math.random() * 999999) + 1;
+  document.getElementById('randomSeed').value = newSeed;
+  updateSeedDisplay(newSeed);
+}
+
+function copyConfigToClipboard() {
+  const cfg = readConfig();
+  cfg._mode = currentMode;
+  cfg._units = currentUnits;
+  cfg._seed = +(document.getElementById('randomSeed').value) || 42;
+  if (currentMode === 'swmm') {
+    document.querySelectorAll('.swmm-only input, .swmm-only select').forEach(el => {
+      if (el.id) cfg['swmm_' + el.id] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+  }
+  navigator.clipboard.writeText(JSON.stringify(cfg, null, 2))
+    .then(() => showToast('Config copied to clipboard', 'success', 1500));
+}
+
+function advanceSeedIfUnlocked() {
+  if (document.getElementById('lockSeed') && document.getElementById('lockSeed').checked) return;
+  const newSeed = Math.floor(Math.random() * 999999) + 1;
+  document.getElementById('randomSeed').value = newSeed;
+  updateSeedDisplay(newSeed);
+}
+
+// ═══════ PROGRESS HELPER ═══════
+function setProgress(pf, pl, pct, label) {
+  if (pf) pf.style.width = pct + '%';
+  if (pl) pl.textContent = label + ' ' + pct + '%';
+}
+
 // ═══════ TERRAIN ═══════
 function generateElevation(row, col, rows, cols, cfg, rng) {
   const nx = col/(cols-1), ny = row/(rows-1), eMin = cfg.elevMin, eMax = cfg.elevMax, range = eMax-eMin;
@@ -2563,23 +2636,27 @@ async function generateNetwork() {
 }
 
 async function generateEPANETNetwork(){
-  const btn=document.getElementById('genBtn'),pb=document.getElementById('progressBar'),pf=document.getElementById('progressFill');
-  btn.disabled=true;btn.textContent='⏳ Generating...';btn.classList.add('generating');pb.style.display='block';pf.style.width='0%';
+  const btn=document.getElementById('genBtn'),pb=document.getElementById('progressBar'),pf=document.getElementById('progressFill'),pl=document.getElementById('progressLabel');
+  btn.disabled=true;btn.textContent='⏳ Generating...';btn.classList.add('generating');pb.style.display='block';if(pl)pl.style.display='block';pf.style.width='0%';
   if(isMobile()){const ci=document.getElementById('controlsInner');ci.classList.add('collapsed');document.getElementById('drawerLabel').textContent='⚙ Tap to expand settings';window.scrollTo({top:0,behavior:'smooth'});}
   await sleep(30);
   try {
   const cfg=readConfig(),seed=+(document.getElementById('randomSeed').value)||42,rng=mulberry32(seed),rows=cfg.gridRows,cols=cfg.gridCols,spacing=cfg.nodeSpacing,jA=cfg.jitter/100*spacing;
+  updateSeedDisplay(seed);
   const nodes=[],nG=Array.from({length:rows},()=>Array(cols).fill(null));let nId=1;
-  pf.style.width='10%';await sleep(5);
+  setProgress(pf,pl,5,'Building grid nodes...');await sleep(5);
 
-  // Build grid nodes
-  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-    const x=c*spacing+(rng()-0.5)*jA, y=r*spacing+(rng()-0.5)*jA;
-    const node={id:'J'+nId,row:r,col:c,x:Math.round(x*100)/100,y:Math.round(y*100)/100,
-      elev:generateElevation(r,c,rows,cols,cfg,mulberry32(r*1000+c+42)),type:'junction',demand:0,zone:'',tag:''};
-    nodes.push(node);nG[r][c]=node;nId++;
+  // Build grid nodes (yield every 50 rows for large grids)
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const x=c*spacing+(rng()-0.5)*jA, y=r*spacing+(rng()-0.5)*jA;
+      const node={id:'J'+nId,row:r,col:c,x:Math.round(x*100)/100,y:Math.round(y*100)/100,
+        elev:generateElevation(r,c,rows,cols,cfg,mulberry32(r*1000+c+42)),type:'junction',demand:0,zone:'',tag:''};
+      nodes.push(node);nG[r][c]=node;nId++;
+    }
+    if(rows>50 && r%50===0){setProgress(pf,pl,5+Math.round(r/rows*10),'Building grid nodes...');await sleep(0);}
   }
-  pf.style.width='15%';await sleep(5);
+  setProgress(pf,pl,15,'Assigning demand zones...');await sleep(5);
 
   // ═══ FIX 5: Spatially clustered demand zones (quadrant + seed-based) ═══
   const zoneCenters = [];
@@ -2611,7 +2688,7 @@ async function generateEPANETNetwork(){
   // Demands
   const dR=cfg.demandMax-cfg.demandMin,zm={Residential:1,Commercial:1.8,Industrial:2.5,Mixed:1.3};
   nodes.forEach(n=>{n.demand=Math.round((cfg.demandMin+rng()*dR*(zm[n.zone]||1)/2.5)*100)/100;});
-  pf.style.width='25%';await sleep(5);
+  setProgress(pf,pl,25,'Placing reservoirs & tanks...');await sleep(5);
 
   // ═══ FIX 2: Integrate reservoirs into grid (replace node, not float beside it) ═══
   const reservoirs=[], rP=distributeOnPerimeter(cfg.numReservoirs,rows,cols,rng);
@@ -2652,7 +2729,7 @@ async function generateEPANETNetwork(){
     node.type='tank';
     node.id=tankId;
   });
-  pf.style.width='35%';await sleep(5);
+  setProgress(pf,pl,35,'Building pipes...');await sleep(5);
 
   // Build pipes
   const pipes=[];let pId=1;
@@ -2692,7 +2769,7 @@ async function generateEPANETNetwork(){
       diameter:dD[Math.floor(rng()*dD.length)],
       roughness:assignCFactor(parent,de,8,cfg,rng,rows,cols),status:'Open'});
   }
-  pf.style.width='50%';await sleep(5);
+  setProgress(pf,pl,50,'Assigning pipe ages...');await sleep(5);
 
   // ═══ ROSSMAN A-FIX 4: Pipe age attribute (installation year correlated with distance from center) ═══
   const currentYear = 2025;
@@ -2708,7 +2785,7 @@ async function generateEPANETNetwork(){
     p.installYear = Math.round(currentYear - Math.max(5, Math.min(80, age)));
   });
 
-  pf.style.width='52%';await sleep(5);
+  setProgress(pf,pl,52,'Computing mass balance...');await sleep(5);
 
   // ═══ Mass balance ═══
   let totalAvgDemand = 0;
@@ -2836,7 +2913,7 @@ async function generateEPANETNetwork(){
     puId++;
     pipes.push({id:'P'+pId++, node1:midId, node2:n2.id, length:halfLen, diameter:origPipe.diameter, roughness:origPipe.roughness, status:'Closed', installYear: origPipe.installYear});
   }
-  pf.style.width='60%';await sleep(5);
+  setProgress(pf,pl,60,'Computing pressure zones...');await sleep(5);
 
   // ═══ ROSSMAN A-FIX 2: Pressure zone logic ═══
   // If elevation range > 80 ft, create pressure zones with PRVs at boundaries
@@ -2981,7 +3058,7 @@ async function generateEPANETNetwork(){
     emitterSet.add(junctionIndices[Math.floor(rng()*junctionIndices.length)]);
   }
   emitterSet.forEach(i=>{nodes[i].emitter=0.5+Math.round(rng()*3*100)/100;emitterNodes.push(nodes[i]);});
-  pf.style.width='70%';await sleep(5);
+  setProgress(pf,pl,70,'Inserting valves...');await sleep(5);
 
   // ═══ ROSSMAN A-FIX 5: Network connectivity validation (BFS from all sources) ═══
   const reachable = new Set();
@@ -3034,7 +3111,7 @@ async function generateEPANETNetwork(){
   // Build INP
   const inp=buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng,totalAvgDemand,peakDemand,numPressureZones,connectivityPct,isolatedNodes.length,supplyDemandRatio);
   generatedINP=inp;
-  pf.style.width='85%';await sleep(5);
+  setProgress(pf,pl,85,'Building INP file...');await sleep(5);
 
   // Store data
   networkData={nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,cfg,totalAvgDemand,peakDemand,
@@ -3044,28 +3121,30 @@ async function generateEPANETNetwork(){
   const bnd={minX:safeMin(aX),minY:safeMin(aY),maxX:safeMax(aX),maxY:safeMax(aY)};
   const bP=(bnd.maxX-bnd.minX)*BOUNDARY_PAD_PCT;bnd.minX-=bP;bnd.minY-=bP;bnd.maxX+=bP;bnd.maxY+=bP;
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
-  pf.style.width='95%';await sleep(5);
+  setProgress(pf,pl,95,'Rendering map...');await sleep(5);
   renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);
+  advanceSeedIfUnlocked();
   } catch(e) { console.error('EPANET generation error:', e); alert('Generation error: ' + e.message); }
   finally { btn.disabled=false;btn.textContent='⚡ GENERATE NETWORK + MAP';btn.classList.remove('generating');
-  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';pb.style.display='none'; }
+  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';} }
 }
 
 // ═══════ INP BUILDER (with system-sized pump curves) ═══════
 function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng,totalAvgDemand,peakDemand,numPressureZones,connectivityPct,isolatedCount,supplyDemandRatio){
   const L=[],a=s=>L.push(s),nl=()=>L.push(''),pM={Residential:'PAT_RES',Commercial:'PAT_COM',Industrial:'PAT_IND',Mixed:'PAT_MIX'};
   const jCount=nodes.filter(n=>n.type==='junction').length;
-  // SI conversion: all internal values are US; convert on output if SI selected
   const si = currentUnits === 'SI';
-  const uE = v => si ? (v * 0.3048) : v;        // elevation: ft → m
-  const uL = v => si ? (v * 0.3048) : v;        // length: ft → m
-  const uD = v => si ? (v * 25.4) : v;          // diameter: in → mm
-  const uQ = v => si ? (v * 0.0631) : v;        // flow: GPM → LPS
-  const uH = v => si ? (v * 0.3048) : v;        // head: ft → m
+  const uE = v => si ? (v * 0.3048) : v;
+  const uL = v => si ? (v * 0.3048) : v;
+  const uD = v => si ? (v * 25.4) : v;
+  const uQ = v => si ? (v * 0.0631) : v;
+  const uH = v => si ? (v * 0.3048) : v;
   const f2 = v => (typeof v==='number'?v.toFixed(2):v);
+  const currentSeed = +(document.getElementById('randomSeed').value) || 42;
 
   a('[TITLE]');
   a(`;EPANET 2.3 Network - Generated ${new Date().toISOString().split('T')[0]}`);
+  a(`;Seed: ${currentSeed}`);
   a(`;${jCount} junctions, ${reservoirs.length} reservoirs, ${tanks.length} tanks`);
   a(`;${pipes.length} pipes, ${pumps.length} pumps, ${valves.length} valves`);
   a(`;Grid: ${cfg.gridRows}x${cfg.gridCols}, Terrain: ${cfg.terrainType}`);
@@ -3185,7 +3264,7 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   a(`Report Timestep\t0:${cfg.rptTimestep.toString().padStart(2,'0')}`);
   a('Report Start\t0:00');a('Start ClockTime\t12 am');a('Statistic\tNONE');nl();
 
-  a('[REPORT]');a('Status\tNo');a('Summary\tNo');a('Page\t0');nl();
+  a('[REPORT]');a('Status\tFull');a('Summary\tYes');a('Page\t0');a('Nodes\tAll');a('Links\tAll');nl();
 
   a('[OPTIONS]');a(`Units\t${currentUnits==='SI'?'LPS':'GPM'}`);a(`Headloss\t${cfg.headlossFormula}`);
   a('Specific Gravity\t1.0');a('Viscosity\t1.0');a('Trials\t40');a('Accuracy\t0.001');
@@ -3298,14 +3377,15 @@ function generateDesignStorm(type, totalDepth) {
 
 // ═══════ SWMM5 GENERATION ═══════
 async function generateSWMMNetwork() {
-  const btn=document.getElementById('genBtn'),pb=document.getElementById('progressBar'),pf=document.getElementById('progressFill');
-  btn.disabled=true;btn.textContent='⏳ Generating SWMM...';btn.classList.add('generating');pb.style.display='block';pf.style.width='0%';
+  const btn=document.getElementById('genBtn'),pb=document.getElementById('progressBar'),pf=document.getElementById('progressFill'),pl=document.getElementById('progressLabel');
+  btn.disabled=true;btn.textContent='⏳ Generating SWMM...';btn.classList.add('generating');pb.style.display='block';if(pl)pl.style.display='block';pf.style.width='0%';
   if(isMobile()){document.getElementById('controlsInner').classList.add('collapsed');window.scrollTo({top:0,behavior:'smooth'});}
   await sleep(30);
   try {
   const cfg = readConfig();
   const seed = +(document.getElementById('randomSeed').value) || 42;
   const rng = mulberry32(seed);
+  updateSeedDisplay(seed);
   const rows = cfg.gridRows, cols = cfg.gridCols, spacing = cfg.nodeSpacing;
   const jA = cfg.jitter/100*spacing;
 
@@ -3404,24 +3484,27 @@ async function generateSWMMNetwork() {
     wetWellDepth: sv('swmmWetWellDepth')
   };
 
-  pf.style.width='10%';await sleep(5);
+  setProgress(pf,pl,10,'Building manhole grid...');await sleep(5);
 
-  // Build grid nodes as manholes (junctions)
+  // Build grid nodes as manholes (junctions) — yield every 50 rows for large grids
   const nodes = [], nG = Array.from({length:rows},()=>Array(cols).fill(null));
   let nId = 1;
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
-    const x = c*spacing+(rng()-0.5)*jA, y = r*spacing+(rng()-0.5)*jA;
-    const groundElev = generateElevation(r,c,rows,cols,cfg,mulberry32(r*1000+c+42));
-    const invertElev = Math.round((groundElev - swmm.cover - rng()*3)*100)/100;
-    const maxDepth = Math.round((groundElev - invertElev)*100)/100;
-    const node = {
-      id:'J'+nId, row:r, col:c, x:Math.round(x*100)/100, y:Math.round(y*100)/100,
-      elev:invertElev, groundElev:groundElev, maxDepth:maxDepth,
-      type:'junction', zone:'', tag:''
-    };
-    nodes.push(node); nG[r][c]=node; nId++;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++) {
+      const x = c*spacing+(rng()-0.5)*jA, y = r*spacing+(rng()-0.5)*jA;
+      const groundElev = generateElevation(r,c,rows,cols,cfg,mulberry32(r*1000+c+42));
+      const invertElev = Math.round((groundElev - swmm.cover - rng()*3)*100)/100;
+      const maxDepth = Math.round((groundElev - invertElev)*100)/100;
+      const node = {
+        id:'J'+nId, row:r, col:c, x:Math.round(x*100)/100, y:Math.round(y*100)/100,
+        elev:invertElev, groundElev:groundElev, maxDepth:maxDepth,
+        type:'junction', zone:'', tag:''
+      };
+      nodes.push(node); nG[r][c]=node; nId++;
+    }
+    if(rows>50 && r%50===0){setProgress(pf,pl,10+Math.round(r/rows*10),'Building manhole grid...');await sleep(0);}
   }
-  pf.style.width='20%';await sleep(5);
+  setProgress(pf,pl,20,'Assigning land use zones...');await sleep(5);
 
   // Zone assignment (reuse spatially clustered approach)
   const pcts=[cfg.pctResidential,cfg.pctCommercial,cfg.pctIndustrial,cfg.pctMixed], sum=pcts.reduce((a,b)=>a+b,0);
@@ -3434,7 +3517,7 @@ async function generateSWMMNetwork() {
     if(roll<iS){n.zone='Industrial';n.tag='IND';}else if(roll<iS+cS){n.zone='Commercial';n.tag='COM';}else if(roll<iS+cS+mS){n.zone='Mixed';n.tag='MIX';}else{n.zone='Residential';n.tag='RES';}
   });
 
-  pf.style.width='25%';await sleep(5);
+  setProgress(pf,pl,25,'Placing outfalls...');await sleep(5);
 
   // Outfalls at lowest-elevation perimeter nodes
   const outfalls = [];
@@ -3450,30 +3533,135 @@ async function generateSWMMNetwork() {
     node.type='outfall';node.id=outId;
   }
 
-  pf.style.width='30%';await sleep(5);
+  setProgress(pf,pl,30,'Computing D8 subcatchments...');await sleep(5);
 
-  // Subcatchments — one per junction node, areas scaled to grid footprint
+  // Subcatchments — D8 flow direction routing
+  // Build a finer DEM grid (subdivide each node cell into sub-cells) and route flow via D8
   const subcatchments = [];
-  const junctionCount = nodes.filter(n=>n.type==='junction').length;
-  // Grid footprint in acres: (rows-1)*spacing * (cols-1)*spacing / 43560
+  const junctionNodes = nodes.filter(n=>n.type==='junction');
+  const junctionCount = junctionNodes.length;
   const gridFootprintAcres = ((rows-1)*spacing * (cols-1)*spacing) / 43560;
-  const baseSubArea = junctionCount > 0 ? gridFootprintAcres / junctionCount : swmm.subArea;
-  nodes.forEach(n=>{
-    if(n.type!=='junction') return;
+  const cellAreaAcres = gridFootprintAcres / Math.max(1, rows * cols);
+
+  // D8 flow directions: 8 neighbors with [dr, dc, distance_factor]
+  const d8 = [[-1,-1,1.414],[-1,0,1],[-1,1,1.414],[0,-1,1],[0,1,1],[1,-1,1.414],[1,0,1],[1,1,1.414]];
+
+  // Build elevation grid for D8 (use groundElev for SWMM)
+  const demGrid = Array.from({length:rows},()=>new Float32Array(cols));
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+    demGrid[r][c] = nG[r][c] ? nG[r][c].groundElev : 9999;
+  }
+
+  // Compute D8 flow direction for each cell → steepest downhill neighbor
+  const flowDir = Array.from({length:rows},()=>new Int8Array(cols).fill(-1));
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+    let maxSlope = 0, bestDir = -1;
+    const elev = demGrid[r][c];
+    for(let d=0;d<8;d++) {
+      const nr = r+d8[d][0], nc = c+d8[d][1];
+      if(nr<0||nr>=rows||nc<0||nc>=cols) continue;
+      const slope = (elev - demGrid[nr][nc]) / d8[d][2];
+      if(slope > maxSlope) { maxSlope = slope; bestDir = d; }
+    }
+    flowDir[r][c] = bestDir;
+  }
+
+  // Trace each cell downstream via D8 to find drainage terminus (local pit/outfall/edge)
+  // then assign all cells along the path to the junction at the terminus
+  const outletMap = Array.from({length:rows},()=>new Int32Array(cols).fill(-1));
+  const junctionIndex = {};
+  junctionNodes.forEach((n,i)=>{ junctionIndex[n.row+'_'+n.col] = i; });
+
+  // Step 1: Find the terminal cell for each cell by following flowDir to a pit/edge
+  const terminus = Array.from({length:rows},()=>new Int32Array(cols).fill(-1));
+  // Encode terminus as r*cols+c (flat index)
+  function findTerminus(r, c) {
+    if(terminus[r][c] !== -1) return terminus[r][c];
+    const visited = [];
+    let cr = r, cc = c;
+    while(true) {
+      const flatIdx = cr*cols+cc;
+      if(terminus[cr][cc] !== -1) {
+        const t = terminus[cr][cc];
+        visited.forEach(([pr,pc])=>{ terminus[pr][pc] = t; });
+        return t;
+      }
+      if(visited.some(([pr,pc])=>pr===cr&&pc===cc)) break; // cycle
+      visited.push([cr, cc]);
+      const dir = flowDir[cr][cc];
+      if(dir < 0) break; // pit/flat = terminus
+      const nr = cr + d8[dir][0], nc = cc + d8[dir][1];
+      if(nr<0||nr>=rows||nc<0||nc>=cols) break; // edge = terminus
+      cr = nr; cc = nc;
+    }
+    const termFlat = cr*cols+cc;
+    visited.forEach(([pr,pc])=>{ terminus[pr][pc] = termFlat; });
+    return termFlat;
+  }
+
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) findTerminus(r,c);
+
+  // Step 2: Map each terminus to its junction index (the junction at that grid cell)
+  const terminusToJunction = {};
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+    const t = terminus[r][c];
+    if(t === -1) continue;
+    if(terminusToJunction[t] !== undefined) continue;
+    const tr = Math.floor(t/cols), tc = t%cols;
+    const key = tr+'_'+tc;
+    if(junctionIndex[key] !== undefined) {
+      terminusToJunction[t] = junctionIndex[key];
+    } else {
+      // Terminus is an outfall or edge — find nearest junction
+      let bestDist = Infinity, bestIdx = 0;
+      junctionNodes.forEach((n,i)=>{
+        const d = Math.abs(n.row-tr)+Math.abs(n.col-tc);
+        if(d<bestDist){bestDist=d;bestIdx=i;}
+      });
+      terminusToJunction[t] = bestIdx;
+    }
+  }
+
+  // Step 3: Assign each cell to its terminus's junction
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+    const t = terminus[r][c];
+    outletMap[r][c] = terminusToJunction[t] !== undefined ? terminusToJunction[t] : 0;
+  }
+
+  // Aggregate cells per junction to build subcatchments
+  const cellCounts = new Int32Array(junctionCount);
+  const cellSlopeSum = new Float32Array(junctionCount);
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) {
+    const idx = outletMap[r][c];
+    if(idx >= 0 && idx < junctionCount) {
+      cellCounts[idx]++;
+      const dir = flowDir[r][c];
+      if(dir >= 0) {
+        const nr = r+d8[dir][0], nc = c+d8[dir][1];
+        if(nr>=0&&nr<rows&&nc>=0&&nc<cols) {
+          cellSlopeSum[idx] += Math.abs(demGrid[r][c]-demGrid[nr][nc]) / (d8[dir][2]*spacing);
+        }
+      }
+    }
+  }
+
+  junctionNodes.forEach((n,i)=>{
+    const nCells = Math.max(1, cellCounts[i]);
+    const area = cellAreaAcres * nCells * (0.9+rng()*0.2);
+    const avgSlope = cellSlopeSum[i] / nCells;
+    const slopePct = Math.max(0.1, avgSlope * 100 * (0.8+rng()*0.4));
+    const width = Math.sqrt(area * 43560) * (0.8+rng()*0.4);
     const zoneImperv = n.zone==='Commercial'?swmm.impervCom:n.zone==='Industrial'?swmm.impervInd:n.zone==='Mixed'?(swmm.impervRes+swmm.impervCom)/2:swmm.impervRes;
-    const area = baseSubArea * (0.7+rng()*0.6);
-    const width = Math.sqrt(area * 43560) * (0.8+rng()*0.4); // width proportional to sqrt(area)
-    const slope = swmm.slope * (0.5+rng()*1.0);
     subcatchments.push({
       id:'S'+n.id.substring(1), outlet:n.id,
       area:Math.round(area*100)/100,
       imperv:Math.round((zoneImperv+(rng()-0.5)*10)*10)/10,
-      width:Math.round(width), slope:Math.round(slope*100)/100,
-      cx:n.x, cy:n.y
+      width:Math.round(width), slope:Math.round(slopePct*100)/100,
+      cx:n.x, cy:n.y, d8Cells:nCells
     });
   });
 
-  pf.style.width='40%';await sleep(5);
+  setProgress(pf,pl,40,'Building conduits...');await sleep(5);
 
   // Conduits — grid connectivity (gravity sewers flow downhill)
   const conduits = []; let cId = 1;
@@ -3561,7 +3749,7 @@ async function generateSWMMNetwork() {
     if(c2>=0&&c2<cols){const n1=nG[r][c],n2=nG[r+1][c2];if(n1&&n2&&n1.id!==n2.id)makeConduit(n1,n2);}
   }
 
-  pf.style.width='60%';await sleep(5);
+  setProgress(pf,pl,60,'Adding pump stations...');await sleep(5);
 
   // ═══ Pump Stations & Force Mains ═══
   const swmmPumps = [];
@@ -3639,7 +3827,7 @@ async function generateSWMMNetwork() {
   const inp = buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm, swmmPumps, forceMains);
   generatedINP = inp;
 
-  pf.style.width='80%';await sleep(5);
+  setProgress(pf,pl,80,'Building INP file...');await sleep(5);
 
   // Store network data (reuse rendering infrastructure)
   const reservoirs = outfalls.map(o=>({id:o.id,x:o.x,y:o.y,head:0,gridNode:o.gridNode}));
@@ -3657,11 +3845,12 @@ async function generateSWMMNetwork() {
   const bP=(bnd.maxX-bnd.minX)*BOUNDARY_PAD_PCT;bnd.minX-=bP;bnd.minY-=bP;bnd.maxX+=bP;bnd.maxY+=bP;
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
 
-  pf.style.width='95%';await sleep(5);
+  setProgress(pf,pl,95,'Rendering map...');await sleep(5);
   renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);
+  advanceSeedIfUnlocked();
   } catch(e) { console.error('SWMM generation error:', e); alert('Generation error: ' + e.message); }
   finally { btn.disabled=false;btn.textContent='🌧 GENERATE SWMM MODEL + MAP';btn.classList.remove('generating');
-  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';pb.style.display='none'; }
+  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';} }
 }
 
 // ═══════ SWMM5 INP BUILDER ═══════
@@ -3679,8 +3868,10 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
   const uR = v => si ? (v * 25.4) : v;          // rainfall in/hr → mm/hr
   const f2 = v => (typeof v==='number'?v.toFixed(2):v); // separate rng for INP builder
 
+  const currentSeed = +(document.getElementById('randomSeed').value) || 42;
   a('[TITLE]');
   a(`;;SWMM 5.2.4 Model - Generated ${new Date().toISOString().split('T')[0]}`);
+  a(`;;Seed: ${currentSeed}`);
   a(`;;${junctions.length} junctions, ${outfalls.length} outfalls, ${subcatchments.length} subcatchments`);
   a(`;;${conduits.length} conduits, Grid: ${cfg.gridRows}x${cfg.gridCols}`);
   a(`;;Storm: ${swmm.stormType} ${swmm.rainDepth}in, Routing: ${swmm.routing}`);
@@ -5783,6 +5974,10 @@ window.addEventListener('load',()=>{
     if ((e.ctrlKey || e.metaKey) && e.key === 'g') { e.preventDefault(); generateNetwork(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 's' && generatedINP) { e.preventDefault(); downloadINP(); }
   });
+  // Seed display: update on input change and show initial value
+  const seedInput = document.getElementById('randomSeed');
+  if(seedInput) seedInput.addEventListener('input', ()=>updateSeedDisplay(seedInput.value));
+  updateSeedDisplay(seedInput ? seedInput.value : 42);
   setTimeout(()=>generateNetwork(),250);
 });
 </script>

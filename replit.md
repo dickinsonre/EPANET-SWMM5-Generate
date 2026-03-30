@@ -98,11 +98,12 @@ Self-contained EPANET 2.3 & SWMM 5.2.4 Network Generator web application. Genera
 Key features:
 - EPANET 2.3 / SWMM 5.2.4 mode toggle
 - US Customary / SI Metric units
-- Quick presets (Tiny 50 → City 100K nodes)
+- Quick presets (Tiny 50 → City 100K nodes), default preset: Standard (1K, 32×32 grid)
 - Interactive canvas city map with terrain, streets, zones, parks
-- INP file generation and download
+- INP file generation and download with full reporting enabled (Status Full, Summary Yes, Nodes All, Links All)
 - DEM and GeoJSON export
-- Config save/load (JSON)
+- Config save/load (JSON) + Copy Config to clipboard
+- Seed management: prominent seed display, Copy Seed button, Dice (randomize) button, Lock Seed checkbox, seed stored in INP [TITLE]
 - WASM solver engine integration (EPANET 2.3 via epanet-js + @model-create/epanet-engine@0.9.0-alpha.1, SWMM via ikegdivs/swmm-js)
 - Multiple tabs: Map, Stats, INP, Docs, HGL, RPT, Results
 - Results visualization with time slider animation
@@ -113,6 +114,9 @@ Key features:
 - Click-to-inspect on canvas: click any node or pipe to see a floating panel with element properties and solver results
 - Tooltips on hover for technical terms and input labels (30+ definitions)
 - Accessibility: ARIA labels, tabindex, keyboard navigation for section headers and interactive elements
+- Progress bar with phase labels (e.g. "Building grid nodes... 10%") during generation
+- Cooperative yielding (every 50 rows) for large-grid UI responsiveness
+- SWMM subcatchments use D8 flow direction algorithm for drainage boundary routing
 
 ### `scripts` (`@workspace/scripts`)
 
