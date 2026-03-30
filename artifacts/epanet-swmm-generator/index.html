@@ -865,9 +865,15 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
           <option value="valley">Central Valley</option>
           <option value="ridge">Ridge Line</option>
           <option value="random">Random Perlin</option>
+          <option value="bluff">Bluff (Sharp Step)</option>
+          <option value="canyon">Canyon (V-Cut)</option>
         </select>
       </div>
       <div class="input-group"><label title="Number of additional hill features added to the terrain. More hills = more elevation variation.">Hill Count</label><input type="number" id="hillCount" value="3" min="0" max="10" inputmode="numeric"></div>
+      <div class="input-group" style="flex-direction:row;align-items:center;gap:8px;">
+        <input type="checkbox" id="chkDiscontinuity" style="width:16px;height:16px;">
+        <label for="chkDiscontinuity" title="Overlay a random sharp elevation break onto the smooth terrain surface. Creates pressure zone challenges.">Add Discontinuity</label>
+      </div>
     </div>
   </div>
 
@@ -2232,6 +2238,35 @@ function setProgress(pf, pl, pct, label) {
 }
 
 // ═══════ TERRAIN ═══════
+let terrainDiscontinuity = null;
+
+function initTerrainParams(cfg, rng) {
+  const range = cfg.elevMax - cfg.elevMin;
+  terrainDiscontinuity = null;
+  let tp = null;
+  if (cfg.terrainType === 'bluff') {
+    tp = { stepHeight: 30 + rng() * 30, bluffPos: 0.35 + rng() * 0.3,
+           bluffAngle: rng() * Math.PI * 0.4 - Math.PI * 0.2 };
+    terrainDiscontinuity = { type: 'bluff', pos: tp.bluffPos, angle: tp.bluffAngle, height: tp.stepHeight };
+  } else if (cfg.terrainType === 'canyon') {
+    tp = { depth: 40 + rng() * 40, width: 0.08 + rng() * 0.08,
+           pos: 0.4 + rng() * 0.2, angle: rng() * Math.PI * 0.3 - Math.PI * 0.15 };
+    terrainDiscontinuity = { type: 'canyon', pos: tp.pos, angle: tp.angle, depth: tp.depth, width: tp.width };
+  }
+  if (cfg.addDiscontinuity && cfg.terrainType !== 'bluff' && cfg.terrainType !== 'canyon') {
+    const dType = rng() > 0.5 ? 'bluff' : 'canyon';
+    if (dType === 'bluff') {
+      terrainDiscontinuity = { type: 'bluff', pos: 0.35 + rng() * 0.3,
+        angle: rng() * Math.PI * 0.4 - Math.PI * 0.2, height: 25 + rng() * 25 };
+    } else {
+      terrainDiscontinuity = { type: 'canyon', pos: 0.4 + rng() * 0.2,
+        angle: rng() * Math.PI * 0.3 - Math.PI * 0.15, depth: 30 + rng() * 30, width: 0.06 + rng() * 0.06 };
+    }
+  }
+  return tp;
+}
+
+let _terrainParams = null;
 function generateElevation(row, col, rows, cols, cfg, rng) {
   const nx = col/(cols-1), ny = row/(rows-1), eMin = cfg.elevMin, eMax = cfg.elevMax, range = eMax-eMin;
   let elev = 0;
@@ -2244,8 +2279,46 @@ function generateElevation(row, col, rows, cols, cfg, rng) {
     case 'valley': elev=eMin+Math.abs(nx-0.5)*2*range*0.8+rng()*range*0.05;break;
     case 'ridge': elev=eMax-Math.abs(ny-0.5)*2*range*0.7+rng()*range*0.05;break;
     case 'random': elev=eMin+range*0.5;for(let f=1;f<=4;f++)elev+=Math.sin(nx*f*5+rng()*10)*Math.cos(ny*f*5+rng()*10)*range*(0.2/f);break;
+    case 'bluff': {
+      const tp = _terrainParams || { stepHeight: 45, bluffPos: 0.5, bluffAngle: 0 };
+      const proj = nx * Math.cos(tp.bluffAngle) + ny * Math.sin(tp.bluffAngle);
+      const stepFactor = 1 / (1 + Math.exp(-(proj - tp.bluffPos) / 0.03));
+      elev = eMin + range * 0.3 + stepFactor * tp.stepHeight;
+      for (let h=0;h<cfg.hillCount;h++){const hx=rng(),hy=rng(),hr=0.1+rng()*0.1,dist=Math.sqrt((nx-hx)**2+(ny-hy)**2);if(dist<hr)elev+=(1-dist/hr)*range*0.1;}
+      break;
+    }
+    case 'canyon': {
+      const tp = _terrainParams || { depth: 60, width: 0.12, pos: 0.5, angle: 0 };
+      const perp = -nx * Math.sin(tp.angle) + ny * Math.cos(tp.angle);
+      const distFromCenter = Math.abs(perp - tp.pos);
+      const baseElev = eMin + range * 0.6;
+      if (distFromCenter < tp.width) {
+        const depthFactor = 1 - (distFromCenter / tp.width);
+        elev = baseElev - depthFactor * depthFactor * tp.depth;
+      } else {
+        elev = baseElev;
+      }
+      for (let h=0;h<cfg.hillCount;h++){const hx=rng(),hy=rng(),hr=0.12+rng()*0.12,dist=Math.sqrt((nx-hx)**2+(ny-hy)**2);if(dist<hr)elev+=(1-dist/hr)*range*0.12;}
+      break;
+    }
   }
-  return Math.max(eMin,Math.min(eMax,Math.round((elev+(rng()-0.5)*range*0.03)*100)/100));
+  elev = elev + (rng()-0.5)*range*0.03;
+  if (terrainDiscontinuity && cfg.terrainType !== 'bluff' && cfg.terrainType !== 'canyon') {
+    const d = terrainDiscontinuity;
+    if (d.type === 'bluff') {
+      const proj = nx * Math.cos(d.angle) + ny * Math.sin(d.angle);
+      const stepFactor = 1 / (1 + Math.exp(-(proj - d.pos) / 0.03));
+      elev += stepFactor * d.height;
+    } else if (d.type === 'canyon') {
+      const perp = -nx * Math.sin(d.angle) + ny * Math.cos(d.angle);
+      const distFC = Math.abs(perp - d.pos);
+      if (distFC < d.width) {
+        const df = 1 - (distFC / d.width);
+        elev -= df * df * d.depth;
+      }
+    }
+  }
+  return Math.max(eMin,Math.min(eMax,Math.round(elev*100)/100));
 }
 
 // ═══════ CITY MAP GENERATOR ═══════
@@ -2269,6 +2342,32 @@ function generateCityMap(bounds, cfg, rng) {
   if(document.getElementById('chkHighway')&&document.getElementById('chkHighway').checked){const pts=[],hDir=rng()>0.5;if(hDir){const bx=minX+W*(0.15+rng()*0.2);for(let y=minY-H*0.05;y<=maxY+H*0.05;y+=H*0.015)pts.push({x:bx+Math.sin(y/H*2)*W*0.04,y});}else{const by=minY+H*(0.7+rng()*0.2);for(let x=minX-W*0.05;x<=maxX+W*0.05;x+=W*0.015)pts.push({x,y:by+Math.sin(x/W*2)*H*0.04});}map.highway={pts};}
   const dN=['Downtown','Northside','Industrial District','Riverside','Westgate','Hillcrest','Eastborough','Southfield'];
   for(let i=0;i<4+Math.floor(rng()*4);i++)map.districts.push({name:dN[i%dN.length],x:minX+W*(0.1+(i%3)*0.35+rng()*0.1),y:minY+H*(0.1+Math.floor(i/3)*0.35+rng()*0.1)});
+  if (terrainDiscontinuity) {
+    const d = terrainDiscontinuity;
+    const pts = [];
+    if (d.type === 'bluff') {
+      const cosA = Math.cos(d.angle), sinA = Math.sin(d.angle);
+      for (let t = -0.2; t <= 1.2; t += 0.02) {
+        const perpX = -sinA, perpY = cosA;
+        const cx = d.pos * cosA, cy = d.pos * sinA;
+        pts.push({ x: minX + (cx + t * perpX) * W, y: minY + (cy + t * perpY) * H });
+      }
+      map.discontinuity = { type: 'bluff', pts, height: d.height, label: 'Bluff Escarpment' };
+    } else {
+      const sinA = Math.sin(d.angle), cosA = Math.cos(d.angle);
+      const along = []; const edgeL = []; const edgeR = [];
+      for (let t = -0.2; t <= 1.2; t += 0.02) {
+        const ax = cosA * t, ay = sinA * t;
+        const px = -sinA * d.pos, py = cosA * d.pos;
+        const cx = ax + px, cy = ay + py;
+        const offX = -sinA * d.width, offY = cosA * d.width;
+        along.push({ x: minX + cx * W, y: minY + cy * H });
+        edgeL.push({ x: minX + (cx - offX) * W, y: minY + (cy - offY) * H });
+        edgeR.push({ x: minX + (cx + offX) * W, y: minY + (cy + offY) * H });
+      }
+      map.discontinuity = { type: 'canyon', pts: along, edgeL, edgeR, depth: d.depth, width: d.width, label: 'Canyon Creek' };
+    }
+  }
   return map;
 }
 
@@ -2283,6 +2382,28 @@ function drawCityMap(ctx,W,H,tx,ty,scale,map){
   map.buildings.forEach(b=>{const bx=tx(b.x),by=ty(b.y),bw=b.w*scale,bh=b.h*scale;if(bw<1.5||bh<1.5)return;ctx.save();ctx.translate(bx,by);ctx.rotate(b.rot);ctx.fillRect(-bw/2,-bh/2,bw,bh);ctx.strokeRect(-bw/2,-bh/2,bw,bh);ctx.restore();});
   map.parks.forEach(p=>{ctx.fillStyle=c.pk;ctx.strokeStyle=c.ps;ctx.lineWidth=1;dp(p.pts,true);ctx.fill();ctx.stroke();const tr=mulberry32(p.cx*100+p.cy);ctx.fillStyle=style==='light'?'#8aad6a':style==='satellite'?'#1a4a1a':'#1a4a3a';for(let t=0;t<15;t++){const ti=Math.floor(tr()*p.pts.length),tp=p.pts[ti];ctx.beginPath();ctx.arc(tx(tp.x)+(tr()-0.5)*20*scale*0.02,ty(tp.y)+(tr()-0.5)*20*scale*0.02,1.5+tr()*2,0,Math.PI*2);ctx.fill();}});
   map.lakes.forEach(l=>{ctx.fillStyle=c.lk;ctx.strokeStyle=c.ls;ctx.lineWidth=1;dp(l.pts,true);ctx.fill();ctx.stroke();});
+  if(map.discontinuity){
+    const disc = map.discontinuity;
+    if(disc.type === 'bluff'){
+      const bluffColor = style==='light'?'#b8956a':style==='satellite'?'#5a4a30':'#6a5a40';
+      const bluffShadow = style==='light'?'rgba(120,90,50,0.3)':style==='satellite'?'rgba(80,60,30,0.4)':'rgba(100,80,50,0.3)';
+      ctx.strokeStyle=bluffShadow;ctx.lineWidth=8;ctx.lineCap='round';ctx.lineJoin='round';dp(disc.pts,false);ctx.stroke();
+      ctx.strokeStyle=bluffColor;ctx.lineWidth=3;ctx.setLineDash([6,3]);dp(disc.pts,false);ctx.stroke();ctx.setLineDash([]);
+      ctx.strokeStyle=style==='light'?'#a07850':'#7a6a50';ctx.lineWidth=1.5;dp(disc.pts,false);ctx.stroke();
+    } else {
+      const canyonFill = style==='light'?'rgba(100,160,120,0.15)':style==='satellite'?'rgba(20,60,20,0.2)':'rgba(30,60,50,0.2)';
+      const streamColor = style==='light'?'#7cb8d0':style==='satellite'?'#1a4060':'#2a5a7a';
+      if(disc.edgeL && disc.edgeR){
+        ctx.fillStyle=canyonFill;ctx.beginPath();
+        ctx.moveTo(tx(disc.edgeL[0].x),ty(disc.edgeL[0].y));
+        for(let i=1;i<disc.edgeL.length;i++)ctx.lineTo(tx(disc.edgeL[i].x),ty(disc.edgeL[i].y));
+        for(let i=disc.edgeR.length-1;i>=0;i--)ctx.lineTo(tx(disc.edgeR[i].x),ty(disc.edgeR[i].y));
+        ctx.closePath();ctx.fill();
+      }
+      ctx.strokeStyle=streamColor;ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';dp(disc.pts,false);ctx.stroke();
+      ctx.strokeStyle=style==='light'?'rgba(100,170,210,0.3)':'rgba(40,100,140,0.3)';ctx.lineWidth=6;dp(disc.pts,false);ctx.stroke();
+    }
+  }
   if(map.river){ctx.strokeStyle=c.rv;ctx.lineWidth=map.river.width*scale;ctx.lineCap='round';ctx.lineJoin='round';dp(map.river.pts,false);ctx.stroke();ctx.strokeStyle=style==='light'?'#7bafc8':'#1a3550';ctx.lineWidth=map.river.width*scale+3;ctx.globalAlpha=0.3;dp(map.river.pts,false);ctx.stroke();ctx.globalAlpha=1;}
   map.streets.filter(s=>s.type==='local').forEach(s=>{ctx.strokeStyle=c.st;ctx.lineWidth=s.width*(scale*0.001+0.3);ctx.lineCap='round';dp(s.pts,false);ctx.stroke();});
   map.streets.filter(s=>s.type==='arterial').forEach(s=>{ctx.strokeStyle=c.art;ctx.lineWidth=s.width*(scale*0.002+0.5);ctx.lineCap='round';dp(s.pts,false);ctx.stroke();});
@@ -2293,6 +2414,7 @@ function drawCityMap(ctx,W,H,tx,ty,scale,map){
     ctx.font=`italic ${Math.max(6,Math.min(10,6+scale*0.001))}px DM Sans`;ctx.fillStyle=style==='light'?'rgba(80,120,50,0.7)':'rgba(130,180,100,0.5)';map.parks.forEach(p=>ctx.fillText(p.name,tx(p.cx),ty(p.cy)));
     ctx.fillStyle=style==='light'?'rgba(50,100,140,0.7)':'rgba(100,160,200,0.5)';map.lakes.forEach(l=>ctx.fillText(l.name,tx(l.cx),ty(l.cy)));
     if(map.river&&map.river.pts.length>5){const mid=map.river.pts[Math.floor(map.river.pts.length/2)],next=map.river.pts[Math.floor(map.river.pts.length/2)+1];ctx.save();ctx.translate(tx(mid.x),ty(mid.y));ctx.rotate(Math.atan2(ty(next.y)-ty(mid.y),tx(next.x)-tx(mid.x)));ctx.font=`italic ${Math.max(7,Math.min(11,7+scale*0.002))}px DM Sans`;ctx.fillStyle=style==='light'?'rgba(50,100,140,0.6)':'rgba(100,160,200,0.4)';ctx.fillText(map.river.name,0,-8);ctx.restore();}
+    if(map.discontinuity&&map.discontinuity.pts.length>5){const dPts=map.discontinuity.pts;const mid=dPts[Math.floor(dPts.length/2)],next=dPts[Math.min(Math.floor(dPts.length/2)+1,dPts.length-1)];ctx.save();ctx.translate(tx(mid.x),ty(mid.y));ctx.rotate(Math.atan2(ty(next.y)-ty(mid.y),tx(next.x)-tx(mid.x)));ctx.font=`italic bold ${Math.max(7,Math.min(11,7+scale*0.002))}px DM Sans`;ctx.fillStyle=map.discontinuity.type==='bluff'?(style==='light'?'rgba(140,90,40,0.6)':'rgba(180,140,80,0.5)'):(style==='light'?'rgba(50,100,140,0.6)':'rgba(100,160,200,0.4)');ctx.fillText(map.discontinuity.label,0,-10);ctx.restore();}
     const cn=document.getElementById('cityName').value||'Clearwater Springs';ctx.font=`bold ${Math.max(10,Math.min(20,10+scale*0.004))}px JetBrains Mono`;ctx.fillStyle=style==='light'?'rgba(60,50,40,0.15)':'rgba(200,210,220,0.08)';ctx.textAlign='left';ctx.fillText(cn.toUpperCase(),10,22);
     const bl=80,rf=bl/scale;ctx.fillStyle=style==='light'?'rgba(60,50,40,0.5)':'rgba(200,210,220,0.3)';ctx.fillRect(10,H-18,bl,2);ctx.font='8px JetBrains Mono';ctx.fillText(rf>5280?(rf/5280).toFixed(1)+' mi':rf.toFixed(0)+' ft',10,H-21);
     ctx.save();ctx.translate(W-24,H-28);ctx.fillStyle=style==='light'?'rgba(60,50,40,0.4)':'rgba(200,210,220,0.25)';ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(-4,4);ctx.lineTo(0,1);ctx.lineTo(4,4);ctx.closePath();ctx.fill();ctx.font='bold 7px JetBrains Mono';ctx.textAlign='center';ctx.fillText('N',0,-13);ctx.restore();
@@ -2764,7 +2886,7 @@ function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function readConfig(){
   const v=id=>{const el=document.getElementById(id);return el?+el.value:0;},s=id=>{const el=document.getElementById(id);return el?el.value:'';};
   const chk=id=>{const el=document.getElementById(id);return el?el.checked:false;};
-  const cfg = {gridRows:v('gridRows'),gridCols:v('gridCols'),nodeSpacing:v('nodeSpacing'),jitter:v('jitter'),diagonalPct:v('diagonalPct'),deadEnds:v('deadEnds'),elevMin:v('elevMin'),elevMax:v('elevMax'),terrainType:s('terrainType'),hillCount:v('hillCount'),numReservoirs:v('numReservoirs'),numTanks:v('numTanks'),numPumps:v('numPumps'),reservoirHead:v('reservoirHead'),tankMaxLevel:v('tankMaxLevel'),pipeTransmission:s('pipeTransmission'),pipeDistribution:s('pipeDistribution'),cMin:v('cMin'),cMax:v('cMax'),numPRV:v('numPRV'),numFCV:v('numFCV'),closedPipes:v('closedPipes'),pctResidential:v('pctResidential'),pctCommercial:v('pctCommercial'),pctIndustrial:v('pctIndustrial'),pctMixed:v('pctMixed'),demandMin:v('demandMin'),demandMax:v('demandMax'),numEmitters:v('numEmitters'),waterQuality:chk('chkWaterQuality'),secondaryDemands:chk('chkSecondaryDemands'),useTags:chk('chkTags'),simDuration:v('simDuration'),hydTimestep:s('hydTimestep'),qualTimestep:v('qualTimestep'),rptTimestep:v('rptTimestep'),headlossFormula:s('headlossFormula')};
+  const cfg = {gridRows:v('gridRows'),gridCols:v('gridCols'),nodeSpacing:v('nodeSpacing'),jitter:v('jitter'),diagonalPct:v('diagonalPct'),deadEnds:v('deadEnds'),elevMin:v('elevMin'),elevMax:v('elevMax'),terrainType:s('terrainType'),hillCount:v('hillCount'),addDiscontinuity:chk('chkDiscontinuity'),numReservoirs:v('numReservoirs'),numTanks:v('numTanks'),numPumps:v('numPumps'),reservoirHead:v('reservoirHead'),tankMaxLevel:v('tankMaxLevel'),pipeTransmission:s('pipeTransmission'),pipeDistribution:s('pipeDistribution'),cMin:v('cMin'),cMax:v('cMax'),numPRV:v('numPRV'),numFCV:v('numFCV'),closedPipes:v('closedPipes'),pctResidential:v('pctResidential'),pctCommercial:v('pctCommercial'),pctIndustrial:v('pctIndustrial'),pctMixed:v('pctMixed'),demandMin:v('demandMin'),demandMax:v('demandMax'),numEmitters:v('numEmitters'),waterQuality:chk('chkWaterQuality'),secondaryDemands:chk('chkSecondaryDemands'),useTags:chk('chkTags'),simDuration:v('simDuration'),hydTimestep:s('hydTimestep'),qualTimestep:v('qualTimestep'),rptTimestep:v('rptTimestep'),headlossFormula:s('headlossFormula')};
   cfg.designMode = chk('chkDesignMode');
   if (cfg.designMode) {
     cfg.designPop = v('designPop');
@@ -3052,6 +3174,12 @@ async function generateEPANETNetwork(silent){
   logEng('network', `Network generation started — ${rows}×${cols} grid (${rows*cols} nodes), spacing ${spacing} ft, seed ${seed}`);
   if (cfg.designMode) {
     logEng('design', `Design Mode active — Population: ${cfg.designPop.toLocaleString()}, Per-Capita: ${cfg.designGPCD} gpcd, Peaking Factor: ${cfg.designPeaking}×, Fire Flow: ${cfg.designFireFlow} GPM`);
+  }
+  _terrainParams = initTerrainParams(cfg, mulberry32(seed + 7777));
+  if (terrainDiscontinuity) {
+    const d = terrainDiscontinuity;
+    if (d.type === 'bluff') logEng('terrain', `Bluff discontinuity — ${d.height.toFixed(0)} ft step change at position ${(d.pos*100).toFixed(0)}%, angle ${(d.angle*180/Math.PI).toFixed(0)}°`);
+    else logEng('terrain', `Canyon discontinuity — ${d.depth.toFixed(0)} ft deep, ${(d.width*100).toFixed(0)}% wide at position ${(d.pos*100).toFixed(0)}%, angle ${(d.angle*180/Math.PI).toFixed(0)}°`);
   }
   const nodes=[],nG=Array.from({length:rows},()=>Array(cols).fill(null));let nId=1;
   setProgress(pf,pl,5,'Building grid nodes...');await sleep(5);
@@ -3884,6 +4012,7 @@ async function generateSWMMNetwork(silent) {
   const seed = +(document.getElementById('randomSeed').value) || 42;
   const rng = mulberry32(seed);
   updateSeedDisplay(seed);
+  _terrainParams = initTerrainParams(cfg, mulberry32(seed + 7777));
   const rows = cfg.gridRows, cols = cfg.gridCols, spacing = cfg.nodeSpacing;
   const jA = cfg.jitter/100*spacing;
 
@@ -6816,6 +6945,10 @@ function loadConfig() {
         if (cfg._units) setUnits(cfg._units);
         if (cfg._seed) document.getElementById('randomSeed').value = cfg._seed;
         // Restore common fields
+        if (cfg.addDiscontinuity !== undefined) {
+          const chkD = document.getElementById('chkDiscontinuity');
+          if (chkD) chkD.checked = cfg.addDiscontinuity;
+        }
         const fields = ['gridRows','gridCols','nodeSpacing','jitter','diagonalPct','deadEnds',
           'elevMin','elevMax','terrainType','hillCount','numReservoirs','numTanks','numPumps',
           'reservoirHead','tankMaxLevel','pipeTransmission','pipeDistribution','cMin','cMax',
