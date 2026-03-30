@@ -3326,6 +3326,7 @@ function setMode(mode) {
   // Hide previous results
   document.getElementById('dlRow').style.display = 'none';
   generatedINP = '';
+  wasmRPT = '';
   updateCalParamOptions();
 }
 
@@ -4906,7 +4907,7 @@ async function runEpanetSolver() {
   const junctions = nd.nodes.filter(n => n.type === 'junction');
 
   if (rptText && rptText.length > 100) {
-    generatedRPT = rptText;
+    wasmRPT = rptText;
   }
 
   const ws2 = new window.__EpanetWorkspace();
@@ -5018,7 +5019,7 @@ async function runSwmmSolver() {
 
   let rptText = '';
   try { rptText = new TextDecoder().decode(solverModule.FS.readFile('model.rpt')); } catch(e) {}
-  if (rptText && rptText.length > 50) generatedRPT = rptText;
+  if (rptText && rptText.length > 50) wasmRPT = rptText;
 
   try {
     const outData = solverModule.FS.readFile('model.out');
@@ -5335,6 +5336,7 @@ function drawResultsOverlay(ctx, W, H, tx, ty, nd) {
 
 // ═══════ RPT TEXT REPORT ═══════
 let generatedRPT = '';
+let wasmRPT = '';
 
 function generateRPT() {
   if (!solverResults || !networkData) return;
@@ -5496,7 +5498,16 @@ function generateRPT() {
   a(`    Timesteps Computed:  ${sr.timesteps.length}`);
   a(`    Simulation Period:   ${sr.timesteps.length > 0 ? sr.timesteps[sr.timesteps.length-1].toFixed(1) : '0'} hours`);
   nl();
-  a(`  Analysis completed successfully.`);
+
+  if (wasmRPT) {
+    a(`  ══════════════════════════════════════════════════════════════════════`);
+    a(`  Full Engine Report Output`);
+    a(`  ══════════════════════════════════════════════════════════════════════`);
+    nl();
+    a(wasmRPT);
+  } else {
+    a(`  Analysis completed successfully.`);
+  }
 
   generatedRPT = L.join('\n');
 
