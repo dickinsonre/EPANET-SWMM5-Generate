@@ -5033,6 +5033,7 @@ async function runEpanetSolver() {
   const linkResults = {};
 
   junctions.forEach(n => { nodeResults[n.id] = []; });
+  (nd.tanks || []).forEach(tk => { nodeResults[tk.id] = []; });
   nd.pipes.forEach(p => { linkResults[p.id] = []; });
 
   model2.openH();
@@ -5055,6 +5056,17 @@ async function runEpanetSolver() {
         nodeResults[n.id].push({ pressure, head, demand });
       } catch(e) {
         nodeResults[n.id].push({ pressure: 0, head: 0, demand: 0 });
+      }
+    });
+
+    (nd.tanks || []).forEach(tk => {
+      try {
+        const nodeIdx = model2.getNodeIndex(tk.id);
+        const head = model2.getNodeValue(nodeIdx, 10);
+        const pressure = model2.getNodeValue(nodeIdx, 11);
+        nodeResults[tk.id].push({ pressure, head, demand: 0 });
+      } catch(e) {
+        nodeResults[tk.id].push({ pressure: 0, head: 0, demand: 0 });
       }
     });
 
@@ -5131,9 +5143,12 @@ function analyzeValidation() {
   (nd.tanks || []).forEach(tk => {
     const results = sr.nodeResults[tk.id] || [];
     if (results.length === 0) return;
-    const pressures = results.map(r => r.pressure);
-    const minLevel = Math.min(...pressures);
-    if (minLevel <= 0.1) emptyTanks.push({ id: tk.id, minLevel });
+    const heads = results.map(r => r.head);
+    const minHead = Math.min(...heads);
+    const tankElev = tk.elevation || 0;
+    const tankMinLevel = tk.minLevel || 0;
+    const minLevel = minHead - tankElev;
+    if (minLevel <= tankMinLevel + 0.5) emptyTanks.push({ id: tk.id, minLevel: minLevel.toFixed(1) });
   });
 
   let massBalanceError = null;
@@ -5149,6 +5164,31 @@ function analyzeValidation() {
   if (negPressureNodes.length > 0 || !converged || (massBalanceError !== null && Math.abs(massBalanceError) > 5)) severity = 'red';
   else if (lowPressureNodes.length > junctions.length * 0.1 || highVelPipes.length > 0 || emptyTanks.length > 0) severity = 'yellow';
 
+  const recommendations = [];
+  if (negPressureNodes.length > 0) {
+    recommendations.push({ type: 'pipe_upsize', severity: 'red', text: `Upsize pipes near ${negPressureNodes.length} negative-pressure node(s) to increase hydraulic capacity` });
+    if (negPressureNodes.length > junctions.length * 0.15) {
+      recommendations.push({ type: 'booster_pump', severity: 'red', text: `Consider adding booster pump(s) — ${negPressureNodes.length} nodes with negative pressure suggests insufficient supply head` });
+    }
+  }
+  if (lowPressureNodes.length > junctions.length * 0.2) {
+    recommendations.push({ type: 'booster_pump', severity: 'yellow', text: `Consider booster pump(s) for ${lowPressureNodes.length} low-pressure nodes (<20 psi) — widespread low pressure indicates systemic head deficit` });
+  }
+  if (highVelPipes.length > 0) {
+    recommendations.push({ type: 'pipe_upsize', severity: 'yellow', text: `Upsize ${highVelPipes.length} pipe(s) with velocity >10 ft/s to reduce headloss and erosion risk` });
+  }
+  if (stagnantPipes.length > nd.pipes.length * 0.3) {
+    recommendations.push({ type: 'stagnation', severity: 'yellow', text: `${stagnantPipes.length} pipe(s) have avg velocity <0.5 ft/s — consider network looping, dead-end removal, or operational flushing schedule` });
+  } else if (stagnantPipes.length > 0) {
+    recommendations.push({ type: 'stagnation', severity: 'info', text: `${stagnantPipes.length} pipe(s) with low flow — monitor water age; consider flushing at dead-ends` });
+  }
+  if (emptyTanks.length > 0) {
+    recommendations.push({ type: 'tank_supply', severity: 'red', text: `${emptyTanks.length} tank(s) drain to minimum — increase supply or add fill pump` });
+  }
+  if (!converged) {
+    recommendations.push({ type: 'convergence', severity: 'red', text: 'Solver did not converge — check for disconnected nodes, extreme demands, or unreasonable pipe sizes' });
+  }
+
   validationReport = {
     severity,
     converged,
@@ -5158,6 +5198,7 @@ function analyzeValidation() {
     highVelPipes,
     stagnantPipes,
     emptyTanks,
+    recommendations,
     totalJunctions: junctions.length,
     totalPipes: nd.pipes.length,
     totalTanks: (nd.tanks || []).length,
@@ -5216,6 +5257,18 @@ function renderValidationUI() {
 
   if (v.fixesApplied > 0) {
     html += `<div style="margin-top:10px;padding:8px 12px;background:rgba(34,197,94,0.1);border-radius:6px;font-size:11px;color:#22c55e;">🔧 ${v.fixesApplied} fixes applied — model re-solved</div>`;
+  }
+
+  if (v.recommendations && v.recommendations.length > 0) {
+    html += `<div style="margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;">`;
+    html += `<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Recommendations</div>`;
+    v.recommendations.forEach(rec => {
+      const icon = rec.severity === 'red' ? '🔴' : rec.severity === 'yellow' ? '🟡' : 'ℹ️';
+      const recColor = rec.severity === 'red' ? '#ef4444' : rec.severity === 'yellow' ? '#f59e0b' : 'var(--text-dim)';
+      html += `<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:4px;font-size:11px;">`;
+      html += `<span>${icon}</span><span style="color:${recColor};">${rec.text}</span></div>`;
+    });
+    html += `</div>`;
   }
 
   if (v.negPressureNodes.length > 0 && v.negPressureNodes.length <= 20) {
@@ -5396,6 +5449,14 @@ function getValidationSummaryText() {
   lines.push(`Empty Tanks:         ${v.emptyTanks.length}`);
   if (v.fixesApplied > 0) lines.push(`Fixes Applied:       ${v.fixesApplied}`);
   lines.push('');
+  if (v.recommendations && v.recommendations.length > 0) {
+    lines.push('Recommendations:');
+    v.recommendations.forEach((rec, i) => {
+      const prefix = rec.severity === 'red' ? '[CRITICAL]' : rec.severity === 'yellow' ? '[WARNING]' : '[INFO]';
+      lines.push(`  ${i+1}. ${prefix} ${rec.text}`);
+    });
+    lines.push('');
+  }
   return lines.join('\n');
 }
 
