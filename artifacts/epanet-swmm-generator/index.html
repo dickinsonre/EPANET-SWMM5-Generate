@@ -2490,6 +2490,8 @@ function renderCanvas(forExport=false,exportWithNetwork=true){
   if(!forExport && solverResults)drawResultsOverlay(ctx,W,H,txF,tyF,nd);
   // Quick Sim pressure heatmap overlay
   if(!forExport && quickSimPressures)drawPressureHeatmap(ctx,W,H,txF,tyF,nd);
+  // Validation badge overlay
+  if(!forExport && validationReport)drawValidationBadge(ctx,W,H);
   return canvas;
 }
 
@@ -2720,6 +2722,7 @@ async function generateNetwork() {
 
 async function generateEPANETNetwork(silent){
   quickSimPressures = null;
+  validationReport = null;
   const btn=document.getElementById('genBtn'),pb=document.getElementById('progressBar'),pf=document.getElementById('progressFill'),pl=document.getElementById('progressLabel');
   if(!silent){btn.disabled=true;btn.textContent='⏳ Generating...';btn.classList.add('generating');pb.style.display='block';if(pl)pl.style.display='block';pf.style.width='0%';
   if(isMobile()){const ci=document.getElementById('controlsInner');ci.classList.add('collapsed');document.getElementById('drawerLabel').textContent='⚙ Tap to expand settings';window.scrollTo({top:0,behavior:'smooth'});}
@@ -3418,6 +3421,7 @@ function setMode(mode) {
   generatedINP = '';
   wasmRPT = '';
   quickSimPressures = null;
+  validationReport = null;
   updateCalParamOptions();
 }
 
@@ -4959,6 +4963,7 @@ async function runSolver() {
       slider.value = 0;
       currentTimestep = 0;
       onTimeSliderChange();
+      analyzeValidation();
       renderAll();
       setTimeout(renderHGL, 100);
       generateRPT();
@@ -5090,6 +5095,308 @@ async function runEpanetSolver() {
   const avgP = avgPressures.length > 0 ? (avgPressures.reduce((s,v) => s+v, 0) / avgPressures.length).toFixed(1) : '?';
 
   setSolverStatus(`✓ EPANET solved: ${stepCount} timesteps, ${junctions.length} nodes, avg pressure ${avgP} psi`);
+}
+
+// ═══════ VALIDATION ANALYZER ═══════
+let validationReport = null;
+const STANDARD_PIPE_SIZES = [4,6,8,10,12,14,16,18,20,24,30,36,42,48,54,60];
+
+function analyzeValidation() {
+  if (!solverResults || !networkData || solverResults.type !== 'epanet') { validationReport = null; return; }
+  const nd = networkData, sr = solverResults;
+  const junctions = nd.nodes.filter(n => n.type === 'junction');
+
+  const negPressureNodes = [];
+  const lowPressureNodes = [];
+  junctions.forEach(n => {
+    const results = sr.nodeResults[n.id] || [];
+    if (results.length === 0) return;
+    const minP = Math.min(...results.map(r => r.pressure));
+    if (minP < 0) negPressureNodes.push({ id: n.id, minPressure: minP, x: n.x, y: n.y });
+    else if (minP < 20) lowPressureNodes.push({ id: n.id, minPressure: minP, x: n.x, y: n.y });
+  });
+
+  const highVelPipes = [];
+  const stagnantPipes = [];
+  nd.pipes.forEach(p => {
+    const results = sr.linkResults[p.id] || [];
+    if (results.length === 0) return;
+    const maxVel = Math.max(...results.map(r => r.velocity));
+    const avgVel = results.reduce((s, r) => s + r.velocity, 0) / results.length;
+    if (maxVel > 10) highVelPipes.push({ id: p.id, maxVelocity: maxVel, diameter: p.diameter, node1: p.node1, node2: p.node2 });
+    if (avgVel < 0.5 && p.status !== 'Closed') stagnantPipes.push({ id: p.id, avgVelocity: avgVel, diameter: p.diameter });
+  });
+
+  const emptyTanks = [];
+  (nd.tanks || []).forEach(tk => {
+    const results = sr.nodeResults[tk.id] || [];
+    if (results.length === 0) return;
+    const pressures = results.map(r => r.pressure);
+    const minLevel = Math.min(...pressures);
+    if (minLevel <= 0.1) emptyTanks.push({ id: tk.id, minLevel });
+  });
+
+  let massBalanceError = null;
+  if (wasmRPT) {
+    const mbMatch = wasmRPT.match(/System Flow Balance.*?Error\s+([-\d.]+)\s*%/s);
+    if (mbMatch) massBalanceError = parseFloat(mbMatch[1]);
+  }
+
+  let converged = true;
+  if (wasmRPT && /WARNING.*cannot converge|WARNING.*unbalanced/i.test(wasmRPT)) converged = false;
+
+  let severity = 'green';
+  if (negPressureNodes.length > 0 || !converged || (massBalanceError !== null && Math.abs(massBalanceError) > 5)) severity = 'red';
+  else if (lowPressureNodes.length > junctions.length * 0.1 || highVelPipes.length > 0 || emptyTanks.length > 0) severity = 'yellow';
+
+  validationReport = {
+    severity,
+    converged,
+    massBalanceError,
+    negPressureNodes,
+    lowPressureNodes,
+    highVelPipes,
+    stagnantPipes,
+    emptyTanks,
+    totalJunctions: junctions.length,
+    totalPipes: nd.pipes.length,
+    totalTanks: (nd.tanks || []).length,
+    fixesApplied: 0
+  };
+}
+
+function renderValidationUI() {
+  if (!validationReport) return '';
+  const v = validationReport;
+  const badge = v.severity === 'green' ? '✅' : v.severity === 'yellow' ? '⚠️' : '❌';
+  const badgeColor = v.severity === 'green' ? '#22c55e' : v.severity === 'yellow' ? '#f59e0b' : '#ef4444';
+  const statusText = v.severity === 'green' ? 'Model Valid' : v.severity === 'yellow' ? 'Minor Issues' : 'Critical Issues';
+
+  let html = `<div style="background:rgba(${v.severity==='green'?'34,197,94':v.severity==='yellow'?'245,158,11':'239,68,68'},0.1);border:1px solid ${badgeColor};border-radius:10px;padding:16px;margin-bottom:16px;">`;
+  html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">`;
+  html += `<span style="font-size:28px;">${badge}</span>`;
+  html += `<div><div style="font-size:16px;font-weight:700;color:${badgeColor};">${statusText}</div>`;
+  html += `<div style="font-size:11px;color:var(--text-dim);">Validation Report — ${v.totalJunctions} junctions, ${v.totalPipes} pipes</div></div>`;
+  if (v.severity !== 'green' && currentMode === 'epanet') {
+    html += `<button onclick="autoFixNetwork()" id="autoFixBtn" class="download-btn" style="margin-left:auto;border-color:${badgeColor};color:${badgeColor};padding:8px 16px;font-size:12px;min-height:36px;">🔧 Auto-Fix</button>`;
+  }
+  html += `</div>`;
+
+  html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">`;
+  html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;">`;
+  html += `<div style="font-size:20px;font-weight:700;color:${v.converged?'#22c55e':'#ef4444'};">${v.converged?'Yes':'No'}</div>`;
+  html += `<div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">Converged</div></div>`;
+
+  html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;">`;
+  const mbe = v.massBalanceError !== null ? Math.abs(v.massBalanceError).toFixed(2) + '%' : 'N/A';
+  const mbeColor = v.massBalanceError !== null ? (Math.abs(v.massBalanceError) > 5 ? '#ef4444' : Math.abs(v.massBalanceError) > 1 ? '#f59e0b' : '#22c55e') : 'var(--text-dim)';
+  html += `<div style="font-size:20px;font-weight:700;color:${mbeColor};">${mbe}</div>`;
+  html += `<div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">Mass Balance Error</div></div>`;
+
+  html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;">`;
+  html += `<div style="font-size:20px;font-weight:700;color:${v.negPressureNodes.length>0?'#ef4444':'#22c55e'};">${v.negPressureNodes.length}</div>`;
+  html += `<div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">Negative Pressure</div></div>`;
+
+  html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;">`;
+  html += `<div style="font-size:20px;font-weight:700;color:${v.lowPressureNodes.length > v.totalJunctions*0.1?'#f59e0b':'#22c55e'};">${v.lowPressureNodes.length}</div>`;
+  html += `<div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">Low Pressure (&lt;20 psi)</div></div>`;
+
+  html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;">`;
+  html += `<div style="font-size:20px;font-weight:700;color:${v.highVelPipes.length>0?'#ef4444':'#22c55e'};">${v.highVelPipes.length}</div>`;
+  html += `<div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">High Velocity (&gt;10 ft/s)</div></div>`;
+
+  html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;">`;
+  html += `<div style="font-size:20px;font-weight:700;color:${v.stagnantPipes.length > v.totalPipes*0.3?'#f59e0b':'var(--text-secondary)'};">${v.stagnantPipes.length}</div>`;
+  html += `<div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">Stagnation Risk (&lt;0.5 ft/s)</div></div>`;
+
+  html += `<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;">`;
+  html += `<div style="font-size:20px;font-weight:700;color:${v.emptyTanks.length>0?'#ef4444':'#22c55e'};">${v.emptyTanks.length}</div>`;
+  html += `<div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;">Empty Tanks</div></div>`;
+  html += `</div>`;
+
+  if (v.fixesApplied > 0) {
+    html += `<div style="margin-top:10px;padding:8px 12px;background:rgba(34,197,94,0.1);border-radius:6px;font-size:11px;color:#22c55e;">🔧 ${v.fixesApplied} fixes applied — model re-solved</div>`;
+  }
+
+  if (v.negPressureNodes.length > 0 && v.negPressureNodes.length <= 20) {
+    html += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12px;color:var(--text-secondary);">Negative Pressure Nodes (${v.negPressureNodes.length})</summary>`;
+    html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);padding:8px;max-height:150px;overflow-y:auto;">`;
+    v.negPressureNodes.forEach(n => { html += `${n.id}: ${n.minPressure.toFixed(1)} psi<br>`; });
+    html += `</div></details>`;
+  }
+  if (v.highVelPipes.length > 0 && v.highVelPipes.length <= 20) {
+    html += `<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:var(--text-secondary);">High Velocity Pipes (${v.highVelPipes.length})</summary>`;
+    html += `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);padding:8px;max-height:150px;overflow-y:auto;">`;
+    v.highVelPipes.forEach(p => { html += `${p.id}: ${p.maxVelocity.toFixed(1)} ft/s (${p.diameter}" dia)<br>`; });
+    html += `</div></details>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function drawValidationBadge(ctx, W, H) {
+  if (!validationReport) return;
+  const v = validationReport;
+  const x = 12, y = 12, r = 16;
+  const color = v.severity === 'green' ? '#22c55e' : v.severity === 'yellow' ? '#f59e0b' : '#ef4444';
+
+  ctx.fillStyle = 'rgba(10,14,26,0.8)';
+  ctx.beginPath(); ctx.roundRect(x - 4, y - 4, 120, 40, 8); ctx.fill();
+
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x + r, y + r, r, 0, Math.PI * 2); ctx.fill();
+
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 14px JetBrains Mono'; ctx.textAlign = 'center';
+  if (v.severity === 'green') ctx.fillText('✓', x + r, y + r + 5);
+  else if (v.severity === 'yellow') ctx.fillText('!', x + r, y + r + 5);
+  else ctx.fillText('✗', x + r, y + r + 5);
+
+  ctx.textAlign = 'left'; ctx.font = 'bold 10px JetBrains Mono'; ctx.fillStyle = color;
+  const label = v.severity === 'green' ? 'VALID' : v.severity === 'yellow' ? 'WARNINGS' : 'CRITICAL';
+  ctx.fillText(label, x + r * 2 + 6, y + 14);
+  ctx.font = '8px DM Sans'; ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText(`${v.negPressureNodes.length} neg / ${v.highVelPipes.length} hi-v`, x + r * 2 + 6, y + 28);
+}
+
+function nextStandardSize(currentDia) {
+  for (let i = 0; i < STANDARD_PIPE_SIZES.length; i++) {
+    if (STANDARD_PIPE_SIZES[i] > currentDia) return STANDARD_PIPE_SIZES[i];
+  }
+  return currentDia;
+}
+
+async function autoFixNetwork() {
+  if (!validationReport || !networkData || !solverResults) return;
+  const btn = document.getElementById('autoFixBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '🔧 Fixing...'; }
+
+  const nd = networkData;
+  const v = validationReport;
+  let fixCount = 0;
+
+  const pipeMap = {};
+  nd.pipes.forEach(p => { pipeMap[p.id] = p; });
+  const nodeAdj = {};
+  nd.pipes.forEach(p => {
+    if (!nodeAdj[p.node1]) nodeAdj[p.node1] = [];
+    if (!nodeAdj[p.node2]) nodeAdj[p.node2] = [];
+    nodeAdj[p.node1].push(p);
+    nodeAdj[p.node2].push(p);
+  });
+
+  const negNodeIds = new Set(v.negPressureNodes.map(n => n.id));
+  const upgradedPipes = new Set();
+
+  negNodeIds.forEach(nodeId => {
+    const adjPipes = nodeAdj[nodeId] || [];
+    adjPipes.forEach(p => {
+      if (upgradedPipes.has(p.id)) return;
+      const newDia = nextStandardSize(p.diameter);
+      if (newDia > p.diameter) {
+        p.diameter = newDia;
+        upgradedPipes.add(p.id);
+        fixCount++;
+      }
+    });
+    const visited = new Set([nodeId]);
+    const queue = [nodeId];
+    let depth = 0;
+    while (queue.length > 0 && depth < 3) {
+      const sz = queue.length;
+      for (let i = 0; i < sz; i++) {
+        const nid = queue.shift();
+        (nodeAdj[nid] || []).forEach(p => {
+          const neighbor = p.node1 === nid ? p.node2 : p.node1;
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            queue.push(neighbor);
+            if (!upgradedPipes.has(p.id)) {
+              const newDia = nextStandardSize(p.diameter);
+              if (newDia > p.diameter) {
+                p.diameter = newDia;
+                upgradedPipes.add(p.id);
+                fixCount++;
+              }
+            }
+          }
+        });
+      }
+      depth++;
+    }
+  });
+
+  v.highVelPipes.forEach(pInfo => {
+    const p = pipeMap[pInfo.id];
+    if (!p || upgradedPipes.has(p.id)) return;
+    const newDia = nextStandardSize(p.diameter);
+    if (newDia > p.diameter) {
+      p.diameter = newDia;
+      upgradedPipes.add(p.id);
+      fixCount++;
+    }
+  });
+
+  if (fixCount === 0) {
+    showToast('No fixable issues found', 'warning');
+    if (btn) { btn.disabled = false; btn.textContent = '🔧 Auto-Fix'; }
+    return;
+  }
+
+  const cfg = nd.cfg;
+  const nodes = nd.nodes;
+  const reservoirs = nd.reservoirs;
+  const tanks = nd.tanks || [];
+  const pipes = nd.pipes;
+  const pumps = nd.pumps;
+  const valves = nd.valves;
+  const emitterNodes = nodes.filter(n => n.emitter);
+  const rng = mulberry32(999);
+  const totalAvgDemand = nodes.filter(n=>n.type==='junction').reduce((s,n)=>s+n.demand,0);
+  const peakDemand = totalAvgDemand * PEAKING_FACTOR;
+  const supplyDemandRatio = nd.supplyDemandRatio || 1;
+
+  generatedINP = buildINP(cfg, nodes, reservoirs, tanks, pipes, pumps, valves, emitterNodes, rng,
+    totalAvgDemand, peakDemand, nd.numPressureZones || 1, nd.connectivityPct || 100, 0, supplyDemandRatio);
+
+  showToast(`Applied ${fixCount} pipe diameter upgrades — re-solving...`, 'success');
+  setSolverStatus(`🔧 Applied ${fixCount} fixes, re-solving...`);
+
+  try {
+    await runEpanetSolver();
+    analyzeValidation();
+    if (validationReport) validationReport.fixesApplied = fixCount;
+    generateResultsHTML();
+    generateRPT();
+    renderAll();
+    setSolverStatus(`✓ Re-solved after ${fixCount} fixes — ${validationReport ? validationReport.severity.toUpperCase() : 'done'}`);
+  } catch(e) {
+    console.error('Auto-fix re-solve error:', e);
+    setSolverStatus(`⚠ Re-solve failed: ${e.message}`);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🔧 Auto-Fix'; }
+}
+
+function getValidationSummaryText() {
+  if (!validationReport) return '';
+  const v = validationReport;
+  const lines = [];
+  lines.push('');
+  lines.push('═══════════════════════════════════════════');
+  lines.push('       NETWORK VALIDATION REPORT');
+  lines.push('═══════════════════════════════════════════');
+  lines.push('');
+  lines.push(`Status:              ${v.severity === 'green' ? 'VALID' : v.severity === 'yellow' ? 'WARNINGS' : 'CRITICAL ISSUES'}`);
+  lines.push(`Converged:           ${v.converged ? 'Yes' : 'No'}`);
+  lines.push(`Mass Balance Error:  ${v.massBalanceError !== null ? Math.abs(v.massBalanceError).toFixed(2) + '%' : 'N/A'}`);
+  lines.push(`Negative Pressure:   ${v.negPressureNodes.length} nodes`);
+  lines.push(`Low Pressure (<20):  ${v.lowPressureNodes.length} nodes`);
+  lines.push(`High Velocity (>10): ${v.highVelPipes.length} pipes`);
+  lines.push(`Stagnation (<0.5):   ${v.stagnantPipes.length} pipes`);
+  lines.push(`Empty Tanks:         ${v.emptyTanks.length}`);
+  if (v.fixesApplied > 0) lines.push(`Fixes Applied:       ${v.fixesApplied}`);
+  lines.push('');
+  return lines.join('\n');
 }
 
 async function runSwmmSolver() {
@@ -5597,6 +5904,9 @@ function generateRPT() {
   a(`    Simulation Period:   ${sr.timesteps.length > 0 ? sr.timesteps[sr.timesteps.length-1].toFixed(1) : '0'} hours`);
   nl();
 
+  const valText = getValidationSummaryText();
+  if (valText) a(valText);
+
   if (wasmRPT) {
     a(`  ══════════════════════════════════════════════════════════════════════`);
     a(`  Full Engine Report Output`);
@@ -5808,8 +6118,9 @@ function generateResultsHTML() {
   // Render inline in Results tab
   const container = document.getElementById('resultsContent');
   if (container) {
-    // Render a simplified inline version
-    container.innerHTML = generatedResultsHTML.replace(/<\/?html>|<\/?head>|<\/?body>|<style>[\s\S]*?<\/style>|<meta[^>]*>|<title>[\s\S]*?<\/title>|<!DOCTYPE[^>]*>/g, '');
+    const validHtml = renderValidationUI();
+    const stripped = generatedResultsHTML.replace(/<\/?html>|<\/?head>|<\/?body>|<style>[\s\S]*?<\/style>|<meta[^>]*>|<title>[\s\S]*?<\/title>|<!DOCTYPE[^>]*>/g, '');
+    container.innerHTML = validHtml + stripped;
   }
 }
 
