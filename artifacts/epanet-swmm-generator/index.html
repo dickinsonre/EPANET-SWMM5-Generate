@@ -3589,6 +3589,75 @@ async function generateEPANETNetwork(silent){
     }
   }
 
+  // ═══ DISCONTINUITY-AWARE INFRASTRUCTURE PLACEMENT ═══
+  if (terrainDiscontinuity) {
+    const d = terrainDiscontinuity;
+    let discPumpsPlaced = 0, discPRVsPlaced = 0;
+    const maxDiscInfra = Math.min(8, Math.floor(pipes.length * 0.05));
+    for (let pi = 0; pi < pipes.length && (discPumpsPlaced + discPRVsPlaced) < maxDiscInfra; pi++) {
+      const p = pipes[pi];
+      if (p.status === 'Closed' || usedPipeIndices.has(pi)) continue;
+      const n1 = allNodeMap[p.node1], n2 = allNodeMap[p.node2];
+      if (!n1 || !n2 || n1.elev === undefined || n2.elev === undefined) continue;
+      const rows_c = cfg.gridRows, cols_c = cfg.gridCols, spacing_c = cfg.nodeSpacing;
+      const gridW = (cols_c - 1) * spacing_c || 1, gridH = (rows_c - 1) * spacing_c || 1;
+      const nx1 = n1.x / gridW, ny1 = n1.y / gridH, nx2 = n2.x / gridW, ny2 = n2.y / gridH;
+      let side1, side2;
+      if (d.type === 'bluff') {
+        const proj1 = nx1 * Math.cos(d.angle) + ny1 * Math.sin(d.angle);
+        const proj2 = nx2 * Math.cos(d.angle) + ny2 * Math.sin(d.angle);
+        side1 = proj1 > d.pos ? 1 : -1;
+        side2 = proj2 > d.pos ? 1 : -1;
+      } else {
+        const perp1 = -nx1 * Math.sin(d.angle) + ny1 * Math.cos(d.angle);
+        const perp2 = -nx2 * Math.sin(d.angle) + ny2 * Math.cos(d.angle);
+        const in1 = Math.abs(perp1 - d.pos) < d.width;
+        const in2 = Math.abs(perp2 - d.pos) < d.width;
+        if (!in1 && !in2) continue;
+        if (in1 === in2) continue;
+        side1 = in1 ? -1 : 1;
+        side2 = in2 ? -1 : 1;
+      }
+      if (side1 === side2) continue;
+      const elevDiff = n1.elev - n2.elev;
+      if (Math.abs(elevDiff) < 10) continue;
+      if (elevDiff < -10 && discPumpsPlaced < Math.ceil(maxDiscInfra / 2)) {
+        const midId = 'J' + nId++;
+        const midNode = { id: midId, row: 0, col: 0,
+          x: Math.round(((n1.x + n2.x) / 2) * 100) / 100,
+          y: Math.round(((n1.y + n2.y) / 2) * 100) / 100,
+          elev: Math.round(((n1.elev + n2.elev) / 2) * 100) / 100,
+          type: 'junction', demand: 0, zone: 'Mixed', tag: 'DISC' };
+        nodes.push(midNode); allNodeMap[midId] = midNode;
+        const halfLen = Math.round(p.length / 2);
+        const origNode2 = p.node2;
+        p.node2 = midId; p.length = halfLen;
+        const pumpHead = Math.round(Math.abs(elevDiff) + 20 + minPressure * PSI_TO_FT * 0.3);
+        const pumpFlow = Math.max(100, Math.round((p.estimatedFlow || 200)));
+        pumps.push({ id: 'PU' + puId, node1: midId, node2: origNode2,
+          curve: 'PUMP' + puId, type: 'booster',
+          designHead: pumpHead, designFlow: pumpFlow });
+        pipes.push({ id: 'P' + pId++, node1: midId, node2: origNode2,
+          length: halfLen, diameter: p.diameter, roughness: p.roughness,
+          status: 'Closed', installYear: p.installYear });
+        logEng('pumps', `Discontinuity pump PU${puId} at ${d.type} crossing — ${Math.abs(elevDiff).toFixed(0)} ft uphill, design: ${pumpFlow} GPM @ ${pumpHead} ft TDH`);
+        puId++;
+        usedPipeIndices.add(pi);
+        discPumpsPlaced++;
+      } else if (elevDiff > 10 && discPRVsPlaced < Math.ceil(maxDiscInfra / 2)) {
+        const downElev = Math.min(n1.elev, n2.elev);
+        const prvSetting = Math.round(downElev + 50 * PSI_TO_FT);
+        if (insertValveAtPipe(pi, 'PRV', prvSetting)) {
+          logEng('valves', `Discontinuity PRV V${vI - 1} at ${d.type} crossing — ${Math.abs(elevDiff).toFixed(0)} ft downhill, setting: ${prvSetting} ft HGL`);
+          discPRVsPlaced++;
+        }
+      }
+    }
+    if (discPumpsPlaced + discPRVsPlaced > 0) {
+      logEng('network', `Discontinuity infrastructure: ${discPumpsPlaced} pump(s) and ${discPRVsPlaced} PRV(s) placed at ${d.type} crossings`);
+    }
+  }
+
   // Additional user-requested PRVs (random placement for calibration)
   const maxValves = Math.floor(pipes.length * 0.3) - usedPipeIndices.size;
   const remainingPRVs = Math.min(Math.max(0, cfg.numPRV - zonePRVsPlaced), maxValves);
