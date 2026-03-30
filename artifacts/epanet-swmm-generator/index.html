@@ -3592,14 +3592,14 @@ async function generateEPANETNetwork(silent){
   if (terrainDiscontinuity) {
     const d = terrainDiscontinuity;
     let discPumpsPlaced = 0, discPRVsPlaced = 0;
-    const maxDiscInfra = Math.min(8, Math.floor(pipes.length * 0.05));
-    for (let pi = 0; pi < pipes.length && (discPumpsPlaced + discPRVsPlaced) < maxDiscInfra; pi++) {
+    const maxDiscInfra = Math.max(2, Math.min(8, Math.floor(pipes.length * 0.05)));
+    let bestCrossing = null, bestCrossingDrop = 0;
+    function classifyPipeCrossing(pi) {
       const p = pipes[pi];
-      if (p.status === 'Closed' || usedPipeIndices.has(pi)) continue;
+      if (p.status === 'Closed' || usedPipeIndices.has(pi)) return null;
       const n1 = allNodeMap[p.node1], n2 = allNodeMap[p.node2];
-      if (!n1 || !n2 || n1.elev === undefined || n2.elev === undefined) continue;
-      const rows_c = cfg.gridRows, cols_c = cfg.gridCols, spacing_c = cfg.nodeSpacing;
-      const gridW = (cols_c - 1) * spacing_c || 1, gridH = (rows_c - 1) * spacing_c || 1;
+      if (!n1 || !n2 || n1.elev === undefined || n2.elev === undefined) return null;
+      const gridW = (cfg.gridCols - 1) * cfg.nodeSpacing || 1, gridH = (cfg.gridRows - 1) * cfg.nodeSpacing || 1;
       const nx1 = n1.x / gridW, ny1 = n1.y / gridH, nx2 = n2.x / gridW, ny2 = n2.y / gridH;
       let side1, side2;
       if (d.type === 'bluff') {
@@ -3612,23 +3612,32 @@ async function generateEPANETNetwork(silent){
         const perp2 = -nx2 * Math.sin(d.angle) + ny2 * Math.cos(d.angle);
         const in1 = Math.abs(perp1 - d.pos) < d.width;
         const in2 = Math.abs(perp2 - d.pos) < d.width;
-        if (!in1 && !in2) continue;
-        if (in1 === in2) continue;
+        if (!in1 && !in2) return null;
+        if (in1 === in2) return null;
         side1 = in1 ? -1 : 1;
         side2 = in2 ? -1 : 1;
       }
-      if (side1 === side2) continue;
-      const highNode = n1.elev >= n2.elev ? n1 : n2;
-      const lowNode = n1.elev >= n2.elev ? n2 : n1;
-      const elevDrop = highNode.elev - lowNode.elev;
-      if (elevDrop < 10) continue;
+      if (side1 === side2) return null;
+      const elevDrop = Math.abs(n1.elev - n2.elev);
       const flowsDownhill = (side1 === 1 && n1.elev > n2.elev) || (side2 === 1 && n2.elev > n1.elev);
+      return { pi, elevDrop, flowsDownhill, n1, n2, p };
+    }
+    for (let pi = 0; pi < pipes.length && (discPumpsPlaced + discPRVsPlaced) < maxDiscInfra; pi++) {
+      const c = classifyPipeCrossing(pi);
+      if (!c) continue;
+      if (c.elevDrop > bestCrossingDrop) { bestCrossing = c; bestCrossingDrop = c.elevDrop; }
+      if (c.elevDrop < 5) continue;
+      const highNode = c.n1.elev >= c.n2.elev ? c.n1 : c.n2;
+      const lowNode = c.n1.elev >= c.n2.elev ? c.n2 : c.n1;
+      const elevDrop = c.elevDrop;
+      const flowsDownhill = c.flowsDownhill;
+      const p = c.p;
       if (!flowsDownhill && discPumpsPlaced < Math.ceil(maxDiscInfra / 2)) {
         const midId = 'J' + nId++;
         const midNode = { id: midId, row: 0, col: 0,
-          x: Math.round(((n1.x + n2.x) / 2) * 100) / 100,
-          y: Math.round(((n1.y + n2.y) / 2) * 100) / 100,
-          elev: Math.round(((n1.elev + n2.elev) / 2) * 100) / 100,
+          x: Math.round(((c.n1.x + c.n2.x) / 2) * 100) / 100,
+          y: Math.round(((c.n1.y + c.n2.y) / 2) * 100) / 100,
+          elev: Math.round(((c.n1.elev + c.n2.elev) / 2) * 100) / 100,
           type: 'junction', demand: 0, zone: 'Mixed', tag: 'DISC' };
         nodes.push(midNode); allNodeMap[midId] = midNode;
         const halfLen = Math.round(p.length / 2);
@@ -3659,8 +3668,19 @@ async function generateEPANETNetwork(silent){
         }
       }
     }
+    if (discPumpsPlaced + discPRVsPlaced === 0 && bestCrossing) {
+      const bc = bestCrossing;
+      const lowElev = Math.min(bc.n1.elev, bc.n2.elev);
+      const prvSet = Math.round(lowElev + 50 * PSI_TO_FT);
+      if (insertValveAtPipe(bc.pi, 'PRV', prvSet)) {
+        logEng('valves', `Fallback discontinuity PRV V${vI - 1} at ${d.type} crossing — best candidate with ${bc.elevDrop.toFixed(0)} ft change, setting: ${prvSet} ft HGL`);
+        discPRVsPlaced++;
+      }
+    }
     if (discPumpsPlaced + discPRVsPlaced > 0) {
       logEng('network', `Discontinuity infrastructure: ${discPumpsPlaced} pump(s) and ${discPRVsPlaced} PRV(s) placed at ${d.type} crossings`);
+    } else {
+      logEng('network', `Discontinuity detected (${d.type}) but no suitable pipe crossings found for infrastructure placement`);
     }
   }
 
