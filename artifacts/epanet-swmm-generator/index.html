@@ -1797,41 +1797,35 @@ const tooltipDefs = {
 function setupTooltips() {
   const popup = document.getElementById('tooltipPopup');
   if (!popup) return;
-  document.querySelectorAll('.controls-panel label[title]').forEach(label => {
-    const titleText = label.getAttribute('title');
-    if (!titleText) return;
-    label.classList.add('has-tooltip');
-    label.removeAttribute('title');
-    label.setAttribute('data-tooltip', titleText);
-    label.setAttribute('role', 'note');
-    label.addEventListener('mouseenter', (e) => {
-      popup.textContent = titleText;
-      const rect = label.getBoundingClientRect();
+  function attachTooltip(el, text) {
+    el.classList.add('has-tooltip');
+    el.setAttribute('data-tooltip', text);
+    el.setAttribute('role', 'note');
+    if (!el.getAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    const show = () => {
+      popup.textContent = text;
+      const rect = el.getBoundingClientRect();
       popup.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
       popup.style.top = (rect.bottom + 6) + 'px';
       popup.classList.add('visible');
-    });
-    label.addEventListener('mouseleave', () => {
-      popup.classList.remove('visible');
-    });
+    };
+    const hide = () => { popup.classList.remove('visible'); };
+    el.addEventListener('mouseenter', show);
+    el.addEventListener('mouseleave', hide);
+    el.addEventListener('focus', show);
+    el.addEventListener('blur', hide);
+  }
+  document.querySelectorAll('.controls-panel label[title]').forEach(label => {
+    const titleText = label.getAttribute('title');
+    if (!titleText) return;
+    label.removeAttribute('title');
+    attachTooltip(label, titleText);
   });
   document.querySelectorAll('.controls-panel h3, .controls-panel label').forEach(el => {
     const text = el.textContent;
     Object.keys(tooltipDefs).forEach(term => {
       if (text.includes(term) && !el.getAttribute('data-tooltip')) {
-        el.classList.add('has-tooltip');
-        el.setAttribute('data-tooltip', tooltipDefs[term]);
-        el.setAttribute('role', 'note');
-        el.addEventListener('mouseenter', (e) => {
-          popup.textContent = tooltipDefs[term];
-          const rect = el.getBoundingClientRect();
-          popup.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
-          popup.style.top = (rect.bottom + 6) + 'px';
-          popup.classList.add('visible');
-        });
-        el.addEventListener('mouseleave', () => {
-          popup.classList.remove('visible');
-        });
+        attachTooltip(el, tooltipDefs[term]);
       }
     });
   });
