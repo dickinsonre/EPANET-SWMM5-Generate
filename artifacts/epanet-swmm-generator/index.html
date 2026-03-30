@@ -783,6 +783,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         <button class="preset-btn" onclick="applyPreset('tiny',this)">Tiny (50)</button>
         <button class="preset-btn" onclick="applyPreset('small',this)">Small (150)</button>
         <button class="preset-btn active" onclick="applyPreset('medium',this)">Medium (750)</button>
+        <button class="preset-btn" onclick="applyPreset('standard',this)">Standard (1K)</button>
         <button class="preset-btn" onclick="applyPreset('large',this)">Large (2500)</button>
         <button class="preset-btn" onclick="applyPreset('xlarge',this)">XL (5000)</button>
         <button class="preset-btn" onclick="applyPreset('mega',this)">Mega (10K)</button>
@@ -1042,6 +1043,12 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 
   <!-- ═══════ TAB 3: ENVIRONMENT ═══════ -->
   <div class="settings-tab-content" id="stab-environment" role="tabpanel">
+
+  <div class="epanet-only" style="padding:20px 16px;color:var(--text-secondary);text-align:center;">
+    <div style="font-size:28px;margin-bottom:8px;">💧</div>
+    <p style="margin:0 0 6px;color:var(--text-primary);font-weight:600;">EPANET Mode</p>
+    <p style="margin:0;font-size:12px;line-height:1.5;">Environment settings (rainfall, groundwater, snowmelt, etc.) are available in SWMM 5.2.4 mode. Switch to SWMM to configure stormwater environment parameters.</p>
+  </div>
 
   <!-- SWMM: Rainfall & Infiltration -->
   <div class="section swmm-only" style="display:none;">
@@ -1999,6 +2006,7 @@ const presets = {
   tiny:   { rows:7,  cols:7,  spacing:400, res:1, tanks:1, pumps:2, prvs:0, fcvs:0, closed:1, emitters:3, deadEnds:2, hillCount:1, parks:2, lakes:0 },
   small:  { rows:12, cols:13, spacing:500, res:2, tanks:3, pumps:4, prvs:1, fcvs:0, closed:3, emitters:10, deadEnds:5, hillCount:2, parks:3, lakes:1 },
   medium: { rows:25, cols:30, spacing:500, res:3, tanks:6, pumps:8, prvs:3, fcvs:1, closed:8, emitters:25, deadEnds:12, hillCount:3, parks:6, lakes:2 },
+  standard:{ rows:32, cols:32, spacing:450, res:4, tanks:8, pumps:10, prvs:4, fcvs:1, closed:10, emitters:35, deadEnds:18, hillCount:3, parks:8, lakes:2 },
   large:  { rows:50, cols:50, spacing:400, res:5, tanks:10, pumps:14, prvs:5, fcvs:2, closed:15, emitters:60, deadEnds:25, hillCount:4, parks:10, lakes:3 },
   xlarge: { rows:70, cols:72, spacing:350, res:8, tanks:15, pumps:20, prvs:8, fcvs:3, closed:25, emitters:100, deadEnds:40, hillCount:5, parks:14, lakes:4 },
   mega:   { rows:100,cols:100,spacing:300, res:12,tanks:20,pumps:30, prvs:12,fcvs:5, closed:40, emitters:200,deadEnds:60, hillCount:6, parks:20, lakes:5 },
