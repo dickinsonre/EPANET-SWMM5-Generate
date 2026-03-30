@@ -1693,7 +1693,6 @@ function validateAllInputs() {
     if (!el) return;
     if (el.closest('.epanet-only') && currentMode !== 'epanet') return;
     if (el.closest('.swmm-only') && currentMode !== 'swmm') return;
-    if (el.offsetParent === null) return;
     if (!validateSingleInput(el, rule)) {
       errors.push(`${rule.label}: must be ${rule.min}–${rule.max}`);
     }
@@ -1735,7 +1734,7 @@ function validateAllInputs() {
       if (transVals.length > 0 && distVals.length > 0) {
         const minTrans = Math.min(...transVals);
         const maxDist = Math.max(...distVals);
-        if (minTrans <= maxDist) {
+        if (minTrans < maxDist) {
           transEl.classList.add('input-warning');
           distEl.classList.add('input-warning');
           errors.push('Smallest transmission diameter should exceed largest distribution diameter');
