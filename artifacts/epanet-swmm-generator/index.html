@@ -1640,32 +1640,20 @@ function showToast(message, type = 'error', duration = 4000) {
   toast._timer = setTimeout(() => { toast.classList.remove('visible'); }, duration);
 }
 
-const validationRules = [
-  { id: 'gridRows', min: 3, max: 400, label: 'Grid Rows' },
-  { id: 'gridCols', min: 3, max: 400, label: 'Grid Columns' },
-  { id: 'nodeSpacing', min: 10, max: 10000, label: 'Node Spacing' },
-  { id: 'randomSeed', min: 1, max: 999999, label: 'Random Seed' },
-  { id: 'elevMin', min: 0, max: 9999, label: 'Min Elevation' },
-  { id: 'elevMax', min: 1, max: 10000, label: 'Max Elevation' },
-  { id: 'numReservoirs', min: 1, max: 20, label: 'Reservoirs' },
-  { id: 'numTanks', min: 0, max: 50, label: 'Tanks' },
-  { id: 'numPumps', min: 1, max: 50, label: 'Pumps' },
-  { id: 'reservoirHead', min: 10, max: 2000, label: 'Reservoir Head' },
-  { id: 'tankMaxLevel', min: 1, max: 200, label: 'Tank Max Level' },
-  { id: 'cMin', min: 50, max: 150, label: 'C-factor Min' },
-  { id: 'cMax', min: 50, max: 150, label: 'C-factor Max' },
-  { id: 'numPRV', min: 0, max: 50, label: 'PRVs' },
-  { id: 'numFCV', min: 0, max: 50, label: 'FCVs' },
-  { id: 'closedPipes', min: 0, max: 200, label: 'Closed Pipes' },
-  { id: 'numEmitters', min: 0, max: 500, label: 'Emitter Nodes' },
-  { id: 'simDuration', min: 1, max: 720, label: 'Simulation Duration' },
-  { id: 'demandMin', min: 0, max: 100, label: 'Demand Min' },
-  { id: 'demandMax', min: 0.1, max: 500, label: 'Demand Max' },
-  { id: 'deadEnds', min: 0, max: 500, label: 'Dead-end Branches' },
-  { id: 'hillCount', min: 0, max: 20, label: 'Hill Count' },
-  { id: 'numParks', min: 0, max: 50, label: 'Parks' },
-  { id: 'numLakes', min: 0, max: 20, label: 'Lakes' },
-];
+function buildValidationRules() {
+  const rules = [];
+  document.querySelectorAll('.controls-panel input[type="number"][id]').forEach(el => {
+    const minA = el.getAttribute('min'), maxA = el.getAttribute('max');
+    if (minA === null && maxA === null) return;
+    const min = minA !== null ? parseFloat(minA) : -Infinity;
+    const max = maxA !== null ? parseFloat(maxA) : Infinity;
+    const labelEl = el.closest('.input-group')?.querySelector('label');
+    const label = labelEl ? labelEl.textContent.replace(/\s*\(.*$/, '').trim() : el.id;
+    rules.push({ id: el.id, min, max, label });
+  });
+  return rules;
+}
+let validationRules = [];
 
 const linkedValidations = [
   { idA: 'elevMin', idB: 'elevMax', rule: 'lt', msg: 'Min Elevation must be less than Max Elevation' },
@@ -1684,13 +1672,28 @@ function validateSingleInput(el, rule) {
   return true;
 }
 
+function validateCsvDiameters(id, label, minVal, maxVal) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  if (el.closest('.epanet-only') && currentMode !== 'epanet') return null;
+  if (el.closest('.swmm-only') && currentMode !== 'swmm') return null;
+  const vals = el.value.split(',').map(s => parseFloat(s.trim())).filter(v => !isNaN(v));
+  if (vals.length === 0) { el.classList.add('input-invalid'); return `${label}: need at least one valid diameter`; }
+  const bad = vals.find(v => v < minVal || v > maxVal);
+  if (bad !== undefined) { el.classList.add('input-invalid'); return `${label}: values must be ${minVal}–${maxVal}`; }
+  el.classList.remove('input-invalid');
+  return null;
+}
+
 function validateAllInputs() {
   let errors = [];
+  if (validationRules.length === 0) validationRules = buildValidationRules();
   validationRules.forEach(rule => {
     const el = document.getElementById(rule.id);
     if (!el) return;
     if (el.closest('.epanet-only') && currentMode !== 'epanet') return;
     if (el.closest('.swmm-only') && currentMode !== 'swmm') return;
+    if (el.offsetParent === null) return;
     if (!validateSingleInput(el, rule)) {
       errors.push(`${rule.label}: must be ${rule.min}–${rule.max}`);
     }
@@ -1713,14 +1716,45 @@ function validateAllInputs() {
       b.classList.remove('input-warning');
     }
   });
+  const csvChecks = [
+    { id: 'pipeTransmission', label: 'Transmission Diameters', min: 8, max: 120 },
+    { id: 'pipeDistribution', label: 'Distribution Diameters', min: 2, max: 36 },
+    { id: 'swmmTrunkDia', label: 'Trunk Diameters', min: 18, max: 120 },
+    { id: 'swmmCollDia', label: 'Collector Diameters', min: 6, max: 48 },
+  ];
+  csvChecks.forEach(c => {
+    const err = validateCsvDiameters(c.id, c.label, c.min, c.max);
+    if (err) errors.push(err);
+  });
+  if (currentMode === 'epanet') {
+    const transEl = document.getElementById('pipeTransmission');
+    const distEl = document.getElementById('pipeDistribution');
+    if (transEl && distEl) {
+      const transVals = transEl.value.split(',').map(s => parseFloat(s.trim())).filter(v => !isNaN(v));
+      const distVals = distEl.value.split(',').map(s => parseFloat(s.trim())).filter(v => !isNaN(v));
+      if (transVals.length > 0 && distVals.length > 0) {
+        const minTrans = Math.min(...transVals);
+        const maxDist = Math.max(...distVals);
+        if (minTrans <= maxDist) {
+          transEl.classList.add('input-warning');
+          distEl.classList.add('input-warning');
+          errors.push('Smallest transmission diameter should exceed largest distribution diameter');
+        } else {
+          transEl.classList.remove('input-warning');
+          distEl.classList.remove('input-warning');
+        }
+      }
+    }
+  }
   return errors;
 }
 
 function setupInputValidation() {
+  validationRules = buildValidationRules();
   validationRules.forEach(rule => {
     const el = document.getElementById(rule.id);
     if (!el) return;
-    el.setAttribute('aria-label', rule.label);
+    if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', rule.label);
     el.addEventListener('input', () => validateSingleInput(el, rule));
     el.addEventListener('blur', () => validateSingleInput(el, rule));
   });
