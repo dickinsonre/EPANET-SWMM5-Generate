@@ -359,6 +359,171 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 }
 .generating { animation: pulse-glow 1.5s infinite; }
 
+/* ═══════ SETTINGS TABS ═══════ */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px 0;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+.settings-tab-btn {
+  flex: 1;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 4px;
+  border: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  min-height: 36px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  border-bottom: 2px solid transparent;
+}
+
+.settings-tab-btn:hover { color: var(--text-secondary); background: rgba(59,130,246,0.05); }
+.settings-tab-btn.active {
+  color: var(--accent-blue);
+  background: rgba(59,130,246,0.08);
+  border-bottom-color: var(--accent-blue);
+}
+
+.settings-tab-content { display: none; }
+.settings-tab-content.active { display: block; }
+
+/* ═══════ TOOLTIPS ═══════ */
+.has-tooltip {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted var(--text-dim);
+}
+
+.tooltip-popup {
+  position: fixed;
+  background: #1e293b;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  max-width: 280px;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.tooltip-popup.visible { opacity: 1; }
+
+/* ═══════ INPUT VALIDATION ═══════ */
+.input-invalid {
+  border-color: var(--accent-red) !important;
+  box-shadow: 0 0 0 2px rgba(239,68,68,0.2) !important;
+}
+
+.input-warning {
+  border-color: var(--accent-amber) !important;
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.15) !important;
+}
+
+/* ═══════ TOAST NOTIFICATION ═══════ */
+.toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  background: #1e293b;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 2000;
+  transition: transform 0.3s ease;
+  max-width: 500px;
+  text-align: center;
+}
+
+.toast.toast-error { border-color: var(--accent-red); }
+.toast.toast-success { border-color: var(--accent-green); }
+.toast.toast-warning { border-color: var(--accent-amber); }
+.toast.visible { transform: translateX(-50%) translateY(0); }
+
+/* ═══════ INSPECT PANEL ═══════ */
+.inspect-panel {
+  position: absolute;
+  background: rgba(17,24,39,0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  min-width: 240px;
+  max-width: 320px;
+  z-index: 50;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  pointer-events: auto;
+}
+
+.inspect-panel .inspect-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inspect-panel .inspect-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.inspect-panel .inspect-close:hover { color: var(--text-primary); }
+
+.inspect-panel .inspect-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.inspect-panel .inspect-label { color: var(--text-dim); }
+.inspect-panel .inspect-value { color: var(--text-primary); font-weight: 600; }
+
+.inspect-panel .inspect-section {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* ═══════ MOBILE DRAWER ═══════ */
 .mobile-drawer-toggle { display: none; }
 
@@ -442,6 +607,19 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     border-top: 1px solid var(--border);
     max-height: none;
     overflow: visible;
+  }
+
+  .settings-tabs {
+    padding: 6px 10px 0;
+    position: sticky;
+    top: 0;
+    z-index: 6;
+  }
+
+  .settings-tab-btn {
+    font-size: 10px;
+    padding: 7px 2px;
+    min-height: 32px;
   }
 
   /* Drawer handle */
@@ -540,6 +718,9 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 </head>
 <body>
 
+<div class="toast" id="toastEl"></div>
+<div class="tooltip-popup" id="tooltipPopup"></div>
+
 <div class="app-header">
   <svg width="32" height="32" viewBox="0 0 40 40">
     <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs>
@@ -580,6 +761,16 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   </div>
 
   <div class="controls-inner" id="controlsInner">
+
+  <div class="settings-tabs" role="tablist" aria-label="Settings categories">
+    <button class="settings-tab-btn active" onclick="switchSettingsTab('network',this)" role="tab" aria-selected="true" aria-controls="stab-network" tabindex="0">Network</button>
+    <button class="settings-tab-btn" onclick="switchSettingsTab('hydraulics',this)" role="tab" aria-selected="false" aria-controls="stab-hydraulics" tabindex="0">Hydraulics</button>
+    <button class="settings-tab-btn" onclick="switchSettingsTab('environment',this)" role="tab" aria-selected="false" aria-controls="stab-environment" tabindex="0">Environment</button>
+    <button class="settings-tab-btn" onclick="switchSettingsTab('mapexport',this)" role="tab" aria-selected="false" aria-controls="stab-mapexport" tabindex="0">Map &amp; Export</button>
+  </div>
+
+  <!-- ═══════ TAB 1: NETWORK ═══════ -->
+  <div class="settings-tab-content active" id="stab-network" role="tabpanel">
 
   <!-- Presets -->
   <div class="section">
@@ -652,6 +843,11 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <div class="input-group"><label title="Number of additional hill features added to the terrain. More hills = more elevation variation.">Hill Count</label><input type="number" id="hillCount" value="3" min="0" max="10" inputmode="numeric"></div>
     </div>
   </div>
+
+  </div><!-- /stab-network -->
+
+  <!-- ═══════ TAB 2: HYDRAULICS ═══════ -->
+  <div class="settings-tab-content" id="stab-hydraulics" role="tabpanel">
 
   <!-- Sources (EPANET only) -->
   <div class="section epanet-only">
@@ -841,6 +1037,11 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       </div>
     </div>
   </div>
+
+  </div><!-- /stab-hydraulics -->
+
+  <!-- ═══════ TAB 3: ENVIRONMENT ═══════ -->
+  <div class="settings-tab-content" id="stab-environment" role="tabpanel">
 
   <!-- SWMM: Rainfall & Infiltration -->
   <div class="section swmm-only" style="display:none;">
@@ -1111,6 +1312,11 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     </div>
   </div>
 
+  </div><!-- /stab-environment -->
+
+  <!-- ═══════ TAB 4: MAP & EXPORT ═══════ -->
+  <div class="settings-tab-content" id="stab-mapexport" role="tabpanel">
+
   <!-- City Map -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
@@ -1157,6 +1363,8 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div id="solverStatus" style="display:none;font-size:11px;color:var(--text-dim);padding:4px 0;font-family:'JetBrains Mono',monospace;"></div>
   </div>
 
+  </div><!-- /stab-mapexport -->
+
   </div><!-- /controls-inner -->
 </div>
 
@@ -1176,8 +1384,9 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   </div>
 
   <div id="tab-map" style="flex:1;display:flex;flex-direction:column;">
-    <div class="canvas-container" id="canvasContainer">
+    <div class="canvas-container" id="canvasContainer" style="position:relative;">
       <canvas id="networkCanvas" width="1200" height="800"></canvas>
+      <div class="inspect-panel" id="inspectPanel" style="display:none;"></div>
     </div>
     <div class="map-controls">
       <label class="map-toggle"><input type="checkbox" id="showCityMap" checked onchange="renderAll()"> City</label>
@@ -1408,6 +1617,346 @@ function toggleDrawer() {
   inner.classList.toggle('collapsed');
   const label = document.getElementById('drawerLabel');
   label.textContent = inner.classList.contains('collapsed') ? '⚙ Tap to expand settings' : '⚙ Settings & Controls';
+}
+
+function switchSettingsTab(tabName, btn) {
+  document.querySelectorAll('.settings-tab-btn').forEach(b => {
+    b.classList.remove('active');
+    b.setAttribute('aria-selected', 'false');
+  });
+  btn.classList.add('active');
+  btn.setAttribute('aria-selected', 'true');
+  document.querySelectorAll('.settings-tab-content').forEach(c => c.classList.remove('active'));
+  const target = document.getElementById('stab-' + tabName);
+  if (target) target.classList.add('active');
+}
+
+function showToast(message, type = 'error', duration = 4000) {
+  const toast = document.getElementById('toastEl');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = 'toast toast-' + type + ' visible';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.classList.remove('visible'); }, duration);
+}
+
+const validationRules = [
+  { id: 'gridRows', min: 3, max: 400, label: 'Grid Rows' },
+  { id: 'gridCols', min: 3, max: 400, label: 'Grid Columns' },
+  { id: 'nodeSpacing', min: 10, max: 10000, label: 'Node Spacing' },
+  { id: 'randomSeed', min: 1, max: 999999, label: 'Random Seed' },
+  { id: 'elevMin', min: 0, max: 9999, label: 'Min Elevation' },
+  { id: 'elevMax', min: 1, max: 10000, label: 'Max Elevation' },
+  { id: 'numReservoirs', min: 1, max: 20, label: 'Reservoirs' },
+  { id: 'numTanks', min: 0, max: 50, label: 'Tanks' },
+  { id: 'numPumps', min: 1, max: 50, label: 'Pumps' },
+  { id: 'reservoirHead', min: 10, max: 2000, label: 'Reservoir Head' },
+  { id: 'tankMaxLevel', min: 1, max: 200, label: 'Tank Max Level' },
+  { id: 'cMin', min: 50, max: 150, label: 'C-factor Min' },
+  { id: 'cMax', min: 50, max: 150, label: 'C-factor Max' },
+  { id: 'numPRV', min: 0, max: 50, label: 'PRVs' },
+  { id: 'numFCV', min: 0, max: 50, label: 'FCVs' },
+  { id: 'closedPipes', min: 0, max: 200, label: 'Closed Pipes' },
+  { id: 'numEmitters', min: 0, max: 500, label: 'Emitter Nodes' },
+  { id: 'simDuration', min: 1, max: 720, label: 'Simulation Duration' },
+  { id: 'demandMin', min: 0, max: 100, label: 'Demand Min' },
+  { id: 'demandMax', min: 0.1, max: 500, label: 'Demand Max' },
+  { id: 'deadEnds', min: 0, max: 500, label: 'Dead-end Branches' },
+  { id: 'hillCount', min: 0, max: 20, label: 'Hill Count' },
+  { id: 'numParks', min: 0, max: 50, label: 'Parks' },
+  { id: 'numLakes', min: 0, max: 20, label: 'Lakes' },
+];
+
+const linkedValidations = [
+  { idA: 'elevMin', idB: 'elevMax', rule: 'lt', msg: 'Min Elevation must be less than Max Elevation' },
+  { idA: 'cMin', idB: 'cMax', rule: 'lte', msg: 'C-factor Min must be ≤ C-factor Max' },
+  { idA: 'demandMin', idB: 'demandMax', rule: 'lte', msg: 'Demand Min must be ≤ Demand Max' },
+];
+
+function validateSingleInput(el, rule) {
+  if (!el) return true;
+  const v = parseFloat(el.value);
+  if (isNaN(v) || v < rule.min || v > rule.max) {
+    el.classList.add('input-invalid');
+    return false;
+  }
+  el.classList.remove('input-invalid');
+  return true;
+}
+
+function validateAllInputs() {
+  let errors = [];
+  validationRules.forEach(rule => {
+    const el = document.getElementById(rule.id);
+    if (!el) return;
+    if (el.closest('.epanet-only') && currentMode !== 'epanet') return;
+    if (el.closest('.swmm-only') && currentMode !== 'swmm') return;
+    if (!validateSingleInput(el, rule)) {
+      errors.push(`${rule.label}: must be ${rule.min}–${rule.max}`);
+    }
+  });
+  linkedValidations.forEach(lv => {
+    const a = document.getElementById(lv.idA);
+    const b = document.getElementById(lv.idB);
+    if (!a || !b) return;
+    if (a.closest('.epanet-only') && currentMode !== 'epanet') return;
+    if (a.closest('.swmm-only') && currentMode !== 'swmm') return;
+    const va = parseFloat(a.value), vb = parseFloat(b.value);
+    if (isNaN(va) || isNaN(vb)) return;
+    const fail = lv.rule === 'lt' ? va >= vb : va > vb;
+    if (fail) {
+      a.classList.add('input-warning');
+      b.classList.add('input-warning');
+      errors.push(lv.msg);
+    } else {
+      a.classList.remove('input-warning');
+      b.classList.remove('input-warning');
+    }
+  });
+  return errors;
+}
+
+function setupInputValidation() {
+  validationRules.forEach(rule => {
+    const el = document.getElementById(rule.id);
+    if (!el) return;
+    el.setAttribute('aria-label', rule.label);
+    el.addEventListener('input', () => validateSingleInput(el, rule));
+    el.addEventListener('blur', () => validateSingleInput(el, rule));
+  });
+}
+
+const tooltipDefs = {
+  'RDII': 'Rainfall-Derived Inflow and Infiltration — unwanted water entering sewer pipes through cracks, joints, and illegal connections during rain events.',
+  'I&I': 'Inflow and Infiltration — groundwater seeping into sewer pipes (infiltration) and stormwater entering through direct connections (inflow).',
+  'H-W': 'Hazen-Williams — a widely-used empirical formula for calculating friction losses in water pipes. Uses a roughness coefficient (C-factor) where higher = smoother.',
+  'H-W C': 'Hazen-Williams C coefficient — roughness factor. New PVC: 140-150. Old cast iron: 60-80. Concrete: 120-130.',
+  'C-factor': 'Hazen-Williams roughness coefficient. Higher values = smoother, newer pipes. Lower = rougher, older pipes. Range: 50-150.',
+  "Manning's n": "Manning's roughness coefficient — friction factor for open-channel and gravity pipe flow. Smooth plastic: 0.009-0.011. Concrete: 0.013. Corrugated metal: 0.024.",
+  'PRV': 'Pressure Reducing Valve — automatically reduces downstream pressure to a set point. Used at pressure zone boundaries to prevent excessive pressure.',
+  'FCV': 'Flow Control Valve — limits the maximum flow through a pipe regardless of pressure conditions.',
+  'Perlin Noise': 'A procedural noise function that produces smooth, natural-looking random variation. Used here for terrain elevation generation.',
+  'BFS': 'Breadth-First Search — a graph traversal algorithm used to check network connectivity and find shortest paths between nodes.',
+  'DEM': 'Digital Elevation Model — a raster grid of ground surface elevations. Compatible with GIS software like ArcGIS and QGIS.',
+  'GeoJSON': 'An open standard format for encoding geographic features using JSON. Can be opened in QGIS, Mapbox, and most mapping tools.',
+  'LID': 'Low Impact Development — green infrastructure practices (rain gardens, permeable pavement, bioswales) that manage stormwater at its source.',
+  'SCS': 'Soil Conservation Service (now NRCS) — developed standard rainfall distributions (Type I, II) and curve number method for hydrology.',
+  'EMC': 'Event Mean Concentration — a single, flow-weighted average pollutant concentration representing an entire storm event.',
+  'ATI': 'Antecedent Temperature Index — a weighted running average of air temperature used in snowmelt calculations.',
+  'RTK': 'Unit hydrograph parameters: R = fraction of rainfall volume, T = time to peak, K = ratio of recession time to time-to-peak.',
+  'DWF': 'Dry Weather Flow — wastewater flow in a sewer during dry (non-rain) conditions. Follows a diurnal pattern (peaks in morning/evening).',
+  'GPM': 'Gallons Per Minute — US customary unit for water flow rate.',
+  'CFS': 'Cubic Feet per Second — US customary unit for stormwater/sewer flow rate.',
+  'LPS': 'Liters Per Second — SI/metric unit for water flow rate.',
+  'CMS': 'Cubic Meters per Second — SI/metric unit for stormwater/sewer flow rate.',
+  'HGL': 'Hydraulic Grade Line — the elevation to which water would rise in a piezometer. Equals pressure head + elevation head.',
+  'DYNWAVE': 'Dynamic Wave — the most accurate routing method. Solves the full Saint-Venant equations for unsteady, gradually-varied flow.',
+  'Ksat': 'Saturated Hydraulic Conductivity — the rate water moves through fully saturated soil. Sand: 1-6 in/hr. Clay: 0.01-0.1 in/hr.',
+};
+
+function setupTooltips() {
+  const popup = document.getElementById('tooltipPopup');
+  if (!popup) return;
+  document.querySelectorAll('.controls-panel label[title]').forEach(label => {
+    const titleText = label.getAttribute('title');
+    if (!titleText) return;
+    label.classList.add('has-tooltip');
+    label.removeAttribute('title');
+    label.setAttribute('data-tooltip', titleText);
+    label.setAttribute('role', 'note');
+    label.addEventListener('mouseenter', (e) => {
+      popup.textContent = titleText;
+      const rect = label.getBoundingClientRect();
+      popup.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
+      popup.style.top = (rect.bottom + 6) + 'px';
+      popup.classList.add('visible');
+    });
+    label.addEventListener('mouseleave', () => {
+      popup.classList.remove('visible');
+    });
+  });
+  document.querySelectorAll('.controls-panel h3, .controls-panel label').forEach(el => {
+    const text = el.textContent;
+    Object.keys(tooltipDefs).forEach(term => {
+      if (text.includes(term) && !el.getAttribute('data-tooltip')) {
+        el.classList.add('has-tooltip');
+        el.setAttribute('data-tooltip', tooltipDefs[term]);
+        el.setAttribute('role', 'note');
+        el.addEventListener('mouseenter', (e) => {
+          popup.textContent = tooltipDefs[term];
+          const rect = el.getBoundingClientRect();
+          popup.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
+          popup.style.top = (rect.bottom + 6) + 'px';
+          popup.classList.add('visible');
+        });
+        el.addEventListener('mouseleave', () => {
+          popup.classList.remove('visible');
+        });
+      }
+    });
+  });
+}
+
+let lastCanvasTransform = null;
+
+function getCanvasCoords(e) {
+  const canvas = document.getElementById('networkCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    px: (e.clientX - rect.left) * scaleX,
+    py: (e.clientY - rect.top) * scaleY,
+    clientX: e.clientX,
+    clientY: e.clientY
+  };
+}
+
+function findNearestElement(px, py) {
+  if (!networkData || !lastCanvasTransform) return null;
+  const { txF, tyF } = lastCanvasTransform;
+  let nearest = null;
+  let minDist = Infinity;
+  const allNodes = [...(networkData.nodes || [])];
+  if (networkData.reservoirs) allNodes.push(...networkData.reservoirs);
+  if (networkData.tanks) allNodes.push(...networkData.tanks);
+  const nodeMap = {};
+  allNodes.forEach(n => { nodeMap[n.id] = n; });
+  allNodes.forEach(n => {
+    const sx = txF(n.x), sy = tyF(n.y);
+    const d = Math.hypot(px - sx, py - sy);
+    if (d < minDist) { minDist = d; nearest = { type: 'node', data: n, dist: d }; }
+  });
+  (networkData.pipes || []).forEach(p => {
+    const n1 = nodeMap[p.node1], n2 = nodeMap[p.node2];
+    if (!n1 || !n2) return;
+    const x1 = txF(n1.x), y1 = tyF(n1.y);
+    const x2 = txF(n2.x), y2 = tyF(n2.y);
+    const len2 = (x2-x1)**2 + (y2-y1)**2;
+    if (len2 === 0) return;
+    let t = Math.max(0, Math.min(1, ((px-x1)*(x2-x1) + (py-y1)*(y2-y1)) / len2));
+    const cx = x1 + t*(x2-x1), cy = y1 + t*(y2-y1);
+    const d = Math.hypot(px - cx, py - cy);
+    if (d < minDist) { minDist = d; nearest = { type: 'pipe', data: p, dist: d }; }
+  });
+  if (minDist > 30) return null;
+  return nearest;
+}
+
+function showInspectPanel(element, clientX, clientY) {
+  const panel = document.getElementById('inspectPanel');
+  if (!panel) return;
+  const container = document.getElementById('canvasContainer');
+  const cRect = container.getBoundingClientRect();
+  let html = '';
+  if (element.type === 'node') {
+    const n = element.data;
+    const nodeType = n.head !== undefined ? 'Reservoir' : (n.maxLevel !== undefined ? 'Tank' : 'Junction');
+    const typeColor = nodeType === 'Reservoir' ? '#22c55e' : (nodeType === 'Tank' ? '#f59e0b' : '#3b82f6');
+    html = `<div class="inspect-title"><span style="color:${typeColor}">${nodeType}: ${n.id}</span><button class="inspect-close" onclick="hideInspectPanel()">×</button></div>`;
+    const elev = n.groundElev || n.elev;
+    html += `<div class="inspect-row"><span class="inspect-label">Elevation</span><span class="inspect-value">${elev?.toFixed(1) || '—'} ft</span></div>`;
+    if (n.demand !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Demand</span><span class="inspect-value">${n.demand?.toFixed(2) || '0'} GPM</span></div>`;
+    if (n.zone) html += `<div class="inspect-row"><span class="inspect-label">Zone</span><span class="inspect-value">${n.zone}</span></div>`;
+    if (n.head !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Head</span><span class="inspect-value">${n.head?.toFixed(1)} ft</span></div>`;
+    if (n.maxLevel !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Max Level</span><span class="inspect-value">${n.maxLevel} ft</span></div>`;
+    if (n.initLevel !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Init Level</span><span class="inspect-value">${n.initLevel?.toFixed(1)} ft</span></div>`;
+    html += `<div class="inspect-row"><span class="inspect-label">Position</span><span class="inspect-value">(${n.x?.toFixed(0)}, ${n.y?.toFixed(0)})</span></div>`;
+    const connPipes = (networkData.pipes || []).filter(p => p.node1 === n.id || p.node2 === n.id);
+    if (connPipes.length > 0) {
+      html += `<div class="inspect-section">Connected Pipes (${connPipes.length})</div>`;
+      connPipes.slice(0, 5).forEach(p => {
+        html += `<div class="inspect-row"><span class="inspect-label">${p.id}</span><span class="inspect-value">${p.diameter}" / ${p.length?.toFixed(0)} ft</span></div>`;
+      });
+      if (connPipes.length > 5) html += `<div class="inspect-row"><span class="inspect-label">...</span><span class="inspect-value">+${connPipes.length-5} more</span></div>`;
+    }
+    if (solverResults && solverResults.nodeResults && solverResults.nodeResults[n.id]) {
+      const sr = solverResults.nodeResults[n.id][currentTimestep];
+      if (sr) {
+        html += `<div class="inspect-section">Solver Results (t=${currentTimestep})</div>`;
+        if (sr.pressure !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Pressure</span><span class="inspect-value" style="color:${sr.pressure<20?'#ef4444':sr.pressure<40?'#f59e0b':'#22c55e'}">${sr.pressure?.toFixed(1)} psi</span></div>`;
+        if (sr.head !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Head</span><span class="inspect-value">${sr.head?.toFixed(1)} ft</span></div>`;
+        if (sr.demand !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Actual Demand</span><span class="inspect-value">${sr.demand?.toFixed(2)} GPM</span></div>`;
+      }
+    }
+  } else {
+    const p = element.data;
+    html = `<div class="inspect-title"><span style="color:#06b6d4">Pipe: ${p.id}</span><button class="inspect-close" onclick="hideInspectPanel()">×</button></div>`;
+    html += `<div class="inspect-row"><span class="inspect-label">Diameter</span><span class="inspect-value">${p.diameter}" (${(p.diameter/12).toFixed(1)} ft)</span></div>`;
+    html += `<div class="inspect-row"><span class="inspect-label">Length</span><span class="inspect-value">${p.length?.toFixed(0)} ft</span></div>`;
+    html += `<div class="inspect-row"><span class="inspect-label">Roughness</span><span class="inspect-value">${p.roughness}</span></div>`;
+    html += `<div class="inspect-row"><span class="inspect-label">Status</span><span class="inspect-value" style="color:${p.status==='Closed'?'#ef4444':'#22c55e'}">${p.status || 'Open'}</span></div>`;
+    html += `<div class="inspect-row"><span class="inspect-label">Nodes</span><span class="inspect-value">${p.node1} → ${p.node2}</span></div>`;
+    if (p.year) html += `<div class="inspect-row"><span class="inspect-label">Install Year</span><span class="inspect-value">${p.year}</span></div>`;
+    if (solverResults && solverResults.linkResults && solverResults.linkResults[p.id]) {
+      const sr = solverResults.linkResults[p.id][currentTimestep];
+      if (sr) {
+        html += `<div class="inspect-section">Solver Results (t=${currentTimestep})</div>`;
+        if (sr.flow !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Flow</span><span class="inspect-value">${sr.flow?.toFixed(2)} GPM</span></div>`;
+        if (sr.velocity !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Velocity</span><span class="inspect-value">${sr.velocity?.toFixed(2)} ft/s</span></div>`;
+        if (sr.headloss !== undefined) html += `<div class="inspect-row"><span class="inspect-label">Head Loss</span><span class="inspect-value">${sr.headloss?.toFixed(3)} ft/kft</span></div>`;
+      }
+    }
+  }
+  panel.innerHTML = html;
+  let left = clientX - cRect.left + 15;
+  let top = clientY - cRect.top - 10;
+  if (left + 260 > cRect.width) left = clientX - cRect.left - 270;
+  if (top + 200 > cRect.height) top = Math.max(10, cRect.height - 300);
+  if (left < 0) left = 10;
+  if (top < 0) top = 10;
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
+  panel.style.display = 'block';
+}
+
+function hideInspectPanel() {
+  const panel = document.getElementById('inspectPanel');
+  if (panel) panel.style.display = 'none';
+}
+
+function setupCanvasInspect() {
+  const canvas = document.getElementById('networkCanvas');
+  if (!canvas) return;
+  canvas.addEventListener('click', (e) => {
+    const { px, py, clientX, clientY } = getCanvasCoords(e);
+    const hit = findNearestElement(px, py);
+    if (hit) {
+      showInspectPanel(hit, clientX, clientY);
+    } else {
+      hideInspectPanel();
+    }
+  });
+}
+
+function setupAccessibility() {
+  document.querySelectorAll('.section-header').forEach(h => {
+    h.setAttribute('role', 'button');
+    h.setAttribute('tabindex', '0');
+    h.setAttribute('aria-expanded', !h.nextElementSibling?.classList.contains('hidden'));
+    h.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(h); }
+    });
+  });
+  document.querySelectorAll('input[type="range"]').forEach(slider => {
+    const label = slider.closest('.input-group')?.querySelector('label');
+    if (label) {
+      const labelText = label.textContent.split(':')[0].trim();
+      slider.setAttribute('aria-label', labelText);
+    }
+    slider.setAttribute('aria-valuenow', slider.value);
+    slider.setAttribute('aria-valuemin', slider.min);
+    slider.setAttribute('aria-valuemax', slider.max);
+    slider.addEventListener('input', () => slider.setAttribute('aria-valuenow', slider.value));
+  });
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.setAttribute('role', 'button');
+    if (!btn.getAttribute('tabindex')) btn.setAttribute('tabindex', '0');
+  });
+  document.querySelectorAll('.download-btn, .generate-btn').forEach(btn => {
+    btn.setAttribute('role', 'button');
+    if (!btn.getAttribute('tabindex')) btn.setAttribute('tabindex', '0');
+  });
 }
 
 document.getElementById('jitter').addEventListener('input', e => document.getElementById('jitterVal').textContent = e.target.value+'%');
@@ -1736,6 +2285,7 @@ function renderCanvas(forExport=false,exportWithNetwork=true){
   const rX=maxX-minX||1,rY=maxY-minY||1,pad=25;
   const sc=Math.min((W-2*pad)/rX,(H-2*pad)/rY),oX=(W-rX*sc)/2,oY=(H-rY*sc)/2;
   const txF=x=>oX+(x-minX)*sc, tyF=y=>H-oY-(y-minY)*sc;
+  if (!forExport) lastCanvasTransform = { txF, tyF, sc, oX, oY, minX, minY, W, H };
   ctx.fillStyle='#0a0e1a';ctx.fillRect(0,0,W,H);
   if((forExport||(document.getElementById('showCityMap')&&document.getElementById('showCityMap').checked))&&cityMapData)drawCityMap(ctx,W,H,txF,tyF,sc,cityMapData);
   if(!forExport&&document.getElementById('showElevation')&&document.getElementById('showElevation').checked){ctx.globalAlpha=0.25;const jNodes=nd.nodes.filter(n=>n.type==='junction');const elevs=jNodes.map(n=>n.elev),eMin=safeMin(elevs),eMax=safeMax(elevs),er=eMax-eMin||1;jNodes.forEach(n=>{const t=(n.elev-eMin)/er;ctx.fillStyle=`rgb(${Math.round(40+t*180)},${Math.round(80+(1-Math.abs(t-0.5)*2)*120)},${Math.round(180-t*140)})`;ctx.beginPath();ctx.arc(txF(n.x),tyF(n.y),6,0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;}
@@ -1962,6 +2512,12 @@ function makePipe(id, n1, n2, cfg, rng, tD, sD, dD, rows, cols, resPositions) {
 
 // ═══════ GENERATE (ALL 7 ROSSMAN FIXES) ═══════
 async function generateNetwork() {
+  const errors = validateAllInputs();
+  if (errors.length > 0) {
+    showToast(errors[0], 'error', 4000);
+    return;
+  }
+  hideInspectPanel();
   if (currentMode === 'swmm') return generateSWMMNetwork();
   return generateEPANETNetwork();
 }
@@ -5169,17 +5725,15 @@ function loadConfig() {
 window.addEventListener('resize',()=>{if(networkData)renderAll();});
 window.addEventListener('load',()=>{
   if(isMobile()){document.getElementById('controlsInner').classList.add('collapsed');}
-  // Add basic ARIA attributes
-  document.querySelectorAll('.section-header').forEach(h => {
-    h.setAttribute('role', 'button');
-    h.setAttribute('aria-expanded', !h.nextElementSibling.classList.contains('hidden'));
-    h.setAttribute('tabindex', '0');
-    h.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(h); }});
-  });
+  setupAccessibility();
+  setupTooltips();
+  setupInputValidation();
+  setupCanvasInspect();
   document.querySelectorAll('.tab-btn').forEach(b => b.setAttribute('role', 'tab'));
-  document.getElementById('genBtn').setAttribute('aria-label', 'Generate hydraulic network model');
-  document.getElementById('mobileFab').setAttribute('aria-label', 'Generate network');
-  // Keyboard shortcuts
+  const genBtn = document.getElementById('genBtn');
+  if (genBtn) genBtn.setAttribute('aria-label', 'Generate hydraulic network model');
+  const fab = document.getElementById('mobileFab');
+  if (fab) fab.setAttribute('aria-label', 'Generate network');
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'g') { e.preventDefault(); generateNetwork(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 's' && generatedINP) { e.preventDefault(); downloadINP(); }

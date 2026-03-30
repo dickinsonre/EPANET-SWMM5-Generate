@@ -108,6 +108,11 @@ Key features:
 - Results visualization with time slider animation
 - Calibration file export: EPANET `.cal` (Pressure/Head/Demand/Flow/Velocity) and SWMM `.dat` (Depth/Head/Inflow/Flow/Velocity)
 - HGL profile plot: ground/crown/invert/HGL lines with computed or estimated data, auto-resizes on tab switch
+- Sidebar settings organized into 4 tabs: Network, Hydraulics, Environment, Map & Export
+- Input validation with red/amber border highlighting and toast notifications blocking generation on invalid values
+- Click-to-inspect on canvas: click any node or pipe to see a floating panel with element properties and solver results
+- Tooltips on hover for technical terms and input labels (30+ definitions)
+- Accessibility: ARIA labels, tabindex, keyboard navigation for section headers and interactive elements
 
 ### `scripts` (`@workspace/scripts`)
 
