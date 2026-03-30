@@ -879,6 +879,27 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   <!-- Sources (EPANET only) -->
   <div class="section epanet-only">
     <div class="section-header" onclick="toggleSection(this)">
+      <div class="section-icon" style="background:rgba(168,85,247,0.15);color:#a855f7;">🏗️</div>
+      <h3>Design Mode</h3><span class="section-toggle collapsed">▼</span>
+    </div>
+    <div class="section-body hidden">
+      <div class="checkbox-row"><input type="checkbox" id="chkDesignMode" onchange="toggleDesignMode()"><label for="chkDesignMode" title="Auto-size infrastructure from population and demand targets">Enable Design Mode</label></div>
+      <div id="designModeFields" style="display:none;">
+        <div class="input-row">
+          <div class="input-group"><label title="Target service population. Used to calculate total water demand.">Population</label><input type="number" id="designPop" value="50000" min="100" max="10000000" inputmode="numeric"></div>
+          <div class="input-group"><label title="Gallons per capita per day. Typical residential: 80-120 gpcd.">Per-Capita (gpcd)</label><input type="number" id="designGPCD" value="100" min="20" max="300" inputmode="numeric"></div>
+        </div>
+        <div class="input-row">
+          <div class="input-group"><label title="Peak hour multiplier on average day demand. Typical: 1.5-3.0.">Peaking Factor</label><input type="number" id="designPeaking" value="2.0" min="1.0" max="5.0" step="0.1" inputmode="decimal"></div>
+          <div class="input-group"><label title="Fire flow requirement in GPM added to peak demand. Typical: 1000-3500 GPM.">Fire Flow (GPM)</label><input type="number" id="designFireFlow" value="1500" min="0" max="10000" inputmode="numeric"></div>
+        </div>
+        <div id="designSummary" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--text-secondary);display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section epanet-only">
+    <div class="section-header" onclick="toggleSection(this)">
       <div class="section-icon" style="background:rgba(59,130,246,0.15);color:#60a5fa;">💧</div>
       <h3>Supply Sources</h3><span class="section-toggle collapsed">▼</span>
     </div>
@@ -2642,6 +2663,14 @@ function renderStats(){
     Object.entries(z).forEach(([k,v])=>st.push({l:k,v:v.toLocaleString(),c:'var(--text-secondary)'}));
     st.push({l:'INP Size',v:(generatedINP.length/1024).toFixed(0)+' KB',c:'var(--text-dim)'});
     st.push({l:'Pipe Len ×',v:'1.3 (street)',c:'var(--text-dim)'});
+    st.push({l:'Pipe Sizing',v:'Flow-Based',c:'#a855f7'});
+    if (nd.cfg && nd.cfg.designMode) {
+      st.push({l:'Design Mode',v:'ON',c:'#a855f7'});
+      st.push({l:'Population',v:(nd.cfg.designPop||0).toLocaleString(),c:'#a855f7'});
+      st.push({l:'Per-Capita',v:(nd.cfg.designGPCD||100)+' gpcd',c:'#a855f7'});
+      st.push({l:'Peaking',v:'×'+(nd.cfg.designPeaking||2.0).toFixed(1),c:'#a855f7'});
+      st.push({l:'Fire Flow',v:(nd.cfg.designFireFlow||0)+' GPM',c:'#a855f7'});
+    }
   }
   document.getElementById('statsGrid').innerHTML=st.map(s=>`<div class="stat-card"><div class="value" style="color:${s.c}">${s.v}</div><div class="label">${s.l}</div></div>`).join('');
 }
@@ -2658,10 +2687,160 @@ function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function readConfig(){
   const v=id=>{const el=document.getElementById(id);return el?+el.value:0;},s=id=>{const el=document.getElementById(id);return el?el.value:'';};
   const chk=id=>{const el=document.getElementById(id);return el?el.checked:false;};
-  return{gridRows:v('gridRows'),gridCols:v('gridCols'),nodeSpacing:v('nodeSpacing'),jitter:v('jitter'),diagonalPct:v('diagonalPct'),deadEnds:v('deadEnds'),elevMin:v('elevMin'),elevMax:v('elevMax'),terrainType:s('terrainType'),hillCount:v('hillCount'),numReservoirs:v('numReservoirs'),numTanks:v('numTanks'),numPumps:v('numPumps'),reservoirHead:v('reservoirHead'),tankMaxLevel:v('tankMaxLevel'),pipeTransmission:s('pipeTransmission'),pipeDistribution:s('pipeDistribution'),cMin:v('cMin'),cMax:v('cMax'),numPRV:v('numPRV'),numFCV:v('numFCV'),closedPipes:v('closedPipes'),pctResidential:v('pctResidential'),pctCommercial:v('pctCommercial'),pctIndustrial:v('pctIndustrial'),pctMixed:v('pctMixed'),demandMin:v('demandMin'),demandMax:v('demandMax'),numEmitters:v('numEmitters'),waterQuality:chk('chkWaterQuality'),secondaryDemands:chk('chkSecondaryDemands'),useTags:chk('chkTags'),simDuration:v('simDuration'),hydTimestep:s('hydTimestep'),qualTimestep:v('qualTimestep'),rptTimestep:v('rptTimestep'),headlossFormula:s('headlossFormula')};
+  const cfg = {gridRows:v('gridRows'),gridCols:v('gridCols'),nodeSpacing:v('nodeSpacing'),jitter:v('jitter'),diagonalPct:v('diagonalPct'),deadEnds:v('deadEnds'),elevMin:v('elevMin'),elevMax:v('elevMax'),terrainType:s('terrainType'),hillCount:v('hillCount'),numReservoirs:v('numReservoirs'),numTanks:v('numTanks'),numPumps:v('numPumps'),reservoirHead:v('reservoirHead'),tankMaxLevel:v('tankMaxLevel'),pipeTransmission:s('pipeTransmission'),pipeDistribution:s('pipeDistribution'),cMin:v('cMin'),cMax:v('cMax'),numPRV:v('numPRV'),numFCV:v('numFCV'),closedPipes:v('closedPipes'),pctResidential:v('pctResidential'),pctCommercial:v('pctCommercial'),pctIndustrial:v('pctIndustrial'),pctMixed:v('pctMixed'),demandMin:v('demandMin'),demandMax:v('demandMax'),numEmitters:v('numEmitters'),waterQuality:chk('chkWaterQuality'),secondaryDemands:chk('chkSecondaryDemands'),useTags:chk('chkTags'),simDuration:v('simDuration'),hydTimestep:s('hydTimestep'),qualTimestep:v('qualTimestep'),rptTimestep:v('rptTimestep'),headlossFormula:s('headlossFormula')};
+  cfg.designMode = chk('chkDesignMode');
+  if (cfg.designMode) {
+    cfg.designPop = v('designPop');
+    cfg.designGPCD = v('designGPCD');
+    cfg.designPeaking = v('designPeaking') || 2.0;
+    cfg.designFireFlow = v('designFireFlow');
+  }
+  return cfg;
 }
 function distributeOnPerimeter(ct,rows,cols,rng){const pos=[],per=2*(rows+cols)-4,step=per/ct;for(let i=0;i<ct;i++){const p=Math.round(i*step+rng()*step*0.3)%per;let r,c;if(p<cols){r=0;c=p;}else if(p<cols+rows-1){r=p-cols+1;c=cols-1;}else if(p<2*cols+rows-2){r=rows-1;c=cols-1-(p-cols-rows+2);}else{r=rows-1-(p-2*cols-rows+3);c=0;}pos.push({r:Math.max(0,Math.min(rows-1,r)),c:Math.max(0,Math.min(cols-1,c))});}return pos;}
 function distributeInField(ct,rows,cols,rng,exc){const pos=[];for(let i=0;i<ct;i++){let r,c,a=0;do{r=2+Math.floor(rng()*(rows-4));c=2+Math.floor(rng()*(cols-4));a++;}while(a<50&&exc.some(p=>Math.abs(p.r-r)<3&&Math.abs(p.c-c)<3));pos.push({r,c});}return pos;}
+
+// ═══════ DESIGN MODE ═══════
+function toggleDesignMode() {
+  const on = document.getElementById('chkDesignMode').checked;
+  document.getElementById('designModeFields').style.display = on ? '' : 'none';
+  const disableIds = ['numReservoirs','numPumps','demandMin','demandMax'];
+  disableIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.disabled = on; el.style.opacity = on ? '0.5' : '1'; }
+  });
+  if (on) updateDesignSummary();
+}
+
+function updateDesignSummary() {
+  const pop = +document.getElementById('designPop').value || 50000;
+  const gpcd = +document.getElementById('designGPCD').value || 100;
+  const peaking = +document.getElementById('designPeaking').value || 2.0;
+  const fireFlow = +document.getElementById('designFireFlow').value || 1500;
+  const avgDayGPM = pop * gpcd / 1440;
+  const peakGPM = avgDayGPM * peaking;
+  const totalDesignGPM = peakGPM + fireFlow;
+  const reservoirCap = 3500;
+  const autoRes = Math.max(2, Math.ceil(totalDesignGPM / reservoirCap));
+  const autoPumps = autoRes + Math.max(2, Math.ceil(autoRes * 0.8));
+  const perNodeDemand = avgDayGPM;
+  const el = document.getElementById('designSummary');
+  if (el) {
+    el.style.display = '';
+    el.innerHTML = `<div style="font-weight:600;color:#a855f7;margin-bottom:4px;">Design Basis</div>` +
+      `Avg Day: <b>${avgDayGPM.toFixed(0)} GPM</b> | Peak Hour: <b>${peakGPM.toFixed(0)} GPM</b><br>` +
+      `Total Design: <b>${totalDesignGPM.toFixed(0)} GPM</b> (peak + fire)<br>` +
+      `Auto Reservoirs: <b>${autoRes}</b> | Auto Pumps: <b>${autoPumps}</b>`;
+  }
+  document.getElementById('numReservoirs').value = autoRes;
+  document.getElementById('numPumps').value = autoPumps;
+}
+
+['designPop','designGPCD','designPeaking','designFireFlow'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => { if (document.getElementById('chkDesignMode').checked) updateDesignSummary(); });
+});
+
+// ═══════ FLOW ESTIMATION & PIPE SIZING ═══════
+function estimatePipeFlows(nodes, reservoirs, tanks, pipes) {
+  const adj = {};
+  const allNodes = {};
+  nodes.forEach(n => { adj[n.id] = []; allNodes[n.id] = n; });
+  reservoirs.forEach(r => { adj[r.id] = []; allNodes[r.id] = r; });
+  tanks.forEach(t => { adj[t.id] = []; allNodes[t.id] = t; });
+
+  const pipeMap = {};
+  pipes.forEach(p => {
+    if (p.status === 'Closed') return;
+    pipeMap[p.id] = { flow: 0 };
+    if (!adj[p.node1]) adj[p.node1] = [];
+    if (!adj[p.node2]) adj[p.node2] = [];
+    adj[p.node1].push({ to: p.node2, pipeId: p.id, dir: 1 });
+    adj[p.node2].push({ to: p.node1, pipeId: p.id, dir: -1 });
+  });
+
+  const sources = new Set(reservoirs.map(r => r.id).concat(tanks.map(t => t.id)));
+
+  const dist = {};
+  const parent = {};
+  const queue = [];
+  sources.forEach(sid => { dist[sid] = 0; queue.push(sid); });
+
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    const neighbors = adj[cur] || [];
+    for (const edge of neighbors) {
+      if (dist[edge.to] !== undefined) continue;
+      dist[edge.to] = (dist[cur] || 0) + 1;
+      parent[edge.to] = { from: cur, pipeId: edge.pipeId, dir: edge.dir };
+      queue.push(edge.to);
+    }
+  }
+
+  nodes.forEach(n => {
+    if (n.type !== 'junction' || !n.demand || n.demand <= 0) return;
+    let cur = n.id;
+    const demand = n.demand;
+    let depth = 0;
+    while (parent[cur] && depth < 200) {
+      const p = parent[cur];
+      pipeMap[p.pipeId].flow += demand;
+      cur = p.from;
+      depth++;
+    }
+  });
+
+  pipes.forEach(p => {
+    if (pipeMap[p.id]) {
+      p.estimatedFlow = pipeMap[p.id].flow;
+    }
+  });
+}
+
+function sizePipeByFlow(flow, isArterial) {
+  const minDia = isArterial ? 12 : 6;
+  const sizes = STANDARD_PIPE_SIZES.filter(d => d >= minDia);
+  for (const dia of sizes) {
+    const areaFt2 = Math.PI * Math.pow(dia / 24, 2);
+    const velFtS = (flow / 449) / areaFt2;
+    if (velFtS <= 5.0) {
+      if (velFtS < 2.0 && dia > minDia) {
+        const prevIdx = sizes.indexOf(dia);
+        if (prevIdx > 0) return sizes[prevIdx - 1];
+      }
+      return dia;
+    }
+  }
+  return sizes[sizes.length - 1];
+}
+
+function applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, resPositions) {
+  const nodeMap = {};
+  nodes.forEach(n => { nodeMap[n.id] = n; });
+  reservoirs.forEach(r => { nodeMap[r.id] = r; });
+  pipes.forEach(p => {
+    if (p.status === 'Closed') return;
+    const flow = p.estimatedFlow || 0;
+    if (flow <= 0) return;
+    const n1 = nodeMap[p.node1];
+    let isArterial = false;
+    if (n1) {
+      const nx = (n1.col || 0) / (cols - 1 || 1);
+      const ny = (n1.row || 0) / (rows - 1 || 1);
+      const onEdge = ny < 0.08 || ny > 0.92 || nx < 0.08 || nx > 0.92;
+      const onCorridor = Math.abs(ny - 0.5) < 0.06 || Math.abs(nx - 0.5) < 0.06;
+      let nearSource = false;
+      if (resPositions) {
+        for (const rp of resPositions) {
+          const rDist = Math.sqrt(((rp.c / (cols - 1 || 1)) - nx) ** 2 + ((rp.r / (rows - 1 || 1)) - ny) ** 2);
+          if (rDist < 0.2) { nearSource = true; break; }
+        }
+      }
+      isArterial = onEdge || onCorridor || nearSource;
+    }
+    p.diameter = sizePipeByFlow(flow, isArterial);
+  });
+}
 
 // FIX 7: C-factor correlated with diameter and position (downtown=old, suburban=new)
 function assignCFactor(n1, n2, diameter, cfg, rng, rows, cols) {
@@ -2773,8 +2952,20 @@ async function generateEPANETNetwork(silent){
   });
 
   // Demands
-  const dR=cfg.demandMax-cfg.demandMin,zm={Residential:1,Commercial:1.8,Industrial:2.5,Mixed:1.3};
-  nodes.forEach(n=>{n.demand=Math.round((cfg.demandMin+rng()*dR*(zm[n.zone]||1)/2.5)*100)/100;});
+  const zm={Residential:1,Commercial:1.8,Industrial:2.5,Mixed:1.3};
+  if (cfg.designMode) {
+    const avgDayGPM = cfg.designPop * cfg.designGPCD / 1440;
+    const junctionCount = nodes.filter(n => n.type === 'junction').length || 1;
+    const baseDemandPerNode = avgDayGPM / junctionCount;
+    const totalZoneWeight = nodes.reduce((s, nd) => s + (zm[nd.zone] || 1), 0) / nodes.length;
+    nodes.forEach(n => {
+      const zoneMult = (zm[n.zone] || 1);
+      n.demand = Math.round(baseDemandPerNode * zoneMult / totalZoneWeight * (0.7 + rng() * 0.6) * 100) / 100;
+    });
+  } else {
+    const dR=cfg.demandMax-cfg.demandMin;
+    nodes.forEach(n=>{n.demand=Math.round((cfg.demandMin+rng()*dR*(zm[n.zone]||1)/2.5)*100)/100;});
+  }
   setProgress(pf,pl,25,'Placing reservoirs & tanks...');await sleep(5);
 
   // ═══ FIX 2: Integrate reservoirs into grid (replace node, not float beside it) ═══
@@ -2849,7 +3040,7 @@ async function generateEPANETNetwork(silent){
       x:Math.round((parent.x+Math.cos(ang)*dist)*100)/100,
       y:Math.round((parent.y+Math.sin(ang)*dist)*100)/100,
       elev:parent.elev+(rng()-0.5)*10,type:'junction',
-      demand:Math.round((cfg.demandMin+rng()*3)*100)/100,zone:parent.zone,tag:parent.tag};
+      demand:Math.round((cfg.demandMin+rng()*3)*100)/100,zone:parent.zone,tag:parent.tag||'RES'};
     nodes.push(de);
     const deLen = Math.round(dist * STREET_LENGTH_FACTOR);
     pipes.push({id:'P'+pId++,node1:parent.id,node2:de.id,length:deLen,
@@ -2872,13 +3063,30 @@ async function generateEPANETNetwork(silent){
     p.installYear = Math.round(currentYear - Math.max(5, Math.min(80, age)));
   });
 
+  setProgress(pf,pl,51,'Estimating pipe flows...');await sleep(5);
+
+  // ═══ FLOW ESTIMATION & DEMAND-DRIVEN PIPE SIZING ═══
+  estimatePipeFlows(nodes, reservoirs, tanks, pipes);
+  applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, rP);
+
+  // Re-assign C-factors after resizing (C correlates with diameter)
+  pipes.forEach(p => {
+    if (p.status === 'Closed') return;
+    const n1 = nodes.find(n=>n.id===p.node1) || reservoirs.find(r=>r.id===p.node1) || tanks.find(t=>t.id===p.node1);
+    const n2 = nodes.find(n=>n.id===p.node2) || reservoirs.find(r=>r.id===p.node2) || tanks.find(t=>t.id===p.node2);
+    if (n1 && n2) p.roughness = assignCFactor(n1, n2, p.diameter, cfg, rng, rows, cols);
+  });
+
   setProgress(pf,pl,52,'Computing mass balance...');await sleep(5);
 
   // ═══ Mass balance ═══
   let totalAvgDemand = 0;
   nodes.forEach(n=>{ if(n.type==='junction') totalAvgDemand += n.demand; });
-  const peakDemand = totalAvgDemand * PEAKING_FACTOR;
-  const supplyPerSource = peakDemand / cfg.numReservoirs;
+  const effectivePeaking = cfg.designMode ? (cfg.designPeaking || 2.0) : PEAKING_FACTOR;
+  const peakDemand = totalAvgDemand * effectivePeaking;
+  const designFireFlow = cfg.designMode ? (cfg.designFireFlow || 0) : 0;
+  const totalDesignDemand = peakDemand + designFireFlow;
+  const supplyPerSource = totalDesignDemand / cfg.numReservoirs;
 
   // ═══ Build adjacency graph for BFS ═══
   const adj = {}; // nodeId -> [{nodeId, pipeLength, pipeDia, pipeRoughness}]
@@ -3192,7 +3400,7 @@ async function generateEPANETNetwork(silent){
   // ═══ ROSSMAN A-FIX 3: Supply-demand ratio ═══
   const totalSupplyCapacity = pumps.filter(p=>p.type==='source').reduce((s,p)=>s+(p.designFlow||0),0) +
     reservoirs.length * supplyPerSource * 0.5; // gravity-fed reservoirs contribute too
-  const supplyDemandRatio = totalSupplyCapacity > 0 ? totalSupplyCapacity / peakDemand : 0;
+  const supplyDemandRatio = totalSupplyCapacity > 0 ? totalSupplyCapacity / totalDesignDemand : 0;
   const supplyAdequate = supplyDemandRatio >= 1.0;
 
   // Build INP

@@ -119,6 +119,8 @@ Key features:
 - Progress bar with phase labels (e.g. "Building grid nodes... 10%") during generation
 - Cooperative yielding (every 50 rows) for large-grid UI responsiveness
 - SWMM subcatchments use D8 flow direction algorithm for drainage boundary routing
+- **Phase 4**: WASM Validation Report — post-solve validation analysis (convergence, mass balance, negative/low pressure, velocity violations, stagnation, empty tanks), green/yellow/red severity badge on map, auto-fix (pipe upsize heuristic + re-solve), recommendations engine (booster pumps, flushing, tank supply), RPT integration
+- **Phase 5**: Demand-Driven Pipe Sizing — BFS flow estimation from sources, flow-based diameter selection (2-5 ft/s target velocity, min 6" distribution / 12" arterial), Design Mode UI (population, per-capita gpcd, peaking factor, fire flow) auto-sizing reservoirs/pumps, Stats tab design basis display
 
 ### `scripts` (`@workspace/scripts`)
 
