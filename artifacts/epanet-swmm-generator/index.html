@@ -1485,7 +1485,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">SWMM 5.2.4 Mode — Stormwater &amp; Sanitary Sewer</h3>
       <p><strong>Junctions:</strong> Manholes with invert elevation = ground elevation − cover depth. Max depth computed from ground-to-invert difference. Spatially clustered land-use zones control impervious percentage.</p>
-      <p><strong>Subcatchments:</strong> One per junction node. Area, width, slope, percent impervious vary by land-use zone. Thiessen (Voronoi) polygons computed from junction coordinates for realistic drainage boundaries.</p>
+      <p><strong>Subcatchments:</strong> Drainage areas delineated using D8 flow direction routing on the DEM grid. Each cell flows to its steepest downhill neighbor until reaching a local pit or grid edge; all cells draining to the same terminus are aggregated into a subcatchment. Area, width, slope, and percent impervious vary by land-use zone.</p>
       <p><strong>Conduits:</strong> Gravity sewers oriented from higher to lower invert elevation. 10 conduit cross-section shapes: Circular, Rectangular Closed, Arch, Egg, Horseshoe, Gothic, Catenary, Basket Handle, Semi-Elliptical, Semi-Circular — with configurable mix percentages. Diameters grade from collectors (12–24") at periphery to trunk sewers (36–60") at center.</p>
       <p><strong>Culverts:</strong> Configurable count with entrance loss coefficients (Kentry=0.5, Kexit=1.0) and FHWA culvert codes (circular concrete, CMP, box concrete, box headwall).</p>
       <p><strong>Outfalls:</strong> Placed at the lowest-elevation perimeter nodes. FREE discharge type.</p>
@@ -4363,14 +4363,14 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
   a('[COORDINATES]');a(';;Node           X-Coord            Y-Coord');
   nodes.forEach(n=>a(`${n.id.padEnd(17)}${n.x.toFixed(2).padStart(18)} ${n.y.toFixed(2).padStart(18)}`));nl();
 
-  // ═══ Thiessen (Voronoi) Polygons ═══
+  // ═══ Subcatchment Polygons (D8 drainage boundaries) ═══
   a('[POLYGONS]');a(';;Subcatchment   X-Coord            Y-Coord');
 
   // Build lookup from subcatchment outlet → coordinates
   const nodeCoordMap = {};
   nodes.forEach(n => nodeCoordMap[n.id] = {x:n.x, y:n.y});
 
-  // Compute Voronoi cell for each subcatchment centroid using midpoints to nearest neighbors
+  // Compute polygon for each subcatchment centroid using midpoints to nearest neighbors
   const allPts = subcatchments.map(s => ({id:s.id, x:s.cx, y:s.cy}));
   const halfSp = cfg.nodeSpacing * 0.5;
   const bounds = {
