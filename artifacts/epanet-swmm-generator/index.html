@@ -3452,7 +3452,7 @@ async function generateEPANETNetwork(silent){
           const downstreamElev = Math.min(n1.elev, n2.elev);
           const prvSetting = Math.round(downstreamElev + 50 * PSI_TO_FT); // HGL target
           if (insertValveAtPipe(pi, 'PRV', prvSetting)) {
-            logEng('valves', `PRV V${vI-1} placed at pipe P${pi+1} — elevation drops from ${highElev.toFixed(0)} ft to ${lowElev.toFixed(0)} ft (crosses zone break at ${brk.toFixed(0)} ft), setting: ${prvSetting} ft HGL (50 psi target at downstream elev ${downstreamElev.toFixed(0)} ft)`);
+            logEng('valves', `PRV V${vI-1} placed at pipe ${pipes[pi].id} — elevation drops from ${highElev.toFixed(0)} ft to ${lowElev.toFixed(0)} ft (crosses zone break at ${brk.toFixed(0)} ft), setting: ${prvSetting} ft HGL (50 psi target at downstream elev ${downstreamElev.toFixed(0)} ft)`);
             zonePRVsPlaced++;
             break;
           }
