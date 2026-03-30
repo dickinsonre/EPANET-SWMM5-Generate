@@ -2694,6 +2694,15 @@ function readConfig(){
     cfg.designGPCD = v('designGPCD');
     cfg.designPeaking = v('designPeaking') || 2.0;
     cfg.designFireFlow = v('designFireFlow');
+    const avgDayGPM = cfg.designPop * cfg.designGPCD / 1440;
+    const peakGPM = avgDayGPM * cfg.designPeaking;
+    const totalDesignGPM = peakGPM + cfg.designFireFlow;
+    const targetSDRatio = 1.25;
+    const targetSupplyGPM = totalDesignGPM * targetSDRatio;
+    const perReservoirGPM = 800;
+    cfg.numReservoirs = Math.max(1, Math.min(8, Math.ceil(targetSupplyGPM / perReservoirGPM)));
+    cfg.numPumps = Math.max(cfg.numReservoirs, Math.ceil(targetSupplyGPM / 600));
+    cfg.reservoirHead = Math.max(cfg.reservoirHead || 300, cfg.elevMax + 80 + totalDesignGPM * 0.002);
   }
   return cfg;
 }
@@ -2720,16 +2729,19 @@ function updateDesignSummary() {
   const avgDayGPM = pop * gpcd / 1440;
   const peakGPM = avgDayGPM * peaking;
   const totalDesignGPM = peakGPM + fireFlow;
-  const reservoirCap = 3500;
-  const autoRes = Math.max(2, Math.ceil(totalDesignGPM / reservoirCap));
-  const autoPumps = autoRes + Math.max(2, Math.ceil(autoRes * 0.8));
-  const perNodeDemand = avgDayGPM;
+  const targetSDRatio = 1.25;
+  const targetSupplyGPM = totalDesignGPM * targetSDRatio;
+  const perReservoirGPM = 800;
+  const autoRes = Math.max(1, Math.min(8, Math.ceil(targetSupplyGPM / perReservoirGPM)));
+  const autoPumps = Math.max(autoRes, Math.ceil(targetSupplyGPM / 600));
+  const sdDisplay = targetSDRatio.toFixed(2);
   const el = document.getElementById('designSummary');
   if (el) {
     el.style.display = '';
     el.innerHTML = `<div style="font-weight:600;color:#a855f7;margin-bottom:4px;">Design Basis</div>` +
       `Avg Day: <b>${avgDayGPM.toFixed(0)} GPM</b> | Peak Hour: <b>${peakGPM.toFixed(0)} GPM</b><br>` +
       `Total Design: <b>${totalDesignGPM.toFixed(0)} GPM</b> (peak + fire)<br>` +
+      `Target S/D Ratio: <b>${sdDisplay}</b> | Supply: <b>${targetSupplyGPM.toFixed(0)} GPM</b><br>` +
       `Auto Reservoirs: <b>${autoRes}</b> | Auto Pumps: <b>${autoPumps}</b>`;
   }
   document.getElementById('numReservoirs').value = autoRes;
@@ -2742,76 +2754,126 @@ function updateDesignSummary() {
 });
 
 // ═══════ FLOW ESTIMATION & PIPE SIZING ═══════
-function estimatePipeFlows(nodes, reservoirs, tanks, pipes) {
-  const adj = {};
-  const allNodes = {};
-  nodes.forEach(n => { adj[n.id] = []; allNodes[n.id] = n; });
-  reservoirs.forEach(r => { adj[r.id] = []; allNodes[r.id] = r; });
-  tanks.forEach(t => { adj[t.id] = []; allNodes[t.id] = t; });
+function hwHeadlossEst(L, Q, C, D) {
+  if (Q <= 0 || D <= 0) return 0;
+  return 10.67 * L * Math.pow(Q, 1.852) / (Math.pow(C, 1.852) * Math.pow(D, 4.87));
+}
 
-  const pipeMap = {};
-  pipes.forEach(p => {
-    if (p.status === 'Closed') return;
-    pipeMap[p.id] = { flow: 0 };
+function estimatePipeFlows(nodes, reservoirs, tanks, pipes) {
+  const allNodes = {};
+  nodes.forEach(n => { allNodes[n.id] = n; });
+  reservoirs.forEach(r => { allNodes[r.id] = r; });
+  tanks.forEach(t => { allNodes[t.id] = t; });
+
+  const sourceSet = new Set(reservoirs.map(r => r.id).concat(tanks.map(t => t.id)));
+  const activePipes = pipes.filter(p => p.status !== 'Closed');
+  if (activePipes.length === 0) return;
+
+  const adj = {};
+  Object.keys(allNodes).forEach(id => { adj[id] = []; });
+  activePipes.forEach((p, idx) => {
     if (!adj[p.node1]) adj[p.node1] = [];
     if (!adj[p.node2]) adj[p.node2] = [];
-    adj[p.node1].push({ to: p.node2, pipeId: p.id, dir: 1 });
-    adj[p.node2].push({ to: p.node1, pipeId: p.id, dir: -1 });
+    adj[p.node1].push({ to: p.node2, pipeIdx: idx });
+    adj[p.node2].push({ to: p.node1, pipeIdx: idx });
   });
 
-  const sources = new Set(reservoirs.map(r => r.id).concat(tanks.map(t => t.id)));
+  const pipeFlows = new Float64Array(activePipes.length);
 
-  const dist = {};
-  const parent = {};
-  const queue = [];
-  sources.forEach(sid => { dist[sid] = 0; queue.push(sid); });
-
-  while (queue.length > 0) {
-    const cur = queue.shift();
-    const neighbors = adj[cur] || [];
-    for (const edge of neighbors) {
-      if (dist[edge.to] !== undefined) continue;
-      dist[edge.to] = (dist[cur] || 0) + 1;
-      parent[edge.to] = { from: cur, pipeId: edge.pipeId, dir: edge.dir };
-      queue.push(edge.to);
+  const parentOf = {};
+  const bfsOrder = [];
+  const visited0 = new Set();
+  const q0 = [];
+  sourceSet.forEach(sid => { visited0.add(sid); q0.push(sid); });
+  while (q0.length > 0) {
+    const cur = q0.shift();
+    bfsOrder.push(cur);
+    for (const edge of (adj[cur] || [])) {
+      if (visited0.has(edge.to)) continue;
+      visited0.add(edge.to);
+      parentOf[edge.to] = { from: cur, pipeIdx: edge.pipeIdx };
+      q0.push(edge.to);
     }
   }
 
   nodes.forEach(n => {
     if (n.type !== 'junction' || !n.demand || n.demand <= 0) return;
     let cur = n.id;
-    const demand = n.demand;
     let depth = 0;
-    while (parent[cur] && depth < 200) {
-      const p = parent[cur];
-      pipeMap[p.pipeId].flow += demand;
-      cur = p.from;
+    while (parentOf[cur] && depth < 500) {
+      const pe = parentOf[cur];
+      pipeFlows[pe.pipeIdx] += n.demand;
+      cur = pe.from;
       depth++;
     }
   });
 
-  pipes.forEach(p => {
-    if (pipeMap[p.id]) {
-      p.estimatedFlow = pipeMap[p.id].flow;
+  const nodeHead = {};
+  sourceSet.forEach(sid => {
+    const src = allNodes[sid];
+    nodeHead[sid] = src.head || (src.elev || 0) + 100;
+  });
+
+  for (let iter = 0; iter < 8; iter++) {
+    for (const nid of bfsOrder) {
+      if (sourceSet.has(nid)) continue;
+      const pe = parentOf[nid];
+      if (!pe) continue;
+      const p = activePipes[pe.pipeIdx];
+      const Q = Math.max(0.1, pipeFlows[pe.pipeIdx]);
+      const hl = hwHeadlossEst(p.length, Q, p.roughness || 100, p.diameter || 8);
+      nodeHead[nid] = (nodeHead[pe.from] || 300) - hl;
     }
+
+    activePipes.forEach((p, idx) => {
+      const h1 = nodeHead[p.node1];
+      const h2 = nodeHead[p.node2];
+      if (h1 === undefined || h2 === undefined) return;
+      const dh = h1 - h2;
+      if (Math.abs(dh) < 0.001 || p.length <= 0) return;
+      const C = p.roughness || 100;
+      const D = p.diameter || 8;
+      const qFromHead = Math.pow(Math.abs(dh) * Math.pow(C, 1.852) * Math.pow(D, 4.87) / (10.67 * p.length), 1 / 1.852);
+      const treeFlow = pipeFlows[idx];
+      pipeFlows[idx] = treeFlow * 0.6 + qFromHead * 0.4;
+    });
+  }
+
+  activePipes.forEach((p, idx) => {
+    p.estimatedFlow = Math.abs(pipeFlows[idx]);
+  });
+
+  pipes.forEach(p => {
+    if (p.status === 'Closed') p.estimatedFlow = 0;
+    if (p.estimatedFlow === undefined) p.estimatedFlow = 0;
   });
 }
 
-function sizePipeByFlow(flow, isArterial) {
+function sizePipeByFlow(flow, isArterial, pipeLength, roughness) {
   const minDia = isArterial ? 12 : 6;
   const sizes = STANDARD_PIPE_SIZES.filter(d => d >= minDia);
+  const L = pipeLength || 500;
+  const C = roughness || 100;
+  const maxHLperFt = 0.01;
+  let bestDia = sizes[0];
+  let bestScore = Infinity;
   for (const dia of sizes) {
     const areaFt2 = Math.PI * Math.pow(dia / 24, 2);
     const velFtS = (flow / 449) / areaFt2;
-    if (velFtS <= 5.0) {
-      if (velFtS < 2.0 && dia > minDia) {
-        const prevIdx = sizes.indexOf(dia);
-        if (prevIdx > 0) return sizes[prevIdx - 1];
-      }
-      return dia;
+    const hl = hwHeadlossEst(L, flow, C, dia);
+    const hlPerFt = L > 0 ? hl / L : 0;
+    if (velFtS > 5.0 || hlPerFt > maxHLperFt) continue;
+    const velPenalty = velFtS < 2.0 ? (2.0 - velFtS) * 10 : 0;
+    const hlPenalty = hlPerFt > maxHLperFt * 0.5 ? (hlPerFt - maxHLperFt * 0.5) * 100 : 0;
+    const velTarget = Math.abs(velFtS - 3.5);
+    const score = velTarget + velPenalty + hlPenalty;
+    if (score < bestScore) {
+      bestScore = score;
+      bestDia = dia;
     }
   }
-  return sizes[sizes.length - 1];
+  if (bestScore === Infinity) bestDia = sizes[sizes.length - 1];
+  return bestDia;
 }
 
 function applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, resPositions) {
@@ -2820,8 +2882,7 @@ function applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, resPositions
   reservoirs.forEach(r => { nodeMap[r.id] = r; });
   pipes.forEach(p => {
     if (p.status === 'Closed') return;
-    const flow = p.estimatedFlow || 0;
-    if (flow <= 0) return;
+    const flow = p.estimatedFlow || 0.5;
     const n1 = nodeMap[p.node1];
     let isArterial = false;
     if (n1) {
@@ -2838,7 +2899,7 @@ function applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, resPositions
       }
       isArterial = onEdge || onCorridor || nearSource;
     }
-    p.diameter = sizePipeByFlow(flow, isArterial);
+    p.diameter = sizePipeByFlow(flow, isArterial, p.length, p.roughness);
   });
 }
 
@@ -3070,10 +3131,14 @@ async function generateEPANETNetwork(silent){
   applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, rP);
 
   // Re-assign C-factors after resizing (C correlates with diameter)
+  const cNodeMap = {};
+  nodes.forEach(n => { cNodeMap[n.id] = n; });
+  reservoirs.forEach(r => { cNodeMap[r.id] = r; });
+  tanks.forEach(t => { cNodeMap[t.id] = t; });
   pipes.forEach(p => {
     if (p.status === 'Closed') return;
-    const n1 = nodes.find(n=>n.id===p.node1) || reservoirs.find(r=>r.id===p.node1) || tanks.find(t=>t.id===p.node1);
-    const n2 = nodes.find(n=>n.id===p.node2) || reservoirs.find(r=>r.id===p.node2) || tanks.find(t=>t.id===p.node2);
+    const n1 = cNodeMap[p.node1];
+    const n2 = cNodeMap[p.node2];
     if (n1 && n2) p.roughness = assignCFactor(n1, n2, p.diameter, cfg, rng, rows, cols);
   });
 
