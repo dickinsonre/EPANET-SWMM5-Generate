@@ -2241,7 +2241,6 @@ function setProgress(pf, pl, pct, label) {
 let terrainDiscontinuity = null;
 
 function initTerrainParams(cfg, rng) {
-  const range = cfg.elevMax - cfg.elevMin;
   terrainDiscontinuity = null;
   let tp = null;
   if (cfg.terrainType === 'bluff') {
@@ -3637,10 +3636,15 @@ async function generateEPANETNetwork(silent){
         pumps.push({ id: 'PU' + puId, node1: midId, node2: origNode2,
           curve: 'PUMP' + puId, type: 'booster',
           designHead: pumpHead, designFlow: pumpFlow });
+        const stdDias = [4,6,8,10,12,16,20,24,30,36,42,48];
+        const curDiaIdx = stdDias.indexOf(p.diameter);
+        if (curDiaIdx >= 0 && curDiaIdx < stdDias.length - 1) {
+          p.diameter = stdDias[curDiaIdx + 1];
+        }
         pipes.push({ id: 'P' + pId++, node1: midId, node2: origNode2,
           length: halfLen, diameter: p.diameter, roughness: p.roughness,
           status: 'Closed', installYear: p.installYear });
-        logEng('pumps', `Discontinuity pump PU${puId} at ${d.type} crossing — ${Math.abs(elevDiff).toFixed(0)} ft uphill, design: ${pumpFlow} GPM @ ${pumpHead} ft TDH`);
+        logEng('pumps', `Discontinuity pump PU${puId} at ${d.type} crossing — ${Math.abs(elevDiff).toFixed(0)} ft uphill, design: ${pumpFlow} GPM @ ${pumpHead} ft TDH, pipe upsized to ${p.diameter}″`);
         puId++;
         usedPipeIndices.add(pi);
         discPumpsPlaced++;
