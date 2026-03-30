@@ -1390,9 +1390,19 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <button class="download-btn" onclick="saveConfig()" style="border-color:var(--text-dim);color:var(--text-dim);">💾 Config</button>
       <button class="download-btn" onclick="loadConfig()" style="border-color:var(--text-dim);color:var(--text-dim);">📂 Load</button>
     </div>
+    <div class="dl-row" id="batchRow" style="display:none;margin-top:6px;">
+      <div style="display:flex;align-items:center;gap:6px;flex:1;">
+        <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Count:</label>
+        <input type="number" id="batchCount" value="5" min="2" max="50" style="width:60px;min-height:36px;padding:4px 8px;font-size:12px;">
+      </div>
+      <button class="download-btn" onclick="batchExport()" id="batchBtn" style="border-color:#a855f7;color:#a855f7;flex:1;">📦 Batch ZIP</button>
+    </div>
     <div class="dl-row" id="solverRow" style="display:none;margin-top:6px;">
       <button class="download-btn" onclick="loadWASM()" id="wasmBtn" style="border-color:#f59e0b;color:#f59e0b;flex:1;">📦 Load WASM Engine</button>
       <button class="download-btn" onclick="runSolver()" id="runBtn" style="border-color:#22c55e;color:#22c55e;flex:1;" disabled>▶ Run Solver</button>
+    </div>
+    <div class="dl-row epanet-only" id="quickSimRow" style="display:none;margin-top:6px;">
+      <button class="download-btn" onclick="quickSim()" id="quickSimBtn" style="border-color:#06b6d4;color:#06b6d4;flex:1;">⚡ Quick Sim (Pressure Map)</button>
     </div>
     <div id="solverStatus" style="display:none;font-size:11px;color:var(--text-dim);padding:4px 0;font-family:'JetBrains Mono',monospace;"></div>
   </div>
@@ -1515,6 +1525,19 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Visualization Controls</h3>
       <p><strong>City Map:</strong> Toggle city backdrop on/off. <strong>Network:</strong> Toggle pipe/conduit overlay. <strong>Labels:</strong> Toggle district, park, lake, and city name labels. <strong>Elevation:</strong> Node elevation heatmap (blue=low, red=high). <strong>Voronoi:</strong> Thiessen polygon boundaries colored by demand/land-use zone.</p>
 
+      <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Spatial Distribution Formulas</h3>
+      <p><strong>C-Factor / Pipe Age Pattern:</strong> Pipes are assigned roughness coefficients and installation years based on distance from the grid center. The formula uses normalized distance <code>d = dist(node, center) / maxDist</code> where <code>d=0</code> is downtown (center) and <code>d=1</code> is suburban (edge).</p>
+      <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8;">
+        <div style="color:var(--accent-amber);">C-factor = Cmin + d * (Cmax - Cmin) + random_jitter</div>
+        <div style="color:var(--text-dim);">Downtown (center, d~0): C = 80-100 (old, rough pipes)</div>
+        <div style="color:var(--text-dim);">Suburban (edge, d~1): C = 110-130 (new, smooth pipes)</div>
+        <div style="margin-top:8px;color:var(--accent-amber);">Install Year = 1950 + d * 70</div>
+        <div style="color:var(--text-dim);">Downtown: 1950s-1960s (oldest infrastructure)</div>
+        <div style="color:var(--text-dim);">Suburban: 2000s-2020s (newest infrastructure)</div>
+      </div>
+      <p><strong>Demand Zones:</strong> Four zones are spatially seeded: Industrial (NW quadrant), Commercial (central spine), Mixed (defined area), Residential (fill). Each junction is assigned to the nearest zone seed point.</p>
+      <p><strong>Pipe Diameters:</strong> Transmission mains (24-36") near reservoirs and along every 5th row/column. Distribution pipes (6-12") elsewhere. Diameter decreases with distance from sources.</p>
+
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Architecture</h3>
       <p>Single self-contained HTML file with no external dependencies. All generation logic, rendering, city map procedural generation, BFS algorithms, Hazen-Williams friction calculator, design storm hyetographs, and .inp file builders run entirely in the browser. Seeded PRNG (Mulberry32) ensures reproducible results for the same grid dimensions. Mobile-optimized with bottom drawer controls, 44px touch targets, and iOS zoom prevention.</p>
 
@@ -1570,6 +1593,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 
 <button class="mobile-fab" id="mobileFab" onclick="generateNetwork()">⚡</button>
 
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
 // NAMED CONSTANTS (no more magic numbers)
@@ -2373,6 +2397,63 @@ function drawNetworkOverlay(ctx,W,H,tx,ty,nd){
       ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '8px DM Sans';
     });
   }
+  const ibX = W - 135, ibY = lgY + lgH + 8, ibW = 125, ibH = 38;
+  ctx.fillStyle = 'rgba(10,14,26,0.65)';
+  ctx.beginPath(); ctx.roundRect(ibX - 8, ibY, ibW, ibH, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(245,158,11,0.7)'; ctx.font = '8px JetBrains Mono'; ctx.textAlign = 'left';
+  ctx.fillText('C-factor / Age', ibX, ibY + 11);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '7px DM Sans';
+  ctx.fillText('Center=old(C80) Edge=new(C130)', ibX, ibY + 23);
+  ctx.fillText('1950s downtown \u2192 2020s suburban', ibX, ibY + 33);
+}
+
+// ═══════ PRESSURE HEATMAP (Quick Sim) ═══════
+function drawPressureHeatmap(ctx, W, H, tx, ty, nd) {
+  if (!quickSimPressures) return;
+  const junctions = nd.nodes.filter(n => n.type === 'junction');
+  const pVals = junctions.map(n => quickSimPressures[n.id]).filter(v => v !== undefined);
+  if (pVals.length === 0) return;
+  const pMin = Math.min(...pVals), pMax = Math.max(...pVals);
+  const pRange = pMax - pMin || 1;
+  function pressureColor(p) {
+    if (p < 0) return 'rgba(139,0,0,0.85)';
+    if (p < 20) return 'rgba(239,68,68,0.8)';
+    if (p < 40) return 'rgba(245,158,11,0.75)';
+    if (p < 60) return 'rgba(234,179,8,0.7)';
+    if (p < 80) return 'rgba(34,197,94,0.7)';
+    return 'rgba(16,185,129,0.7)';
+  }
+  const js = Math.max(3, Math.min(8, 1200 / junctions.length));
+  junctions.forEach(n => {
+    const p = quickSimPressures[n.id];
+    if (p === undefined) return;
+    ctx.fillStyle = pressureColor(p);
+    ctx.beginPath();
+    ctx.arc(tx(n.x), ty(n.y), js, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  const lgX = 12, lgY = H - 120, lgW = 140, lgH = 110;
+  ctx.fillStyle = 'rgba(10,14,26,0.85)';
+  ctx.beginPath(); ctx.roundRect(lgX, lgY, lgW, lgH, 6); ctx.fill();
+  ctx.font = 'bold 10px JetBrains Mono';
+  ctx.fillStyle = '#06b6d4'; ctx.textAlign = 'left';
+  ctx.fillText('PRESSURE (psi)', lgX + 8, lgY + 16);
+  const bands = [
+    ['rgba(16,185,129,0.9)', '> 80 (high)'],
+    ['rgba(34,197,94,0.9)', '60-80 (good)'],
+    ['rgba(234,179,8,0.9)', '40-60 (ok)'],
+    ['rgba(245,158,11,0.9)', '20-40 (marginal)'],
+    ['rgba(239,68,68,0.9)', '0-20 (low)'],
+    ['rgba(139,0,0,0.9)', '< 0 (negative)']
+  ];
+  bands.forEach(([c, label], i) => {
+    const y = lgY + 28 + i * 13;
+    ctx.fillStyle = c; ctx.fillRect(lgX + 8, y - 4, 10, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '9px DM Sans';
+    ctx.fillText(label, lgX + 22, y + 3);
+  });
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '8px JetBrains Mono';
+  ctx.fillText(`Range: ${pMin.toFixed(1)}-${pMax.toFixed(1)} psi`, lgX + 8, lgY + lgH - 6);
 }
 
 // ═══════ RENDER ═══════
@@ -2407,6 +2488,8 @@ function renderCanvas(forExport=false,exportWithNetwork=true){
   if(forExport?exportWithNetwork:(document.getElementById('showNetwork')&&document.getElementById('showNetwork').checked))drawNetworkOverlay(ctx,W,H,txF,tyF,nd);
   // Solver results overlay (pressure/depth/velocity coloring)
   if(!forExport && solverResults)drawResultsOverlay(ctx,W,H,txF,tyF,nd);
+  // Quick Sim pressure heatmap overlay
+  if(!forExport && quickSimPressures)drawPressureHeatmap(ctx,W,H,txF,tyF,nd);
   return canvas;
 }
 
@@ -2635,11 +2718,12 @@ async function generateNetwork() {
   return generateEPANETNetwork();
 }
 
-async function generateEPANETNetwork(){
+async function generateEPANETNetwork(silent){
+  quickSimPressures = null;
   const btn=document.getElementById('genBtn'),pb=document.getElementById('progressBar'),pf=document.getElementById('progressFill'),pl=document.getElementById('progressLabel');
-  btn.disabled=true;btn.textContent='⏳ Generating...';btn.classList.add('generating');pb.style.display='block';if(pl)pl.style.display='block';pf.style.width='0%';
+  if(!silent){btn.disabled=true;btn.textContent='⏳ Generating...';btn.classList.add('generating');pb.style.display='block';if(pl)pl.style.display='block';pf.style.width='0%';
   if(isMobile()){const ci=document.getElementById('controlsInner');ci.classList.add('collapsed');document.getElementById('drawerLabel').textContent='⚙ Tap to expand settings';window.scrollTo({top:0,behavior:'smooth'});}
-  await sleep(30);
+  await sleep(30);}
   try {
   const cfg=readConfig(),seed=+(document.getElementById('randomSeed').value)||42,rng=mulberry32(seed),rows=cfg.gridRows,cols=cfg.gridCols,spacing=cfg.nodeSpacing,jA=cfg.jitter/100*spacing;
   updateSeedDisplay(seed);
@@ -3121,12 +3205,12 @@ async function generateEPANETNetwork(){
   const bnd={minX:safeMin(aX),minY:safeMin(aY),maxX:safeMax(aX),maxY:safeMax(aY)};
   const bP=(bnd.maxX-bnd.minX)*BOUNDARY_PAD_PCT;bnd.minX-=bP;bnd.minY-=bP;bnd.maxX+=bP;bnd.maxY+=bP;
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
-  setProgress(pf,pl,95,'Rendering map...');await sleep(5);
-  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);
-  advanceSeedIfUnlocked();
-  } catch(e) { console.error('EPANET generation error:', e); alert('Generation error: ' + e.message); }
-  finally { btn.disabled=false;btn.textContent='⚡ GENERATE NETWORK + MAP';btn.classList.remove('generating');
-  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';} }
+  if(!silent){setProgress(pf,pl,95,'Rendering map...');await sleep(5);
+  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);}
+  if(!silent)advanceSeedIfUnlocked();
+  } catch(e) { console.error('EPANET generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
+  finally { if(!silent){btn.disabled=false;btn.textContent='⚡ GENERATE NETWORK + MAP';btn.classList.remove('generating');
+  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';document.getElementById('quickSimRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
 }
 
 // ═══════ INP BUILDER (with system-sized pump curves) ═══════
@@ -3143,7 +3227,8 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   const currentSeed = +(document.getElementById('randomSeed').value) || 42;
 
   a('[TITLE]');
-  a(`;EPANET 2.3 Network - Generated ${new Date().toISOString().split('T')[0]}`);
+  a(`;EPANET 2.3 Network — Generator v3.0`);
+  a(`;Generated: ${new Date().toISOString()}`);
   a(`;Seed: ${currentSeed}`);
   a(`;${jCount} junctions, ${reservoirs.length} reservoirs, ${tanks.length} tanks`);
   a(`;${pipes.length} pipes, ${pumps.length} pumps, ${valves.length} valves`);
@@ -3278,8 +3363,10 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   reservoirs.forEach(r=>a(`${r.id}\t${r.x.toFixed(2)}\t${r.y.toFixed(2)}`));
   tanks.forEach(t=>a(`${t.id}\t${t.x.toFixed(2)}\t${t.y.toFixed(2)}`));nl();
 
-  a('[VERTICES]');a(';Link\tX-Coord\tY-Coord');nl();
-  a('[LABELS]');reservoirs.forEach(r=>a(`${r.x.toFixed(2)}\t${(r.y+100).toFixed(2)}\t"${r.name}"`));nl();
+  if(reservoirs.length>0||tanks.length>0){
+    a('[LABELS]');reservoirs.forEach(r=>a(`${r.x.toFixed(2)}\t${(r.y+100).toFixed(2)}\t"${r.name}"`));
+    tanks.forEach(t=>a(`${t.x.toFixed(2)}\t${(t.y+100).toFixed(2)}\t"${t.id}"`));nl();
+  }
 
   const mxX=nodes.reduce((m,n)=>Math.max(m,n.x),0),mxY=nodes.reduce((m,n)=>Math.max(m,n.y),0);
   a('[BACKDROP]');a(`DIMENSIONS\t-200\t-200\t${(mxX+500).toFixed(0)}\t${(mxY+500).toFixed(0)}`);
@@ -3325,8 +3412,12 @@ function setMode(mode) {
     : '🌧 GENERATE SWMM MODEL + MAP';
   // Hide previous results
   document.getElementById('dlRow').style.display = 'none';
+  document.getElementById('solverRow').style.display = 'none';
+  document.getElementById('batchRow').style.display = 'none';
+  document.getElementById('quickSimRow').style.display = 'none';
   generatedINP = '';
   wasmRPT = '';
+  quickSimPressures = null;
   updateCalParamOptions();
 }
 
@@ -3377,11 +3468,11 @@ function generateDesignStorm(type, totalDepth) {
 }
 
 // ═══════ SWMM5 GENERATION ═══════
-async function generateSWMMNetwork() {
+async function generateSWMMNetwork(silent) {
   const btn=document.getElementById('genBtn'),pb=document.getElementById('progressBar'),pf=document.getElementById('progressFill'),pl=document.getElementById('progressLabel');
-  btn.disabled=true;btn.textContent='⏳ Generating SWMM...';btn.classList.add('generating');pb.style.display='block';if(pl)pl.style.display='block';pf.style.width='0%';
+  if(!silent){btn.disabled=true;btn.textContent='⏳ Generating SWMM...';btn.classList.add('generating');pb.style.display='block';if(pl)pl.style.display='block';pf.style.width='0%';
   if(isMobile()){document.getElementById('controlsInner').classList.add('collapsed');window.scrollTo({top:0,behavior:'smooth'});}
-  await sleep(30);
+  await sleep(30);}
   try {
   const cfg = readConfig();
   const seed = +(document.getElementById('randomSeed').value) || 42;
@@ -3846,12 +3937,12 @@ async function generateSWMMNetwork() {
   const bP=(bnd.maxX-bnd.minX)*BOUNDARY_PAD_PCT;bnd.minX-=bP;bnd.minY-=bP;bnd.maxX+=bP;bnd.maxY+=bP;
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
 
-  setProgress(pf,pl,95,'Rendering map...');await sleep(5);
-  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);
-  advanceSeedIfUnlocked();
-  } catch(e) { console.error('SWMM generation error:', e); alert('Generation error: ' + e.message); }
-  finally { btn.disabled=false;btn.textContent='🌧 GENERATE SWMM MODEL + MAP';btn.classList.remove('generating');
-  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';} }
+  if(!silent){setProgress(pf,pl,95,'Rendering map...');await sleep(5);
+  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);}
+  if(!silent)advanceSeedIfUnlocked();
+  } catch(e) { console.error('SWMM generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
+  finally { if(!silent){btn.disabled=false;btn.textContent='🌧 GENERATE SWMM MODEL + MAP';btn.classList.remove('generating');
+  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
 }
 
 // ═══════ SWMM5 INP BUILDER ═══════
@@ -3871,7 +3962,8 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
 
   const currentSeed = +(document.getElementById('randomSeed').value) || 42;
   a('[TITLE]');
-  a(`;;SWMM 5.2.4 Model - Generated ${new Date().toISOString().split('T')[0]}`);
+  a(`;;SWMM 5.2.4 Model — Generator v3.0`);
+  a(`;;Generated: ${new Date().toISOString()}`);
   a(`;;Seed: ${currentSeed}`);
   a(`;;${junctions.length} junctions, ${outfalls.length} outfalls, ${subcatchments.length} subcatchments`);
   a(`;;${conduits.length} conduits, Grid: ${cfg.gridRows}x${cfg.gridCols}`);
@@ -4896,8 +4988,14 @@ async function runEpanetSolver() {
   setSolverStatus('Solving hydraulics...');
   model.solveH();
 
+  setSolverStatus('Saving hydraulic results...');
+  model.saveH();
+
   setSolverStatus('Solving water quality...');
   model.solveQ();
+
+  setSolverStatus('Writing report...');
+  model.report();
 
   const rptText = ws.readFile('model.rpt', 'utf8');
 
@@ -5966,6 +6064,92 @@ function loadConfig() {
     reader.readAsText(file);
   };
   input.click();
+}
+
+// ═══════ BATCH EXPORT (ZIP) ═══════
+async function batchExport() {
+  if (!generatedINP || !networkData) { showToast('Generate a network first','warning'); return; }
+  const btn = document.getElementById('batchBtn');
+  btn.disabled = true; btn.textContent = '⏳ Generating...';
+  try {
+    if (typeof JSZip === 'undefined') { showToast('JSZip library not loaded', 'error'); return; }
+    const zip = new JSZip();
+    const count = Math.min(50, Math.max(2, +(document.getElementById('batchCount').value) || 5));
+    const baseSeed = +(document.getElementById('randomSeed').value) || 42;
+    const manifest = { generator: 'EPANET-SWMM Generator v3.0', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
+    const seedEl = document.getElementById('randomSeed');
+    const origSeed = seedEl.value;
+    for (let i = 0; i < count; i++) {
+      const seed = baseSeed + i;
+      seedEl.value = seed;
+      btn.textContent = `⏳ ${i+1}/${count}...`;
+      await new Promise(r => setTimeout(r, 10));
+      if (currentMode === 'epanet') {
+        await generateEPANETNetwork(true);
+      } else {
+        await generateSWMMNetwork(true);
+      }
+      const fname = currentMode === 'epanet'
+        ? `EPANET23_${networkData.cfg.gridRows}x${networkData.cfg.gridCols}_seed${seed}.inp`
+        : `SWMM524_${networkData.cfg.gridRows}x${networkData.cfg.gridCols}_seed${seed}.inp`;
+      zip.file(fname, generatedINP);
+      manifest.files.push({ filename: fname, seed, nodes: networkData.nodes.length, pipes: networkData.pipes.length });
+    }
+    seedEl.value = origSeed;
+    zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${currentMode}_batch_${count}seeds.zip`; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    showToast(`Exported ${count} models as ZIP`, 'success');
+  } catch(e) { console.error('Batch export error:', e); showToast('Batch export failed: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '📦 Batch ZIP'; }
+}
+
+// ═══════ QUICK SIM (Pressure Heatmap) ═══════
+let quickSimPressures = null;
+
+async function quickSim() {
+  if (!generatedINP || !networkData) { showToast('Generate a network first', 'warning'); return; }
+  if (currentMode !== 'epanet') { showToast('Quick Sim is only available in EPANET mode', 'warning'); return; }
+  const btn = document.getElementById('quickSimBtn');
+  btn.disabled = true; btn.textContent = '⏳ Loading engine...';
+  try {
+    if (!solverModule || solverModule.type !== 'epanet-js') {
+      await loadEpanetEngine();
+    }
+    btn.textContent = '⏳ Solving...';
+    setSolverStatus('Quick Sim: running steady-state...');
+    const ws = solverModule._epanetWs;
+    const model = new window.__EpanetProject(ws);
+    ws.writeFile('quicksim.inp', generatedINP);
+    model.open('quicksim.inp', 'quicksim.rpt', 'quicksim.out');
+    model.solveH();
+    const nd = networkData;
+    const junctions = nd.nodes.filter(n => n.type === 'junction');
+    const pressures = {};
+    for (let i = 1; i <= model.getCount(0); i++) {
+      const nodeId = model.getNodeId(i);
+      const p = model.getNodeValue(i, 11);
+      pressures[nodeId] = p;
+    }
+    model.close();
+    quickSimPressures = pressures;
+    document.getElementById('showResults').checked = false;
+    renderAll();
+    setSolverStatus(`✓ Quick Sim complete — pressure heatmap displayed (${junctions.length} nodes)`);
+    showToast('Pressure heatmap displayed on map', 'success');
+    const mapTabBtn = document.querySelector('.preview-header .tab-btn');
+    switchTab('map', mapTabBtn);
+  } catch(e) {
+    console.error('Quick Sim error:', e);
+    setSolverStatus(`⚠ Quick Sim error: ${e.message}`);
+    showToast('Quick Sim failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '⚡ Quick Sim (Pressure Map)';
+  }
 }
 
 // ═══════ INIT ═══════

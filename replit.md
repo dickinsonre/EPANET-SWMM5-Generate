@@ -108,6 +108,8 @@ Key features:
 - Multiple tabs: Map, Stats, INP, Docs, HGL, RPT, Results
 - Results visualization with time slider animation
 - Calibration file export: EPANET `.cal` (Pressure/Head/Demand/Flow/Velocity) and SWMM `.dat` (Depth/Head/Inflow/Flow/Velocity)
+- Batch ZIP export: generates N INP models (2-50) with sequential seeds, packages as ZIP with manifest.json (JSZip CDN)
+- Quick Sim: one-click steady-state EPANET solve → pressure heatmap overlay on map canvas with color-coded legend (green=good, red=low)
 - HGL profile plot: ground/crown/invert/HGL lines with computed or estimated data, auto-resizes on tab switch
 - Sidebar settings organized into 4 tabs: Network, Hydraulics, Environment, Map & Export
 - Input validation with red/amber border highlighting and toast notifications blocking generation on invalid values
