@@ -1695,7 +1695,9 @@ const ENG_LOG_COLORS = {
 };
 
 function logEng(category, message, values) {
-  engineeringLog.push({ category, message, values: values || {}, idx: engineeringLog.length + 1 });
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+  engineeringLog.push({ category, message, values: values || {}, idx: engineeringLog.length + 1, timestamp: ts, isoTime: now.toISOString() });
 }
 
 function renderEngLog() {
@@ -1708,7 +1710,7 @@ function renderEngLog() {
     const color = ENG_LOG_COLORS[entry.category] || '#94a3b8';
     html += `<div class="eng-log-entry" data-cat="${entry.category}" style="display:flex;gap:8px;padding:6px 8px;border-left:3px solid ${color};margin-bottom:4px;background:rgba(255,255,255,0.02);border-radius:0 6px 6px 0;">` +
       `<span style="font-size:15px;flex:none;width:22px;text-align:center;">${icon}</span>` +
-      `<span style="flex:1;"><span style="color:${color};font-weight:600;font-size:11px;text-transform:uppercase;">${entry.category}</span><br>${entry.message}</span>` +
+      `<span style="flex:1;"><span style="color:${color};font-weight:600;font-size:11px;text-transform:uppercase;">${entry.category}</span> <span style="color:var(--text-dim);font-size:10px;">[${entry.timestamp}]</span><br>${entry.message}</span>` +
       `<span style="color:var(--text-dim);font-size:10px;flex:none;min-width:24px;text-align:right;">#${entry.idx}</span></div>`;
   });
   el.innerHTML = html;
@@ -1728,7 +1730,7 @@ function exportEngLog() {
   if (engineeringLog.length === 0) { showToast('No log to export', 'warning'); return; }
   let txt = 'ENGINEERING DECISION LOG\n' + '='.repeat(60) + '\n\n';
   engineeringLog.forEach(e => {
-    txt += `[${e.category.toUpperCase()}] #${e.idx}\n${e.message}\n\n`;
+    txt += `[${e.isoTime || e.timestamp}] [${e.category.toUpperCase()}] #${e.idx}\n${e.message}\n\n`;
   });
   const blob = new Blob([txt], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
