@@ -106,6 +106,8 @@ Key features:
 - WASM solver engine integration (EPANET 2.3 via epanet-js + @model-create/epanet-engine@0.9.0-alpha.1, SWMM via ikegdivs/swmm-js)
 - Multiple tabs: Map, Stats, INP, Docs, HGL, RPT, Results
 - Results visualization with time slider animation
+- Calibration file export: EPANET `.cal` (Pressure/Head/Demand/Flow/Velocity) and SWMM `.dat` (Depth/Head/Inflow/Flow/Velocity)
+- HGL profile plot: ground/crown/invert/HGL lines with computed or estimated data, auto-resizes on tab switch
 
 ### `scripts` (`@workspace/scripts`)
 
