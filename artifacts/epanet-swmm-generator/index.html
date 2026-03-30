@@ -5145,7 +5145,7 @@ function analyzeValidation() {
     if (results.length === 0) return;
     const heads = results.map(r => r.head);
     const minHead = Math.min(...heads);
-    const tankElev = tk.elevation || 0;
+    const tankElev = tk.elev || 0;
     const tankMinLevel = tk.minLevel || 0;
     const minLevel = minHead - tankElev;
     if (minLevel <= tankMinLevel + 0.5) emptyTanks.push({ id: tk.id, minLevel: minLevel.toFixed(1) });
