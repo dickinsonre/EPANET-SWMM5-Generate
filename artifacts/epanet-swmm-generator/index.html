@@ -6079,6 +6079,9 @@ async function batchExport() {
     const manifest = { generator: 'EPANET-SWMM Generator v3.0', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
     const seedEl = document.getElementById('randomSeed');
     const origSeed = seedEl.value;
+    const savedINP = generatedINP;
+    const savedND = networkData;
+    const savedRPT = wasmRPT;
     for (let i = 0; i < count; i++) {
       const seed = baseSeed + i;
       seedEl.value = seed;
@@ -6096,6 +6099,9 @@ async function batchExport() {
       manifest.files.push({ filename: fname, seed, nodes: networkData.nodes.length, pipes: networkData.pipes.length });
     }
     seedEl.value = origSeed;
+    generatedINP = savedINP;
+    networkData = savedND;
+    wasmRPT = savedRPT;
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
