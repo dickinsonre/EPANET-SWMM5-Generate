@@ -6697,6 +6697,16 @@ function loadConfig() {
           const el = document.getElementById(f);
           if (el && cfg[f] !== undefined) el.value = cfg[f];
         });
+        // Restore Design Mode fields
+        if (cfg.designMode !== undefined) {
+          const chkDM = document.getElementById('chkDesignMode');
+          if (chkDM) chkDM.checked = cfg.designMode;
+          ['designPop','designGPCD','designPeaking','designFireFlow'].forEach(f => {
+            const el = document.getElementById(f);
+            if (el && cfg[f] !== undefined) el.value = cfg[f];
+          });
+          toggleDesignMode();
+        }
         // Restore SWMM fields
         Object.keys(cfg).forEach(k => {
           if (k.startsWith('swmm_')) {
