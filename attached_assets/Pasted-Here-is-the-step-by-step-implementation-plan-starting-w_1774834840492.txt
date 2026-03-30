@@ -1,0 +1,565 @@
+Here is the step-by-step implementation plan, starting with the UI refactoring, followed by the`InpGenerator` class, Web Worker integration, WASM strategy, and Canvas rendering.
+
+---
+
+## 1. Refactoring UI into Tabbed Structure
+
+### Step 1: HTML Structure
+Replace the monolithic settings list with a tabbed interface. Use a container for tabs and content panes.
+
+```html
+<div class="wizard-container">
+  <!-- Tab Navigation -->
+  <div class="tab-navigation">
+    <button class="tab-btn active" data-target="topo">1. Topology</button>
+    <button class="tab-btn" data-target="hydraulics">2. Hydraulics</button>
+    <button class="tab-btn" data-target="swmm">3. SWMM</button>
+    <button class="tab-btn" data-target="map">4. Map & Export</button>
+  </div>
+
+  <!-- Tab Content Panes -->
+  <div class="tab-content">
+    <!-- Topology Tab -->
+    <div id="topo" class="tab-pane active">
+      <h3>Network Topology</h3>
+      <!-- Grid settings, presets, jitter controls -->
+      <label>Grid Rows: <input type="number" id="gridRows" value="30"></label>
+      <label>Grid Columns: <input type="number" id="gridCols" value="25"></label>
+      <label>Node Spacing (ft): <input type="number" id="nodeSpacing" value="500"></label>
+      <button class="preset-btn" data-preset="tiny">Tiny</button>
+      <button class="preset-btn" data-preset="small">Small</button>
+      <button class="preset-btn" data-preset="medium">Medium</button>
+      <button class="preset-btn" data-preset="large">Large</button>
+      <button class="preset-btn" data-preset="city">City</button>
+    </div>
+
+    <!-- Hydraulics Tab -->
+    <div id="hydraulics" class="tab-pane">
+      <h3>Hydraulic Parameters</h3>
+      <!-- Pipe diameters, C-factors, pump settings -->
+      <label>Transmission Diameter (in): <input type="number" id="transDiameter" value="24"></label>
+      <label>Distribution Diameter (in): <input type="number" id="distDiameter" value="12"></label>
+      <label>C-Factor Min: <input type="number" id="cFactorMin" value="100"></label>
+      <label>C-Factor Max: <input type="number" id="cFactorMax" value="130"></label>
+    </div>
+
+    <!-- SWMM Tab -->
+    <div id="swmm" class="tab-pane">
+      <h3>SWMM Parameters</h3>
+      <!-- LID, storm, RDII settings -->
+      <label>Design Storm: 
+        <select id="designStorm">
+          <option value="SCS_Type_II">SCS Type II (24-hr)</option>
+          <option value="Uniform">Uniform (6-hr)</option>
+        </select>
+      </label>
+      <label>Total Depth (in): <input type="number" id="stormDepth" value="5.0"></label>
+      <label>Enable RDII: <input type="checkbox" id="enableRDII" checked></label>
+    </div>
+
+    <!-- Map & Export Tab -->
+    <div id="map" class="tab-pane">
+      <h3>Map & Export</h3>
+      <!-- Map style, batch export, quick sim -->
+      <label>Map Style:
+        <select id="mapStyle">
+          <option value="light">Light (paper map)</option>
+          <option value="satellite">Satellite (dark)</option>
+          <option value="blueprint">Blueprint</option>
+        </select>
+      </label>
+      <button id="generateBtn">Generate Network</button>
+      <button id="batchExportBtn">Batch Export (Sensitivity)</button>
+      <button id="quickSimBtn">Quick Sim</button>
+    </div>
+  </div>
+
+  <!-- Canvas Container -->
+  <div class="canvas-container">
+    <canvas id="networkCanvas" width="800" height="600"></canvas>
+    <div id="inspectPanel" class="inspect-panel"></div>
+  </div>
+</div>
+```
+
+### Step 2: CSS for Tab Styling
+```css
+.tab-navigation {
+  display: flex;
+  border-bottom: 2px solid #ccc;
+}
+.tab-btn {
+  padding: 10px 20px;
+  background: #f0f0f0;
+  border: none;
+  cursor: pointer;
+}
+.tab-btn.active {
+  background: #fff;
+  border-bottom: 2px solid #007bff;
+}
+.tab-pane {
+  display: none;
+  padding: 20px;
+}
+.tab-pane.active {
+  display: block;
+}
+.canvas-container {
+  position: relative;
+  margin-top: 20px;
+}
+.inspect-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  background: rgba(255,255,255,0.9);
+  padding: 10px;
+  border: 1px solid #ccc;
+  display: none;
+}
+```
+
+### Step 3: JavaScript for Tab Switching
+```javascript
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    // Remove active class from all tabs
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    
+    // Add active class to clicked tab
+    btn.classList.add('active');
+    const target = btn.dataset.target;
+    document.getElementById(target).classList.add('active');
+  });
+});
+```
+
+---
+
+## 2. Implementing the`InpGenerator` Class
+
+This class handles strict EPANET 2.3 and SWMM 5.2.4 compliance.
+
+### Step 1: Class Structure
+```javascript
+class InpGenerator {
+  constructor(config) {
+    this.config = config;
+    this.lines = [];
+    this.nodes = [];
+    this.pipes = [];
+  }
+
+  generateEPANET() {
+    this.lines = [];
+    this._addTitle();
+    this._addJunctions();
+    this._addReservoirs();
+    this._addTanks();
+    this._addPipes();
+    this._addPumps();
+    this._addValves();
+    this._addPatterns();
+    this._addCurves();
+    this._addOptions();
+    this._addCoordinates();
+    this._addVertices();
+    this._addLabels();
+    this._addBackdrop();
+    this._addEnd();
+    return this.lines.join('\n');
+  }
+
+  generateSWMM() {
+    this.lines = [];
+    this._addTitle();
+    this._addOptions();
+    this._addSubcatchments();
+    this._addSubareas();
+    this._addInfiltration();
+    this._addJunctions();
+    this._addOutfalls();
+    this._addConduits();
+    this._addPumps();
+    this._addOrifices();
+    this._addWeirs();
+    this._addXSections();
+    this._addPollutants();
+    this._addLandUses();
+    this._addCoverages();
+    this._addBuildup();
+    this._addWashoff();
+    this._addRDII();
+    this._addHydrographs();
+    this._addTimeseries();
+    this._addPatterns();
+    this._addCurves();
+    this._addCoordinates();
+    this._addVertices();
+    this._addLabels();
+    this._addBackdrop();
+    this._addEnd();
+    return this.lines.join('\n');
+  }
+
+  // Private methods for each section
+  _addTitle() {
+    this.lines.push(`[TITLE]`);
+    this.lines.push(`; Generated by EPANET/SWMM Generator ${new Date().toISOString()}`);
+    this.lines.push(`; Grid: ${this.config.gridRows}x${this.config.gridCols}, Terrain: ${this.config.terrainType}`);
+  }
+
+  _addJunctions() {
+    this.lines.push(`[JUNCTIONS]`);
+    this.lines.push(`; ID Elev Demand Pattern`);
+    this.nodes.forEach(node => {
+      if (node.type === 'junction') {
+        this.lines.push(`${node.id} ${node.elevation.toFixed(2)} ${node.demand.toFixed(2)} ${node.pattern}`);
+      }
+    });
+  }
+
+  _addReservoirs() {
+    this.lines.push(`[RESERVOIRS]`);
+    this.lines.push(`; ID Head Pattern`);
+    this.nodes.forEach(node => {
+      if (node.type === 'reservoir') {
+        this.lines.push(`${node.id} ${node.head.toFixed(2)} ${node.pattern}`);
+      }
+    });
+  }
+
+  _addPipes() {
+    this.lines.push(`[PIPES]`);
+    this.lines.push(`; ID Node1 Node2 Length Diameter C-factor MinorLoss Status`);
+    this.pipes.forEach(pipe => {
+      // Strict Validation: Diameter must be > 0
+      if (pipe.diameter <= 0) pipe.diameter = 6; // Default minimum
+      // C-factor clamp (80-150 for EPANET)
+      let c = Math.max(80, Math.min(150, pipe.cFactor));
+      this.lines.push(`${pipe.id} ${pipe.node1} ${pipe.node2} ${pipe.length.toFixed(2)} ${pipe.diameter} ${c} 0 OPEN`);
+    });
+  }
+
+  _addOptions() {
+    this.lines.push(`[OPTIONS]`);
+    this.lines.push(`FLOW_UNITS ${this.config.units === 'SI' ? 'LPS' : 'GPM'}`);
+    this.lines.push(`HEADLOSS ${this.config.headlossMethod}`);
+    this.lines.push(`VISCOITY ${this.config.viscosity || 1.0}`);
+    this.lines.push(`DIFFUSION ${this.config.diffusion || 1.0}`);
+    this.lines.push(`SPECIFIC_GRAVITY ${this.config.specificGravity || 1.0}`);
+    this.lines.push(`MAX_TRIES ${this.config.maxTries || 10}`);
+    this.lines.push(`ACCURACY ${this.config.accuracy || 0.001}`);
+    this.lines.push(`TOLERANCE ${this.config.tolerance || 0.01}`);
+    this.lines.push(`EMIT_EXPON ${this.config.emitExpon || 0.5}`);
+    this.lines.push(`DEMAND_MULTIPLIER ${this.config.demandMultiplier || 1.0}`);
+    this.lines.push(`EMITTER_EXPONENT ${this.config.emitterExponent || 0.5}`);
+    this.lines.push(`TORQUE ${this.config.torque || 0.0}`);
+    this.lines.push(`CHECK_FREQUENCY ${this.config.checkFrequency || 10}`);
+    this.lines.push(`MAX_CHECK_FREQ ${this.config.maxCheckFreq || 100}`);
+    this.lines.push(`TEMPERATURE ${this.config.temperature || 20.0}`);
+  }
+
+  _addEnd() {
+    this.lines.push(`[END]`);
+  }
+}
+```
+
+### Step 2: Integration with UI
+```javascript
+// Generate button click handler
+document.getElementById('generateBtn').addEventListener('click', () => {
+  const config = getConfigFromUI();
+  const generator = new InpGenerator(config);
+  
+  // Generate based on mode (EPANET or SWMM)
+  let inpContent;
+  if (config.mode === 'EPANET') {
+    inpContent = generator.generateEPANET();
+  } else {
+    inpContent = generator.generateSWMM();
+  }
+  
+  // Download or display
+  downloadFile('model.inp', inpContent);
+  
+  // Update canvas with generated network
+  updateCanvas(generator.nodes, generator.pipes);
+});
+```
+
+---
+
+## 3. Web Worker for Batch Processing
+
+### Step 1: Create Worker Blob
+```javascript
+const workerCode = `
+  self.onmessage = function(e) {
+    const { config, seeds } = e.data;
+    const results = [];
+    
+    // Import InpGenerator class (simplified version)
+    class InpGenerator {
+      constructor(config) {
+        this.config = config;
+        this.lines = [];
+        this.nodes = [];
+        this.pipes = [];
+      }
+      
+      generateEPANET() {
+        // ... (same generation logic as main thread)
+        return this.lines.join('\\n');
+      }
+    }
+    
+    seeds.forEach(seed => {
+      const localConfig = JSON.parse(JSON.stringify(config));
+      localConfig.randomSeed = seed;
+      
+      const generator = new InpGenerator(localConfig);
+      const content = generator.generateEPANET();
+      results.push({ seed, content });
+    });
+    
+    self.postMessage(results);
+  };
+`;
+
+const blob = new Blob([workerCode], { type: 'application/javascript' });
+const worker = new Worker(URL.createObjectURL(blob));
+```
+
+### Step 2: Batch Export Handler
+```javascript
+document.getElementById('batchExportBtn').addEventListener('click', async () => {
+  const seeds = [];
+  const count = parseInt(document.getElementById('batchCount').value) || 10;
+  
+  for(let i=0; i<count; i++) seeds.push(Math.floor(Math.random() * 10000));
+  
+  const config = getConfigFromUI();
+  
+  worker.onmessage = function(e) {
+    const zip = new JSZip();
+    const folder = zip.folder("batch_models");
+    
+    e.data.forEach(model => {
+      folder.file(`model_seed_${model.seed}.inp`, model.content);
+    });
+    
+    zip.generateAsync({type:"blob"}).then(function(content) {
+      saveAs(content, "batch_sensitivity_analysis.zip");
+    });
+  };
+  
+  worker.postMessage({ config: config, seeds: seeds });
+});
+```
+
+---
+
+## 4. Plan for Integrating EPANET WASM Module
+
+### Strategy:
+1.  **Source:** Use the official EPA EPANET-MSX WASM build or compile the C source to WASM using Emscripten.
+2.  **Integration:** Load the WASM module asynchronously and initialize the EPANET engine.
+3.  **Simulation Flow:**
+    - Write the generated`.inp` content to the WASM virtual file system.
+    - Call EPANET functions (`ENopen`,`ENsolveH`,`ENgetnodevalue`).
+    - Parse results and overlay on canvas.
+
+### Implementation Steps:
+
+#### Step 1: Load WASM Module
+```javascript
+// Assuming epanet.wasm is hosted or embedded
+async function loadEPANETWASM() {
+  const response = await fetch('epanet.wasm');
+  const bytes = await response.arrayBuffer();
+  const { instance } = await WebAssembly.instantiate(bytes, {
+    env: {
+      memory: new WebAssembly.Memory({ initial: 256, maximum: 256 }),
+      // Add necessary imports for C runtime (e.g., printf, fopen)
+    }
+  });
+  return instance.exports;
+}
+```
+
+#### Step 2: Initialize EPANET Engine
+```javascript
+let epanetEngine = null;
+
+async function initializeEPANET() {
+  epanetEngine = await loadEPANETWASM();
+  
+  // Set up virtual file system (if needed)
+  if (epanetEngine.FS) {
+    epanetEngine.FS.mkdir('/work');
+    epanetEngine.FS.chdir('/work');
+  }
+}
+```
+
+#### Step 3: Run Simulation
+```javascript
+async function runQuickSim() {
+  if (!epanetEngine) await initializeEPANET();
+  
+  const config = getConfigFromUI();
+  const generator = new InpGenerator(config);
+  const inpContent = generator.generateEPANET();
+  
+  // Write to virtual file system
+  epanetEngine.FS.writeFile('model.inp', inpContent);
+  
+  // Run EPANET
+  epanetEngine.ENopen('model.inp', 'report.rpt', '');
+  epanetEngine.ENsolveH();
+  
+  // Retrieve results
+  const nodeCount = epanetEngine.ENgetcount(0); // 0 = EN_NODECOUNT
+  const pressures = [];
+  for(let i=1; i<=nodeCount; i++) {
+    const pressure = epanetEngine.ENgetnodevalue(i, 2); // 2 = EN_PRESSURE
+    pressures.push(pressure);
+  }
+  
+  // Overlay heatmap
+  drawHeatmap(pressures);
+}
+```
+
+#### Step 4: Fallback for Missing WASM
+If WASM is not available, provide a simplified hydraulic solver in JavaScript (e.g., Hardy-Cross method) for demonstration.
+
+---
+
+## 5. Canvas Rendering Implementation
+
+### Step 1: Canvas Setup
+```html
+<canvas id="networkCanvas" width="800" height="600"></canvas>
+```
+
+### Step 2: Render Function
+```javascript
+const canvas = document.getElementById('networkCanvas');
+const ctx = canvas.getContext('2d');
+
+function renderNetwork(nodes, pipes) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw background map (city streets, etc.)
+  drawCityMap();
+  
+  // Draw pipes
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+  pipes.forEach(pipe => {
+    const n1 = nodes.find(n => n.id === pipe.node1);
+    const n2 = nodes.find(n => n.id === pipe.node2);
+    if (n1 && n2) {
+      ctx.beginPath();
+      ctx.moveTo(n1.x, n1.y);
+      ctx.lineTo(n2.x, n2.y);
+      ctx.stroke();
+    }
+  });
+  
+  // Draw nodes
+  nodes.forEach(node => {
+    ctx.fillStyle = node.type === 'reservoir' ? 'blue' : 'black';
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawCityMap() {
+  // Draw grid lines, streets, parks (simplified)
+  ctx.strokeStyle = '#ddd';
+  ctx.lineWidth = 1;
+  for(let i=0; i<canvas.width; i+=50) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, canvas.height);
+    ctx.stroke();
+  }
+  for(let i=0; i<canvas.height; i+=50) {
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(canvas.width, i);
+    ctx.stroke();
+  }
+}
+```
+
+### Step 3: Click-to-Inspect
+```javascript
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  
+  // Find nearest node (within 10 pixels)
+  const clickedNode = nodes.find(node => 
+    Math.sqrt((node.x - x)**2 + (node.y - y)**2) < 10
+  );
+  
+  if (clickedNode) {
+    showInspectPanel(clickedNode);
+  }
+});
+
+function showInspectPanel(node) {
+  const panel = document.getElementById('inspectPanel');
+  panel.innerHTML = `
+    <h3>Node: ${node.id}</h3>
+    <p>Type: ${node.type}</p>
+    <p>Elevation: ${node.elevation} ft</p>
+    <p>Demand: ${node.demand} GPM</p>
+    <p>Pressure: ${node.pressure || 'N/A'} psi</p>
+  `;
+  panel.style.display = 'block';
+}
+```
+
+### Step 4: Heatmap Overlay
+```javascript
+function drawHeatmap(pressures) {
+  nodes.forEach((node, index) => {
+    const p = pressures[index];
+    const color = getPressureColor(p); // Blue (low) to Red (high)
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function getPressureColor(pressure) {
+  // Normalize pressure to 0-1 range (assuming 0-100 psi range)
+  const normalized = Math.max(0, Math.min(1, pressure / 100));
+  const r = Math.floor(255 * normalized);
+  const b = Math.floor(255 * (1 - normalized));
+  return `rgb(${r}, 0, ${b})`;
+}
+```
+
+---
+
+## Summary of Implementation Steps
+
+1.  **UI Refactoring:** Complete tabbed structure with CSS and JavaScript for switching.
+2.  **InpGenerator Class:** Implement strict EPANET 2.3 and SWMM 5.2.4 compliance with validation.
+3.  **Web Worker:** Set up batch processing for sensitivity analysis using JSZip.
+4.  **WASM Integration:** Load EPANET WASM module and run simulations in-browser.
+5.  **Canvas Rendering:** Interactive canvas with click-to-inspect and heatmap overlays.
+
+This plan ensures a modular, compliant, and user-friendly tool for hydraulic model generation and analysis.
