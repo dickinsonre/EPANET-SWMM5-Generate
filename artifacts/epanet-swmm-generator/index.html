@@ -1228,7 +1228,7 @@ canvas#networkCanvas { display: block; width: 100%; height: 100%; }
       <p><strong>Network Topology:</strong> Grid-based layout with configurable jitter (position perturbation), diagonal cross-connections for looping, and dead-end branches. Grid size from 3×3 to 316×316. Eight presets from Tiny (50 nodes) through City (100K nodes).</p>
       <p><strong>Terrain:</strong> Five terrain models — rolling hills with NW→SE slope, flat, central valley, ridge line, and random Perlin-like noise. Configurable elevation range (default 58–202 ft) with multiple hill features.</p>
       <p><strong>Reservoirs:</strong> Placed at perimeter nodes and fully integrated into the grid — the reservoir replaces the junction node, inheriting all pipe connections. No floating nodes. Source pumps are only created when the reservoir head is insufficient for gravity feed.</p>
-      <p><strong>Pump Curves:</strong> Sized via BFS critical-path analysis. The engine traces from each reservoir through the pipe network using Hazen-Williams friction loss to find the farthest node, then computes the required pump head as elevation deficit + computed friction. Three-point curves bracket the operating point (shutoff = 133% design head).</p>
+      <p><strong>Pump Curves:</strong> Sized via BFS critical-path analysis. The engine traces from each reservoir through the pipe network using Hazen-Williams friction loss to find the farthest node, then computes the required pump head as elevation deficit + computed friction + safety margin. Three-point curves bracket the operating point (shutoff = 150% design head, max flow = 250% design flow) to prevent "exceeds maximum flow" warnings. Booster pumps are sized based on actual pipe diameter and downstream elevation needs.</p>
       <p><strong>Tanks:</strong> Placed in the distribution field. Base elevation computed to serve the local pressure zone at ~85% of source HGL. Tank nodes replace junction nodes, same as reservoirs.</p>
       <p><strong>Pipes:</strong> Length = Euclidean distance × 1.3 street-routing factor. Diameters: transmission (24–36") along corridors and near sources, secondary (12–20") on arterials every 5th row/column, distribution (6–12") elsewhere. C-factors spatially correlated: downtown (center) = old pipes (C=80–100), suburban (edges) = new pipes (C=110–130).</p>
       <p><strong>Pipe Age:</strong> Each pipe assigned an installation year correlated with distance from center (1950s downtown → 2020s suburban). Written as decade-tagged link attributes (YR1960s, YR1990s, etc.).</p>
@@ -1326,7 +1326,7 @@ const PEAKING_FACTOR = 1.6;         // Peak demand / average demand ratio
 const PSI_TO_FT = 2.31;            // 1 psi = 2.31 ft of head
 const TANK_HGL_FRACTION = 0.85;    // Tank base = 85% of source HGL at that location
 const MIN_PRESSURE_PSI = 20;       // Minimum acceptable system pressure (psi)
-const PUMP_SHUTOFF_FACTOR = 1.33;  // Shutoff head = 133% of design head
+const PUMP_SHUTOFF_FACTOR = 1.5;  // Shutoff head = 150% of design head (wider curve)
 const BOUNDARY_PAD_PCT = 0.08;     // Map boundary padding as fraction of extent
 
 // ═══════════════════════════════════════════════════════════
@@ -2178,7 +2178,8 @@ async function generateEPANETNetwork(){
     const bfs = bfsCriticalPath(res.id, supplyPerSource);
     const criticalElev = bfs.farthestElev || maxJunctionElev;
     const frictionHead = Math.max(5, bfs.maxFrictionLoss);
-    const requiredHGL = criticalElev + minPressure * PSI_TO_FT;
+    const safetyMargin = frictionHead * 0.25 + 10;
+    const requiredHGL = criticalElev + minPressure * PSI_TO_FT + safetyMargin;
     const headDeficit = requiredHGL - res.head + frictionHead;
 
     if (headDeficit > 5) {
@@ -2201,15 +2202,18 @@ async function generateEPANETNetwork(){
   });
 
   // Booster pumps — split pipe, insert intermediate node
+  // Sized based on actual pipe flow estimate and downstream elevation need
   const maxPumps = Math.floor(pipes.length * 0.3);
   const boosterCount = Math.min(Math.max(0, cfg.numPumps - pumps.length), maxPumps);
   for(let b=0; b<boosterCount; b++){
     let attempts=0, pIdx;
     do { pIdx = Math.floor(rng()*pipes.length); attempts++; }
-    while(attempts<50 && pipes[pIdx].status==='Closed');
+    while(attempts<50 && (pipes[pIdx].status==='Closed' || /^[TR]\d/.test(pipes[pIdx].node1) || /^[TR]\d/.test(pipes[pIdx].node2)));
+    if(attempts>=50) continue;
     const origPipe = pipes[pIdx];
     const n1 = allNodeMap[origPipe.node1], n2 = allNodeMap[origPipe.node2];
     if(!n1||!n2) continue;
+    if(n1.type==='reservoir'||n1.type==='tank'||n2.type==='reservoir'||n2.type==='tank') continue;
     const midId = 'J'+nId++;
     const midX = Math.round(((n1.x+n2.x)/2)*100)/100;
     const midY = Math.round(((n1.y+n2.y)/2)*100)/100;
@@ -2218,9 +2222,11 @@ async function generateEPANETNetwork(){
     nodes.push(midNode); allNodeMap[midId] = midNode;
     const halfLen = Math.round(origPipe.length/2);
     origPipe.node2 = midId; origPipe.length = halfLen;
-    pipes.push({id:'P'+pId++, node1:midId, node2:n2.id, length:halfLen, diameter:origPipe.diameter, roughness:origPipe.roughness, status:'Open', installYear: origPipe.installYear});
-    const removedPipe = pipes.pop();
-    const boostHead = 30 + rng()*40, boostFlow = 200 + rng()*600;
+    const pipeArea = Math.PI * Math.pow(origPipe.diameter/2/12, 2);
+    const estVelocity = 2.0 + rng()*2.0;
+    const boostFlow = Math.max(100, Math.round(pipeArea * estVelocity * 449));
+    const elevDiff = Math.abs((n2.elev||avgJunctionElev) - midElev);
+    const boostHead = Math.max(20, Math.round(elevDiff + minPressure * PSI_TO_FT * 0.3 + 10 + rng()*20));
     pumps.push({ id:'PU'+puId, node1:midId, node2:n2.id, curve:'PUMP'+puId, type:'booster', designHead:Math.round(boostHead), designFlow:Math.round(boostFlow) });
     puId++;
     pipes.push({id:'P'+pId++, node1:midId, node2:n2.id, length:halfLen, diameter:origPipe.diameter, roughness:origPipe.roughness, status:'Closed', installYear: origPipe.installYear});
@@ -2305,10 +2311,58 @@ async function generateEPANETNetwork(){
     insertValveAtPipe(pIdx, 'FCV', 100+Math.round(rng()*200));
   }
 
-  // Closed pipes
+  // Closed pipes — with connectivity-safe validation
+  // Close pipes randomly but verify no nodes become disconnected
   const closedSet=new Set();
-  while(closedSet.size<Math.min(cfg.closedPipes,pipes.length)) closedSet.add(Math.floor(rng()*pipes.length));
-  closedSet.forEach(i=>{pipes[i].status='Closed';});
+  const closedTarget = Math.min(cfg.closedPipes, Math.floor(pipes.length * 0.15));
+  let closeAttempts = 0;
+  while(closedSet.size < closedTarget && closeAttempts < closedTarget * 5) {
+    const ci = Math.floor(rng()*pipes.length);
+    closeAttempts++;
+    if(closedSet.has(ci)) continue;
+    const cp = pipes[ci];
+    if(cp.status==='Closed') continue;
+    cp.status='Closed';
+    // Quick connectivity check: can both endpoints still reach a source?
+    const tempAdj = {};
+    nodes.forEach(n => tempAdj[n.id] = []);
+    reservoirs.forEach(r => tempAdj[r.id] = tempAdj[r.id]||[]);
+    tanks.forEach(t => tempAdj[t.id] = tempAdj[t.id]||[]);
+    pipes.forEach(tp => {
+      if(tp.status==='Closed') return;
+      if(!tempAdj[tp.node1]) tempAdj[tp.node1]=[];
+      if(!tempAdj[tp.node2]) tempAdj[tp.node2]=[];
+      tempAdj[tp.node1].push(tp.node2);
+      tempAdj[tp.node2].push(tp.node1);
+    });
+    valves.forEach(vv=>{
+      if(!tempAdj[vv.node1]) tempAdj[vv.node1]=[];
+      if(!tempAdj[vv.node2]) tempAdj[vv.node2]=[];
+      tempAdj[vv.node1].push(vv.node2);
+      tempAdj[vv.node2].push(vv.node1);
+    });
+    pumps.forEach(pp=>{
+      if(!tempAdj[pp.node1]) tempAdj[pp.node1]=[];
+      if(!tempAdj[pp.node2]) tempAdj[pp.node2]=[];
+      tempAdj[pp.node1].push(pp.node2);
+      tempAdj[pp.node2].push(pp.node1);
+    });
+    const tempReachable = new Set();
+    const tq = [...reservoirs.map(r=>r.id)];
+    tq.forEach(id=>tempReachable.add(id));
+    while(tq.length>0){
+      const cur=tq.shift();
+      (tempAdj[cur]||[]).forEach(nbr=>{
+        if(!tempReachable.has(nbr)){tempReachable.add(nbr);tq.push(nbr);}
+      });
+    }
+    const wouldDisconnect = nodes.some(n=>!tempReachable.has(n.id)) || tanks.some(t=>!tempReachable.has(t.id));
+    if(wouldDisconnect){
+      cp.status='Open';
+    } else {
+      closedSet.add(ci);
+    }
+  }
 
   // Emitters
   const emitterNodes=[],emitterSet=new Set(),junctionIndices=[];
@@ -2478,18 +2532,18 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
     a('PAT_FIRE\t0\t0\t0\t0\t0\t0');a('PAT_FIRE\t0\t0\t0\t0\t0\t0');nl();
   }
 
-  // ═══ FIX 3: System-sized pump curves ═══
+  // ═══ FIX 3: System-sized pump curves (wide range to prevent exceeding max flow) ═══
   a('[CURVES]');a(';ID\tX-Value\tY-Value');
   pumps.forEach(p=>{
     const dH = uH(p.designHead || 100);
     const dQ = uQ(p.designFlow || 500);
     const shutoff = Math.round(dH * PUMP_SHUTOFF_FACTOR);
-    const maxQ = Math.round(dQ * 1.5);
+    const maxQ = Math.round(dQ * 2.5);
     const fInfo = p.frictionHead ? `, BFS friction=${f2(uH(p.frictionHead))}` : '';
     a(`;${p.curve} - ${p.type} pump, design ${f2(dQ)} @ ${f2(dH)}${fInfo}`);
     a(`${p.curve}\t0\t${shutoff}`);
     a(`${p.curve}\t${f2(dQ)}\t${f2(dH)}`);
-    a(`${p.curve}\t${f2(maxQ)}\t${Math.round(dH*0.3)}`);
+    a(`${p.curve}\t${f2(maxQ)}\t${Math.round(dH*0.15)}`);
   });nl();
 
   a('[CONTROLS]');
