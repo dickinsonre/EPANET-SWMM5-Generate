@@ -5162,7 +5162,7 @@ function analyzeValidation() {
 
   let severity = 'green';
   if (negPressureNodes.length > 0 || !converged || (massBalanceError !== null && Math.abs(massBalanceError) > 5)) severity = 'red';
-  else if (lowPressureNodes.length > junctions.length * 0.1 || highVelPipes.length > 0 || emptyTanks.length > 0) severity = 'yellow';
+  else if (lowPressureNodes.length > junctions.length * 0.1 || highVelPipes.length > 0 || emptyTanks.length > 0 || stagnantPipes.length > nd.pipes.length * 0.3) severity = 'yellow';
 
   const recommendations = [];
   if (negPressureNodes.length > 0) {
@@ -5219,7 +5219,7 @@ function renderValidationUI() {
   html += `<div><div style="font-size:16px;font-weight:700;color:${badgeColor};">${statusText}</div>`;
   html += `<div style="font-size:11px;color:var(--text-dim);">Validation Report — ${v.totalJunctions} junctions, ${v.totalPipes} pipes</div></div>`;
   if (v.severity !== 'green' && currentMode === 'epanet') {
-    html += `<button onclick="autoFixNetwork()" id="autoFixBtn" class="download-btn" style="margin-left:auto;border-color:${badgeColor};color:${badgeColor};padding:8px 16px;font-size:12px;min-height:36px;">🔧 Auto-Fix</button>`;
+    html += `<button onclick="autoFixNetwork()" id="autoFixBtn" class="download-btn" title="Heuristic fix: upsizes pipes near problem nodes using neighborhood search" style="margin-left:auto;border-color:${badgeColor};color:${badgeColor};padding:8px 16px;font-size:12px;min-height:36px;">🔧 Auto-Fix (Pipe Upsize)</button>`;
   }
   html += `</div>`;
 
