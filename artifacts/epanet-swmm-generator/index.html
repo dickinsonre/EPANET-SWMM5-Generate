@@ -1836,11 +1836,9 @@ let lastCanvasTransform = null;
 function getCanvasCoords(e) {
   const canvas = document.getElementById('networkCanvas');
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
   return {
-    px: (e.clientX - rect.left) * scaleX,
-    py: (e.clientY - rect.top) * scaleY,
+    px: e.clientX - rect.left,
+    py: e.clientY - rect.top,
     clientX: e.clientX,
     clientY: e.clientY
   };
