@@ -5183,7 +5183,7 @@ function analyzeValidation() {
     recommendations.push({ type: 'stagnation', severity: 'info', text: `${stagnantPipes.length} pipe(s) with low flow — monitor water age; consider flushing at dead-ends` });
   }
   if (emptyTanks.length > 0) {
-    recommendations.push({ type: 'tank_supply', severity: 'red', text: `${emptyTanks.length} tank(s) drain to minimum — increase supply or add fill pump` });
+    recommendations.push({ type: 'tank_supply', severity: 'red', text: `${emptyTanks.length} tank(s) drain to minimum — increase supply capacity, adjust pump curve/control setpoints, or add dedicated fill pump` });
   }
   if (!converged) {
     recommendations.push({ type: 'convergence', severity: 'red', text: 'Solver did not converge — check for disconnected nodes, extreme demands, or unreasonable pipe sizes' });
