@@ -1,0 +1,70 @@
+Let me think about this properly — not feature requests, but examining the fundamental assumptions and where they break down.
+
+---
+
+**The central tension in this tool is that it claims hydraulic validity but achieves it through geometric heuristics rather than hydraulic analysis.** That's not a bug — it's a design choice that made the tool possible. But it creates a ceiling, and I think you're hitting it. Let me walk through where the physics breaks down and what completing the loop would unlock.
+
+**1. The pipe sizing is backwards.**
+
+Right now, diameter assignment works from position: near the center or near a reservoir = transmission main, every 5th row = secondary, everything else = distribution. Real pipe sizing works from demand: you compute the flow each pipe needs to carry, then select the diameter that delivers that flow within velocity and headloss constraints.
+
+The BFS pump sizing partially addresses this — it traces friction paths — but it uses an estimated flow per pipe (`totalFlow / visited.size * 0.3`) that doesn't reflect actual flow distribution. In a real grid network, flow splits at every junction based on downstream demand and relative pipe resistance. The pipes near a reservoir might carry 80% of the flow or 20%, depending on whether there's another reservoir feeding from the other side.
+
+The fix isn't complicated conceptually: after placing demands, run a simplified steady-state solve (even just a few iterations of Hardy Cross or gradient method) to get approximate flows, then resize pipes to carry those flows at 2–5 ft/s. You already have the adjacency graph and the H-W headloss function. This would make the generated networks converge reliably when run through the real solver, which most of them probably don't do right now — and that's the thing that would separate this tool from a toy.
+
+**2. The WASM solver completion changes everything.**
+
+You have the scaffold. You have the binary parsers. You have the results visualization with the time slider. But right now `generateDemoResults()` produces sinusoidal curves that look plausible but aren't physics. Completing the EPANET WASM integration (which is close — `epanet-js` with `@model-create/epanet-engine` is the right stack) would let you do something nobody else has done: **generate a network, solve it, identify problems, and fix them — all in the browser, in seconds.**
+
+Here's what that unlocks: after the initial solve, you could auto-fix the network. Find nodes with negative pressure? Increase upstream pipe diameters or add a booster pump. Find pipes with velocity below 0.5 ft/s? Flag stagnation risk. Find tanks that drain completely? Adjust pump controls. This iterative generate-solve-fix loop is what real engineers do over weeks — showing it happening automatically would be a powerful teaching moment.
+
+**3. The demand model is disconnected from the network's capacity.**
+
+You compute total demand, peak demand, and supply/demand ratio, but these are reported after the fact — they don't influence the network design. In real practice, you start with a design population and per-capita demand, size your sources and transmission to serve that population with a peaking factor and fire flow, then work down to distribution.
+
+The improvement: let the user specify a target population or total demand, then back-calculate how many reservoirs, what pump capacity, and what transmission diameters are needed. The current approach (user picks 3 reservoirs and 8 pumps independently) often produces systems where the supply/demand ratio is 0.4 or 3.0 — neither is realistic. A "design mode" that auto-sizes infrastructure to meet the demand would produce networks that actually represent how water systems are planned.
+
+**4. The RDII implementation is your strongest differentiator — push it further.**
+
+The 5 spatially-distributed RTK unit hydrograph groups with age-correlated R values is the most sophisticated feature in this generator and it directly comes from your 50 years of RDII work. But right now the UH groups are randomly parameterized within ranges. What you know from real calibration — the actual statistical distributions of R/T/K values from your 15 years supporting RDII Analyst — could replace the uniform random ranges with realistic distributions. R1 for old vitrified clay in sandy soil doesn't have the same distribution as R1 for PVC in clay soil.
+
+This is where your 338 real-world models could feed in. If you analyzed the calibrated RTK parameters from those models and built empirical distributions by pipe age, material, and soil type, the generated RDII would be statistically realistic rather than just structurally correct. That's publishable work — and it's the kind of thing that would make EWRI and CIMM.org take notice.
+
+**5. The single-file architecture served you well but is now a constraint.**
+
+4,910 lines in one HTML file was the right call for rapid iteration and Replit deployment. But you're at the point where the generator engine, the INP builder, the city map renderer, and the solver integration are four distinct systems jammed into one namespace. The monorepo scaffold is already there — `lib/` exists, the TypeScript build chain works. Extracting the core generator into a proper module would let you:
+
+- Write tests against it (does a 25×30 grid with 3 reservoirs actually produce a connected network every time? For every seed from 1 to 1000?)
+- Import it into other tools (your SWMM5 Lego Builder, the Model Generator from 338 real-world models)
+- Publish it as an npm package that PySWMM and WNTR users could call from Node
+- Version the generator independently from the UI
+
+**6. The educational narrative is implicit — make it explicit.**
+
+The Docs tab documents what the tool does. What's missing is *why*. When a student generates a network and sees PRVs placed at elevation zone boundaries, they see the result but not the reasoning. An "engineering log" that narrates the decisions as they happen — "Elevation range is 144 ft, which exceeds 80 ft, so dividing into 3 pressure zones of ~48 ft each. Placing PRV at pipe P847 where elevation drops from 178 ft to 124 ft, setting to 115 ft HGL (50 psi target at downstream elevation 124 ft)" — would turn the generator from a model factory into a teaching tool.
+
+This is low-effort, high-impact: you already compute all those values. You just don't surface the reasoning chain.
+
+**7. The terrain model limits network realism more than you might think.**
+
+Five terrain types (rolling, flat, valley, ridge, random Perlin) with Gaussian hills produce smooth, continuous elevation surfaces. Real terrain has discontinuities — bluffs, stream valleys, ridgelines with sharp breaks. These discontinuities are exactly where the interesting hydraulic problems happen: pressure zone boundaries, creek crossings requiring aerial pipes or inverted siphons, pump stations at the bottom of valleys.
+
+A terrain model that includes at least one sharp elevation break (a 40-foot bluff across the middle of the grid, for example) would create networks with more realistic challenges. The generator would need to handle it — placing a pump station or PRV at the break, routing pipes across or around it — and that handling is itself educational.
+
+**8. The missing feedback loop: generated → solved → validated → published.**
+
+Right now the workflow ends at .inp download. The implicit assumption is that someone loads the file into EPANET or SWMM and runs it. But what if the generated model doesn't converge? The user doesn't know if it's a bug in the generator or a mistake in their solver setup.
+
+With the WASM solver working, you could add a "validation report" that runs the model and reports: convergence status, mass balance error, nodes with negative pressure, pipes exceeding velocity limits, tanks that empty, subcatchments with no outflow path. A green checkmark means "this model is ready for use." That validation badge would make these models trustworthy for classroom use, conference demos, and algorithm benchmarking — which is where the legacy value lives.
+
+**9. What I'd prioritize if I were you:**
+
+First: complete the EPANET WASM solve loop. You're 80% there. The `epanet-js` integration just needs the Emscripten filesystem write → solve → binary parse pipeline debugged. Once that works, everything else gets easier because you can validate your own output.
+
+Second: add the engineering decision log. Minimal code, maximum educational impact, and it writes itself into your LinkedIn newsletter and SWMM5.org blog posts.
+
+Third: demand-driven pipe sizing (the simplified steady-state solve). This is the fix that makes generated networks reliably converge, which makes the WASM solver results trustworthy, which makes the validation report meaningful.
+
+Fourth: extract the generator engine into a testable module. Not because the single file doesn't work, but because tests would catch the edge cases that silently produce bad networks (seed 7743 with valley terrain and 5 reservoirs produces an isolated cluster, for example).
+
+The RDII distribution analysis from real models is the longer-term play — that's the ASCE journal paper.
