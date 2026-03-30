@@ -2876,10 +2876,11 @@ function sizePipeByFlow(flow, isArterial, pipeLength, roughness) {
   return bestDia;
 }
 
-function applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, resPositions) {
+function applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, resPositions, tanks) {
   const nodeMap = {};
   nodes.forEach(n => { nodeMap[n.id] = n; });
   reservoirs.forEach(r => { nodeMap[r.id] = r; });
+  if (tanks) tanks.forEach(t => { nodeMap[t.id] = t; });
   pipes.forEach(p => {
     if (p.status === 'Closed') return;
     const flow = p.estimatedFlow || 0.5;
@@ -2943,8 +2944,8 @@ function makePipe(id, n1, n2, cfg, rng, tD, sD, dD, rows, cols, resPositions) {
   const dx=n2.x-n1.x, dy=n2.y-n1.y;
   const eucLen = Math.sqrt(dx*dx+dy*dy);
   const len = Math.max(10, Math.round(eucLen * STREET_LENGTH_FACTOR)); // FIX 4
-  const diameter = assignDiameter(n1, n2, cfg, rng, tD, sD, dD, rows, cols, resPositions);
-  const roughness = assignCFactor(n1, n2, diameter, cfg, rng, rows, cols); // FIX 7
+  const diameter = 8;
+  const roughness = 100;
   return {id:'P'+id, node1:n1.id, node2:n2.id, length:len, diameter:diameter, roughness:roughness, status:'Open'};
 }
 
@@ -3128,7 +3129,7 @@ async function generateEPANETNetwork(silent){
 
   // ═══ FLOW ESTIMATION & DEMAND-DRIVEN PIPE SIZING ═══
   estimatePipeFlows(nodes, reservoirs, tanks, pipes);
-  applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, rP);
+  applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, rP, tanks);
 
   // Re-assign C-factors after resizing (C correlates with diameter)
   const cNodeMap = {};
