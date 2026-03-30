@@ -3618,9 +3618,12 @@ async function generateEPANETNetwork(silent){
         side2 = in2 ? -1 : 1;
       }
       if (side1 === side2) continue;
-      const elevDiff = n1.elev - n2.elev;
-      if (Math.abs(elevDiff) < 10) continue;
-      if (elevDiff < -10 && discPumpsPlaced < Math.ceil(maxDiscInfra / 2)) {
+      const highNode = n1.elev >= n2.elev ? n1 : n2;
+      const lowNode = n1.elev >= n2.elev ? n2 : n1;
+      const elevDrop = highNode.elev - lowNode.elev;
+      if (elevDrop < 10) continue;
+      const flowsDownhill = (side1 === 1 && n1.elev > n2.elev) || (side2 === 1 && n2.elev > n1.elev);
+      if (!flowsDownhill && discPumpsPlaced < Math.ceil(maxDiscInfra / 2)) {
         const midId = 'J' + nId++;
         const midNode = { id: midId, row: 0, col: 0,
           x: Math.round(((n1.x + n2.x) / 2) * 100) / 100,
@@ -3631,7 +3634,7 @@ async function generateEPANETNetwork(silent){
         const halfLen = Math.round(p.length / 2);
         const origNode2 = p.node2;
         p.node2 = midId; p.length = halfLen;
-        const pumpHead = Math.round(Math.abs(elevDiff) + 20 + minPressure * PSI_TO_FT * 0.3);
+        const pumpHead = Math.round(elevDrop + 20 + minPressure * PSI_TO_FT * 0.3);
         const pumpFlow = Math.max(100, Math.round((p.estimatedFlow || 200)));
         pumps.push({ id: 'PU' + puId, node1: midId, node2: origNode2,
           curve: 'PUMP' + puId, type: 'booster',
@@ -3644,15 +3647,14 @@ async function generateEPANETNetwork(silent){
         pipes.push({ id: 'P' + pId++, node1: midId, node2: origNode2,
           length: halfLen, diameter: p.diameter, roughness: p.roughness,
           status: 'Closed', installYear: p.installYear });
-        logEng('pumps', `Discontinuity pump PU${puId} at ${d.type} crossing — ${Math.abs(elevDiff).toFixed(0)} ft uphill, design: ${pumpFlow} GPM @ ${pumpHead} ft TDH, pipe upsized to ${p.diameter}″`);
+        logEng('pumps', `Discontinuity pump PU${puId} at ${d.type} crossing — ${elevDrop.toFixed(0)} ft uphill, design: ${pumpFlow} GPM @ ${pumpHead} ft TDH, pipe upsized to ${p.diameter}″`);
         puId++;
         usedPipeIndices.add(pi);
         discPumpsPlaced++;
-      } else if (elevDiff > 10 && discPRVsPlaced < Math.ceil(maxDiscInfra / 2)) {
-        const downElev = Math.min(n1.elev, n2.elev);
-        const prvSetting = Math.round(downElev + 50 * PSI_TO_FT);
+      } else if (flowsDownhill && discPRVsPlaced < Math.ceil(maxDiscInfra / 2)) {
+        const prvSetting = Math.round(lowNode.elev + 50 * PSI_TO_FT);
         if (insertValveAtPipe(pi, 'PRV', prvSetting)) {
-          logEng('valves', `Discontinuity PRV V${vI - 1} at ${d.type} crossing — ${Math.abs(elevDiff).toFixed(0)} ft downhill, setting: ${prvSetting} ft HGL`);
+          logEng('valves', `Discontinuity PRV V${vI - 1} at ${d.type} crossing — ${elevDrop.toFixed(0)} ft downhill, setting: ${prvSetting} ft HGL`);
           discPRVsPlaced++;
         }
       }
