@@ -1415,7 +1415,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     </div>
   </div>
 
-  <div id="tab-stats" style="display:none;"><div class="stats-grid" id="statsGrid"></div></div>
+  <div id="tab-stats" style="display:none;flex:1;overflow-y:auto;padding:8px 0;"><div class="stats-grid" id="statsGrid"></div></div>
   <div id="tab-inp" style="display:none;">
     <div style="display:flex;gap:6px;margin-bottom:8px;">
       <button class="download-btn" onclick="downloadINP()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download .inp</button>
@@ -1604,9 +1604,16 @@ function toggleSection(header) {
 function switchTab(tab, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  const flexTabs = ['map','stats'];
   ['map','stats','inp','docs','hgl','rpt','results'].forEach(t => {
     const el = document.getElementById('tab-'+t);
-    el.style.display = t === tab ? (t === 'map' ? 'flex' : 'block') : 'none';
+    if (t === tab) {
+      el.style.display = flexTabs.includes(t) ? 'flex' : 'block';
+      el.style.flexDirection = flexTabs.includes(t) ? 'column' : '';
+      el.style.flex = '1';
+    } else {
+      el.style.display = 'none';
+    }
   });
   if (tab === 'map') setTimeout(renderAll, 50);
   if (tab === 'hgl' && networkData) setTimeout(renderHGL, 50);
