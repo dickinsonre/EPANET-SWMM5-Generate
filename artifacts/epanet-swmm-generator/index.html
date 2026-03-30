@@ -1443,6 +1443,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <button class="tab-btn" onclick="switchTab('inp',this)">INP</button>
       <button class="tab-btn" onclick="switchTab('docs',this)">Docs</button>
       <button class="tab-btn" onclick="switchTab('hgl',this)">HGL</button>
+      <button class="tab-btn" onclick="switchTab('log',this)" id="logTabBtn" style="display:none;">Log</button>
       <button class="tab-btn" onclick="switchTab('rpt',this)" id="rptTabBtn" style="display:none;">RPT</button>
       <button class="tab-btn" onclick="switchTab('results',this)" id="resultsTabBtn" style="display:none;">Results</button>
     </div>
@@ -1593,6 +1594,28 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   </div>
 
   <!-- Results Tab (HTML formatted output) -->
+  <div id="tab-log" style="display:none;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch;">
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
+      <input type="text" id="logSearchInput" placeholder="Search log..." oninput="filterEngLog()" style="flex:1;min-width:120px;padding:6px 10px;font-size:11px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;">
+      <select id="logCategoryFilter" onchange="filterEngLog()" style="flex:none;padding:6px 10px;font-size:11px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;">
+        <option value="all">All Categories</option>
+        <option value="terrain">Terrain</option>
+        <option value="zones">Zones</option>
+        <option value="demands">Demands</option>
+        <option value="sources">Sources</option>
+        <option value="pipes">Pipes</option>
+        <option value="pumps">Pumps</option>
+        <option value="valves">Valves</option>
+        <option value="network">Network</option>
+        <option value="design">Design</option>
+      </select>
+      <button class="download-btn" onclick="exportEngLog()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">Export Log</button>
+    </div>
+    <div id="engLogContent" style="font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-secondary);line-height:1.6;">
+      <p style="color:var(--text-dim);">Generate a network to see the engineering decision log.</p>
+    </div>
+  </div>
+
   <div id="tab-results" style="display:none;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch;">
     <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
       <button class="download-btn" onclick="downloadResultsHTML()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download HTML Report</button>
@@ -1660,6 +1683,58 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 
 let generatedINP = '';
 let networkData = null;
+let engineeringLog = [];
+
+const ENG_LOG_ICONS = {
+  terrain: '⛰️', zones: '🏘️', demands: '💧', sources: '🏭',
+  pipes: '🔧', pumps: '⚙️', valves: '🔴', network: '🌐', design: '📐'
+};
+const ENG_LOG_COLORS = {
+  terrain: '#f59e0b', zones: '#a855f7', demands: '#3b82f6', sources: '#22c55e',
+  pipes: '#64748b', pumps: '#ef4444', valves: '#ec4899', network: '#06b6d4', design: '#8b5cf6'
+};
+
+function logEng(category, message, values) {
+  engineeringLog.push({ category, message, values: values || {}, idx: engineeringLog.length + 1 });
+}
+
+function renderEngLog() {
+  const el = document.getElementById('engLogContent');
+  if (!el || engineeringLog.length === 0) return;
+  document.getElementById('logTabBtn').style.display = '';
+  let html = '';
+  engineeringLog.forEach((entry, i) => {
+    const icon = ENG_LOG_ICONS[entry.category] || '📋';
+    const color = ENG_LOG_COLORS[entry.category] || '#94a3b8';
+    html += `<div class="eng-log-entry" data-cat="${entry.category}" style="display:flex;gap:8px;padding:6px 8px;border-left:3px solid ${color};margin-bottom:4px;background:rgba(255,255,255,0.02);border-radius:0 6px 6px 0;">` +
+      `<span style="font-size:15px;flex:none;width:22px;text-align:center;">${icon}</span>` +
+      `<span style="flex:1;"><span style="color:${color};font-weight:600;font-size:11px;text-transform:uppercase;">${entry.category}</span><br>${entry.message}</span>` +
+      `<span style="color:var(--text-dim);font-size:10px;flex:none;min-width:24px;text-align:right;">#${entry.idx}</span></div>`;
+  });
+  el.innerHTML = html;
+}
+
+function filterEngLog() {
+  const search = (document.getElementById('logSearchInput').value || '').toLowerCase();
+  const cat = document.getElementById('logCategoryFilter').value;
+  document.querySelectorAll('.eng-log-entry').forEach(el => {
+    const matchCat = cat === 'all' || el.dataset.cat === cat;
+    const matchSearch = !search || el.textContent.toLowerCase().includes(search);
+    el.style.display = (matchCat && matchSearch) ? 'flex' : 'none';
+  });
+}
+
+function exportEngLog() {
+  if (engineeringLog.length === 0) { showToast('No log to export', 'warning'); return; }
+  let txt = 'ENGINEERING DECISION LOG\n' + '='.repeat(60) + '\n\n';
+  engineeringLog.forEach(e => {
+    txt += `[${e.category.toUpperCase()}] #${e.idx}\n${e.message}\n\n`;
+  });
+  const blob = new Blob([txt], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'engineering_log.txt'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 200);
+}
 let cityMapData = null;
 let isMobile = () => window.innerWidth < 768;
 
@@ -1684,7 +1759,7 @@ function switchTab(tab, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const flexTabs = ['map','stats'];
-  ['map','stats','inp','docs','hgl','rpt','results'].forEach(t => {
+  ['map','stats','inp','docs','hgl','log','rpt','results'].forEach(t => {
     const el = document.getElementById('tab-'+t);
     if (t === tab) {
       el.style.display = flexTabs.includes(t) ? 'flex' : 'block';
@@ -2964,6 +3039,7 @@ async function generateNetwork() {
 async function generateEPANETNetwork(silent){
   quickSimPressures = null;
   validationReport = null;
+  engineeringLog = [];
   const btn=document.getElementById('genBtn'),pb=document.getElementById('progressBar'),pf=document.getElementById('progressFill'),pl=document.getElementById('progressLabel');
   if(!silent){btn.disabled=true;btn.textContent='⏳ Generating...';btn.classList.add('generating');pb.style.display='block';if(pl)pl.style.display='block';pf.style.width='0%';
   if(isMobile()){const ci=document.getElementById('controlsInner');ci.classList.add('collapsed');document.getElementById('drawerLabel').textContent='⚙ Tap to expand settings';window.scrollTo({top:0,behavior:'smooth'});}
@@ -2971,6 +3047,10 @@ async function generateEPANETNetwork(silent){
   try {
   const cfg=readConfig(),seed=+(document.getElementById('randomSeed').value)||42,rng=mulberry32(seed),rows=cfg.gridRows,cols=cfg.gridCols,spacing=cfg.nodeSpacing,jA=cfg.jitter/100*spacing;
   updateSeedDisplay(seed);
+  logEng('network', `Network generation started — ${rows}×${cols} grid (${rows*cols} nodes), spacing ${spacing} ft, seed ${seed}`);
+  if (cfg.designMode) {
+    logEng('design', `Design Mode active — Population: ${cfg.designPop.toLocaleString()}, Per-Capita: ${cfg.designGPCD} gpcd, Peaking Factor: ${cfg.designPeaking}×, Fire Flow: ${cfg.designFireFlow} GPM`);
+  }
   const nodes=[],nG=Array.from({length:rows},()=>Array(cols).fill(null));let nId=1;
   setProgress(pf,pl,5,'Building grid nodes...');await sleep(5);
 
@@ -2983,6 +3063,11 @@ async function generateEPANETNetwork(silent){
       nodes.push(node);nG[r][c]=node;nId++;
     }
     if(rows>50 && r%50===0){setProgress(pf,pl,5+Math.round(r/rows*10),'Building grid nodes...');await sleep(0);}
+  }
+  { const elevs = nodes.map(n=>n.elev); const minE = safeMin(elevs); const maxE = safeMax(elevs);
+    logEng('terrain', `Terrain generated — elevation range ${minE.toFixed(0)} ft to ${maxE.toFixed(0)} ft (${(maxE-minE).toFixed(0)} ft total relief), type: ${cfg.terrainType}`);
+    if (maxE - minE > 80) logEng('terrain', `Elevation range of ${(maxE-minE).toFixed(0)} ft exceeds 80 ft threshold → pressure zone division will be required`);
+    else logEng('terrain', `Elevation range of ${(maxE-minE).toFixed(0)} ft is within 80 ft limit → single pressure zone is adequate`);
   }
   setProgress(pf,pl,15,'Assigning demand zones...');await sleep(5);
 
@@ -3028,6 +3113,14 @@ async function generateEPANETNetwork(silent){
     const dR=cfg.demandMax-cfg.demandMin;
     nodes.forEach(n=>{n.demand=Math.round((cfg.demandMin+rng()*dR*(zm[n.zone]||1)/2.5)*100)/100;});
   }
+  { const zCounts = {}; nodes.forEach(n => { zCounts[n.zone] = (zCounts[n.zone]||0) + 1; });
+    const zStr = Object.entries(zCounts).map(([z,c]) => `${z}: ${c} (${(c/nodes.length*100).toFixed(0)}%)`).join(', ');
+    logEng('zones', `Demand zones assigned — ${zStr}`);
+    const totalDem = nodes.reduce((s,n) => s + (n.demand||0), 0);
+    const avgDem = totalDem / (nodes.filter(n=>n.type==='junction').length || 1);
+    logEng('demands', `Demand distribution — total avg demand: ${totalDem.toFixed(1)} GPM, avg per node: ${avgDem.toFixed(2)} GPM`);
+    if (cfg.designMode) logEng('demands', `Design demand basis — ${cfg.designPop.toLocaleString()} pop × ${cfg.designGPCD} gpcd = ${(cfg.designPop*cfg.designGPCD/1440).toFixed(0)} GPM avg day demand`);
+  }
   setProgress(pf,pl,25,'Placing reservoirs & tanks...');await sleep(5);
 
   // ═══ FIX 2: Integrate reservoirs into grid (replace node, not float beside it) ═══
@@ -3046,6 +3139,10 @@ async function generateEPANETNetwork(silent){
     node.type='reservoir';
     node.id=resId;
     node.demand=0;
+  });
+
+  reservoirs.forEach(r => {
+    logEng('sources', `Reservoir ${r.id} (${r.name}) placed at grid edge — head: ${r.head.toFixed(1)} ft, provides gravity supply to surrounding network`);
   });
 
   // Tanks (already fixed in previous version)
@@ -3068,6 +3165,9 @@ async function generateEPANETNetwork(silent){
     });
     node.type='tank';
     node.id=tankId;
+  });
+  tanks.forEach(t => {
+    logEng('sources', `Tank ${t.id} placed at interior location — base elev: ${t.elev.toFixed(0)} ft, max level: ${t.maxLevel} ft (${t.diameter} ft dia), provides equalization storage`);
   });
   setProgress(pf,pl,35,'Building pipes...');await sleep(5);
 
@@ -3109,6 +3209,9 @@ async function generateEPANETNetwork(silent){
       diameter:dD[Math.floor(rng()*dD.length)],
       roughness:assignCFactor(parent,de,8,cfg,rng,rows,cols),status:'Open'});
   }
+  { const openPipes = pipes.filter(p=>p.status==='Open').length;
+    logEng('pipes', `Pipe network built — ${pipes.length} total pipes (${openPipes} open), ${cfg.deadEnds} dead-ends, ${cfg.diagonalPct}% diagonal connections`);
+  }
   setProgress(pf,pl,50,'Assigning pipe ages...');await sleep(5);
 
   // ═══ ROSSMAN A-FIX 4: Pipe age attribute (installation year correlated with distance from center) ═══
@@ -3131,6 +3234,13 @@ async function generateEPANETNetwork(silent){
   estimatePipeFlows(nodes, reservoirs, tanks, pipes);
   applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, rP, tanks);
 
+  { const diaCounts = {}; pipes.filter(p=>p.status==='Open').forEach(p => { const d = p.diameter; diaCounts[d] = (diaCounts[d]||0)+1; });
+    const topDias = Object.entries(diaCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([d,c])=>`${d}": ${c}`).join(', ');
+    logEng('pipes', `Flow-based pipe sizing complete — diameter distribution (top 5): ${topDias}`);
+    const maxFlow = Math.max(...pipes.map(p=>p.estimatedFlow||0));
+    const avgFlow = pipes.filter(p=>p.status==='Open').reduce((s,p)=>s+(p.estimatedFlow||0),0) / (pipes.filter(p=>p.status==='Open').length||1);
+    logEng('pipes', `Estimated pipe flows — max: ${maxFlow.toFixed(1)} GPM, avg: ${avgFlow.toFixed(1)} GPM (8 iterations of H-W head/flow correction)`);
+  }
   // Re-assign C-factors after resizing (C correlates with diameter)
   const cNodeMap = {};
   nodes.forEach(n => { cNodeMap[n.id] = n; });
@@ -3239,8 +3349,11 @@ async function generateEPANETNetwork(silent){
           designHead: Math.round(headDeficit), designFlow: Math.round(supplyPerSource),
           frictionHead: Math.round(frictionHead)
         });
+        logEng('pumps', `Source pump PU${puId} at ${res.id} — head deficit: ${Math.round(headDeficit)} ft (friction: ${Math.round(frictionHead)} ft, critical elev: ${Math.round(criticalElev)} ft) → design: ${Math.round(supplyPerSource)} GPM @ ${Math.round(headDeficit)} ft TDH`);
         puId++;
       }
+    } else {
+      logEng('pumps', `Reservoir ${res.id} provides adequate gravity head (${res.head.toFixed(0)} ft) — no source pump needed (critical path loss: ${Math.round(frictionHead)} ft)`);
     }
   });
 
@@ -3271,6 +3384,7 @@ async function generateEPANETNetwork(silent){
     const elevDiff = Math.abs((n2.elev||avgJunctionElev) - midElev);
     const boostHead = Math.max(20, Math.round(elevDiff + minPressure * PSI_TO_FT * 0.3 + 10 + rng()*20));
     pumps.push({ id:'PU'+puId, node1:midId, node2:n2.id, curve:'PUMP'+puId, type:'booster', designHead:Math.round(boostHead), designFlow:Math.round(boostFlow) });
+    logEng('pumps', `Booster pump PU${puId} inserted at pipe split — design: ${Math.round(boostFlow)} GPM @ ${Math.round(boostHead)} ft TDH, compensates for ${Math.round(elevDiff)} ft elevation change`);
     puId++;
     pipes.push({id:'P'+pId++, node1:midId, node2:n2.id, length:halfLen, diameter:origPipe.diameter, roughness:origPipe.roughness, status:'Closed', installYear: origPipe.installYear});
   }
@@ -3286,6 +3400,12 @@ async function generateEPANETNetwork(silent){
     for (let z = 1; z < numPressureZones; z++) {
       zoneBreaks.push(minElev + (elevRange * z / numPressureZones));
     }
+  }
+
+  if (numPressureZones > 1) {
+    logEng('zones', `Elevation range of ${elevRange.toFixed(0)} ft divided into ${numPressureZones} pressure zones (~${Math.round(elevRange/numPressureZones)} ft each) — zone breaks at elevations: ${zoneBreaks.map(b=>b.toFixed(0)+' ft').join(', ')}`);
+  } else {
+    logEng('zones', `Single pressure zone — elevation range ${elevRange.toFixed(0)} ft is within acceptable limits, no PRV zone boundaries needed`);
   }
 
   const valves=[];let vI=1;
@@ -3330,6 +3450,7 @@ async function generateEPANETNetwork(silent){
           const downstreamElev = Math.min(n1.elev, n2.elev);
           const prvSetting = Math.round(downstreamElev + 50 * PSI_TO_FT); // HGL target
           if (insertValveAtPipe(pi, 'PRV', prvSetting)) {
+            logEng('valves', `PRV V${vI-1} placed at pipe P${pi+1} — elevation drops from ${highElev.toFixed(0)} ft to ${lowElev.toFixed(0)} ft (crosses zone break at ${brk.toFixed(0)} ft), setting: ${prvSetting} ft HGL (50 psi target at downstream elev ${downstreamElev.toFixed(0)} ft)`);
             zonePRVsPlaced++;
             break;
           }
@@ -3469,6 +3590,10 @@ async function generateEPANETNetwork(silent){
   const supplyDemandRatio = totalSupplyCapacity > 0 ? totalSupplyCapacity / totalDesignDemand : 0;
   const supplyAdequate = supplyDemandRatio >= 1.0;
 
+  logEng('network', `Connectivity: ${connectivityPct}% of ${totalNodes} nodes reachable from sources (${isolatedNodes.length} isolated)`);
+  logEng('network', `Supply adequacy — S/D ratio: ${supplyDemandRatio.toFixed(2)} (${supplyAdequate ? 'ADEQUATE' : 'DEFICIENT'}) — total supply capacity: ${totalSupplyCapacity.toFixed(0)} GPM vs total design demand: ${totalDesignDemand.toFixed(0)} GPM`);
+  logEng('network', `Final network summary — ${nodes.filter(n=>n.type==='junction').length} junctions, ${reservoirs.length} reservoirs, ${tanks.length} tanks, ${pipes.length} pipes, ${pumps.length} pumps (${pumps.filter(p=>p.type==='source').length} source, ${pumps.filter(p=>p.type==='booster').length} booster), ${valves.length} valves`);
+
   // Build INP
   const inp=buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng,totalAvgDemand,peakDemand,numPressureZones,connectivityPct,isolatedNodes.length,supplyDemandRatio);
   generatedINP=inp;
@@ -3483,7 +3608,8 @@ async function generateEPANETNetwork(silent){
   const bP=(bnd.maxX-bnd.minX)*BOUNDARY_PAD_PCT;bnd.minX-=bP;bnd.minY-=bP;bnd.maxX+=bP;bnd.maxY+=bP;
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
   if(!silent){setProgress(pf,pl,95,'Rendering map...');await sleep(5);
-  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);}
+  renderAll();renderStats();renderINPPreview(inp);renderEngLog();setTimeout(renderHGL,100);
+  const lBtn=document.getElementById('logTabBtn');if(lBtn)lBtn.style.display='';}
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('EPANET generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='⚡ GENERATE NETWORK + MAP';btn.classList.remove('generating');
