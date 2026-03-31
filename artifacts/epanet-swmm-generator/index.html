@@ -8125,8 +8125,11 @@ function generateResultsHTML() {
   const junctions = nd.nodes.filter(n=>n.type==='junction');
   const engine = isEpanet ? 'EPANET 2.3' : 'SWMM 5.2.4';
   const now = new Date().toLocaleString();
+  const flowU = currentUnits === 'SI' ? (isEpanet ? 'LPS' : 'CMS') : (isEpanet ? 'GPM' : 'CFS');
+  const pU = currentUnits === 'SI' ? 'm' : 'psi';
+  const hU = currentUnits === 'SI' ? 'm' : 'ft';
+  const seed = +(document.getElementById('randomSeed').value)||42;
 
-  // Compute statistics
   const nodeStats = {};
   junctions.forEach(n => {
     const results = sr.nodeResults[n.id] || [];
@@ -8162,29 +8165,67 @@ function generateResultsHTML() {
     };
   });
 
-  // Build HTML report
-  const css = `body{font-family:Arial,sans-serif;margin:20px;background:#fff;color:#1a1a2e;max-width:1100px;}
-    h1{color:#1a3a6b;border-bottom:3px solid #1a3a6b;padding-bottom:8px;} h2{color:#2563eb;margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:4px;}
-    table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;} th{background:#1a3a6b;color:#fff;padding:8px 10px;text-align:left;font-size:12px;}
-    td{padding:6px 10px;border-bottom:1px solid #eee;} tr:nth-child(even){background:#f8fafc;} tr:hover{background:#eff6ff;}
-    .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:16px 0;}
-    .stat-box{background:#f0f4ff;border-radius:8px;padding:14px;text-align:center;border:1px solid #dde5f0;}
-    .stat-box .val{font-size:24px;font-weight:700;color:#1a3a6b;} .stat-box .lbl{font-size:11px;color:#6b7280;text-transform:uppercase;}
-    .warn{color:#dc2626;font-weight:700;} .ok{color:#059669;font-weight:700;} .caution{color:#d97706;}
-    .bar{height:8px;border-radius:4px;background:#e5e7eb;overflow:hidden;margin-top:4px;} .bar-fill{height:100%;border-radius:4px;}
-    @media print{body{font-size:11px;} table{font-size:10px;}}`;
+  const fmtTime = hrs => { const h = Math.floor(hrs), m = Math.round((hrs - h) * 60); return h + ':' + String(m).padStart(2,'0') + ':00'; };
+  const reportTS = [];
+  if (sr.timesteps.length <= 12) { for (let t = 0; t < sr.timesteps.length; t++) reportTS.push(t); }
+  else { const step = Math.max(1, Math.floor(sr.timesteps.length / 8)); for (let t = 0; t < sr.timesteps.length; t += step) reportTS.push(t); const last = sr.timesteps.length - 1; if (reportTS[reportTS.length-1] !== last) reportTS.push(last); }
+
+  const css = `
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh;}
+.header{background:linear-gradient(135deg,#1a3a6b 0%,#2563eb 100%);color:#fff;padding:24px 32px;position:sticky;top:0;z-index:100;}
+.header h1{font-size:22px;font-weight:700;margin-bottom:4px;} .header p{font-size:12px;opacity:0.85;}
+.tab-bar{display:flex;background:#0f1b33;border-bottom:2px solid #2563eb;position:sticky;top:72px;z-index:99;overflow-x:auto;}
+.tab-bar button{background:none;border:none;color:#8899bb;padding:12px 24px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;transition:all 0.2s;}
+.tab-bar button:hover{color:#fff;background:rgba(37,99,235,0.15);} .tab-bar button.active{color:#fff;border-bottom-color:#60a5fa;background:rgba(37,99,235,0.2);}
+.tab-content{display:none;padding:24px 32px;max-width:1400px;margin:0 auto;} .tab-content.active{display:block;}
+h2{color:#1a3a6b;font-size:17px;margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+th{background:#1a3a6b;color:#fff;padding:10px 14px;text-align:left;font-size:12px;font-weight:600;position:sticky;top:0;}
+td{padding:7px 14px;border-bottom:1px solid #f0f0f0;font-variant-numeric:tabular-nums;} tr:nth-child(even){background:#f8fafc;} tr:hover{background:#eff6ff;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:16px 0;}
+.stat-box{background:#fff;border-radius:10px;padding:16px;text-align:center;border:1px solid #e5e7eb;box-shadow:0 1px 2px rgba(0,0,0,0.04);}
+.stat-box .val{font-size:26px;font-weight:700;color:#1a3a6b;} .stat-box .lbl{font-size:11px;color:#6b7280;text-transform:uppercase;margin-top:4px;}
+.warn{color:#dc2626;font-weight:700;} .ok{color:#059669;font-weight:700;} .caution{color:#d97706;}
+.bar{height:8px;border-radius:4px;background:#e5e7eb;overflow:hidden;margin-top:4px;} .bar-fill{height:100%;border-radius:4px;}
+.ts-select{margin:12px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.ts-select select{padding:8px 14px;border-radius:6px;border:1px solid #d1d5db;font-size:13px;background:#fff;cursor:pointer;}
+.ts-select label{font-weight:600;color:#374151;font-size:13px;}
+pre.rpt{background:#0f172a;color:#e2e8f0;padding:20px;border-radius:8px;font-family:'Consolas','Courier New',monospace;font-size:12px;line-height:1.6;overflow:auto;max-height:70vh;white-space:pre;tab-size:8;}
+pre.rpt .h{color:#60a5fa;} pre.rpt .a{color:#fbbf24;} pre.rpt .g{color:#4ade80;}
+.footer{color:#94a3b8;font-size:11px;padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;margin-top:32px;}
+@media(max-width:768px){.tab-bar button{padding:10px 14px;font-size:12px;} .tab-content{padding:16px;} .stat-grid{grid-template-columns:repeat(2,1fr);}}
+@media print{.tab-bar{display:none;} .tab-content{display:block!important;page-break-before:always;} .header{position:relative;} body{background:#fff;}}
+`;
 
   const H = [];
-  H.push(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${engine} Results Report</title><style>${css}</style></head><body>`);
-  H.push(`<h1>${engine} — Hydraulic Analysis Report</h1>`);
-  H.push(`<p>Generated: ${now} | Grid: ${nd.cfg.gridRows}×${nd.cfg.gridCols} | Seed: ${+(document.getElementById('randomSeed').value)||42}</p>`);
+  H.push('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">');
+  H.push('<title>' + engine + ' Results Report</title>');
+  H.push('<sty' + 'le>' + css + '</sty' + 'le></head><body>');
 
-  // Summary stats
-  H.push(`<h2>System Summary</h2><div class="stat-grid">`);
-  H.push(`<div class="stat-box"><div class="val">${junctions.length.toLocaleString()}</div><div class="lbl">Junctions</div></div>`);
-  H.push(`<div class="stat-box"><div class="val">${nd.pipes.length.toLocaleString()}</div><div class="lbl">${isEpanet?'Pipes':'Conduits'}</div></div>`);
-  H.push(`<div class="stat-box"><div class="val">${sr.timesteps.length}</div><div class="lbl">Timesteps</div></div>`);
-  H.push(`<div class="stat-box"><div class="val">${sr.timesteps.length>0?sr.timesteps[sr.timesteps.length-1].toFixed(1):'0'} hr</div><div class="lbl">Duration</div></div>`);
+  H.push('<div class="header"><h1>' + engine + ' &mdash; Hydraulic Analysis Report</h1>');
+  H.push('<p>Generated: ' + now + ' &nbsp;|&nbsp; Grid: ' + nd.cfg.gridRows + '&times;' + nd.cfg.gridCols + ' &nbsp;|&nbsp; Seed: ' + seed + ' &nbsp;|&nbsp; Timesteps: ' + sr.timesteps.length + '</p></div>');
+
+  H.push('<div class="tab-bar" id="tabBar">');
+  H.push('<button class="active" onclick="switchTab(\'summary\')">Summary</button>');
+  H.push('<button onclick="switchTab(\'nodes\')">Node Results</button>');
+  H.push('<button onclick="switchTab(\'links\')">Link Results</button>');
+  H.push('<button onclick="switchTab(\'timestep\')">Per-Timestep</button>');
+  H.push('<button onclick="switchTab(\'zones\')">Zone Summary</button>');
+  H.push('<button onclick="switchTab(\'rpt\')">RPT Text</button>');
+  H.push('</div>');
+
+  // ── Tab 1: Summary ──
+  H.push('<div class="tab-content active" id="tab-summary">');
+  H.push('<h2>System Summary</h2><div class="stat-grid">');
+  H.push('<div class="stat-box"><div class="val">' + junctions.length.toLocaleString() + '</div><div class="lbl">Junctions</div></div>');
+  H.push('<div class="stat-box"><div class="val">' + nd.reservoirs.length + '</div><div class="lbl">Reservoirs</div></div>');
+  H.push('<div class="stat-box"><div class="val">' + (nd.tanks||[]).length + '</div><div class="lbl">Tanks</div></div>');
+  H.push('<div class="stat-box"><div class="val">' + nd.pipes.length.toLocaleString() + '</div><div class="lbl">' + (isEpanet?'Pipes':'Conduits') + '</div></div>');
+  H.push('<div class="stat-box"><div class="val">' + nd.pumps.length + '</div><div class="lbl">Pumps</div></div>');
+  H.push('<div class="stat-box"><div class="val">' + (nd.valves||[]).length + '</div><div class="lbl">Valves</div></div>');
+  H.push('<div class="stat-box"><div class="val">' + sr.timesteps.length + '</div><div class="lbl">Timesteps</div></div>');
+  H.push('<div class="stat-box"><div class="val">' + (sr.timesteps.length>0?sr.timesteps[sr.timesteps.length-1].toFixed(1):'0') + ' hr</div><div class="lbl">Duration</div></div>');
 
   if (isEpanet) {
     const allMinP = Object.values(nodeStats).map(s=>s.minP);
@@ -8192,71 +8233,137 @@ function generateResultsHTML() {
     const sysMinP = allMinP.length>0?safeMin(allMinP):0;
     const sysMaxP = allMaxP.length>0?safeMax(allMaxP):0;
     const lowPNodes = Object.values(nodeStats).filter(s=>s.minP<20).length;
-    H.push(`<div class="stat-box"><div class="val ${sysMinP<20?'warn':'ok'}">${sysMinP.toFixed(1)} psi</div><div class="lbl">Min Pressure</div></div>`);
-    H.push(`<div class="stat-box"><div class="val">${sysMaxP.toFixed(1)} psi</div><div class="lbl">Max Pressure</div></div>`);
-    H.push(`<div class="stat-box"><div class="val ${lowPNodes>0?'warn':'ok'}">${lowPNodes}</div><div class="lbl">Nodes &lt; 20 psi</div></div>`);
+    H.push('<div class="stat-box"><div class="val ' + (sysMinP<20?'warn':'ok') + '">' + sysMinP.toFixed(1) + ' ' + pU + '</div><div class="lbl">Min Pressure</div></div>');
+    H.push('<div class="stat-box"><div class="val">' + sysMaxP.toFixed(1) + ' ' + pU + '</div><div class="lbl">Max Pressure</div></div>');
+    H.push('<div class="stat-box"><div class="val ' + (lowPNodes>0?'warn':'ok') + '">' + lowPNodes + '</div><div class="lbl">Nodes &lt; 20 ' + pU + '</div></div>');
   } else {
     const surNodes = Object.values(nodeStats).filter(s=>s.surchargeHrs>0).length;
     const maxD = Object.values(nodeStats).map(s=>s.maxDepth);
-    H.push(`<div class="stat-box"><div class="val">${maxD.length>0?safeMax(maxD).toFixed(1):'0'} ft</div><div class="lbl">Max Node Depth</div></div>`);
-    H.push(`<div class="stat-box"><div class="val ${surNodes>0?'caution':'ok'}">${surNodes}</div><div class="lbl">Surcharging Nodes</div></div>`);
+    H.push('<div class="stat-box"><div class="val">' + (maxD.length>0?safeMax(maxD).toFixed(1):'0') + ' ' + hU + '</div><div class="lbl">Max Node Depth</div></div>');
+    H.push('<div class="stat-box"><div class="val ' + (surNodes>0?'caution':'ok') + '">' + surNodes + '</div><div class="lbl">Surcharging Nodes</div></div>');
   }
-
   const allMaxV = Object.values(linkStats).map(s=>s.maxVel);
   const sysMaxV = allMaxV.length>0?safeMax(allMaxV):0;
   const highV = Object.values(linkStats).filter(s=>s.maxVel>5).length;
-  H.push(`<div class="stat-box"><div class="val ${sysMaxV>8?'warn':sysMaxV>5?'caution':'ok'}">${sysMaxV.toFixed(1)} ft/s</div><div class="lbl">Max Velocity</div></div>`);
-  H.push(`<div class="stat-box"><div class="val ${highV>0?'caution':'ok'}">${highV}</div><div class="lbl">Links &gt; 5 ft/s</div></div>`);
-  H.push(`</div>`);
+  H.push('<div class="stat-box"><div class="val ' + (sysMaxV>8?'warn':sysMaxV>5?'caution':'ok') + '">' + sysMaxV.toFixed(1) + ' ft/s</div><div class="lbl">Max Velocity</div></div>');
+  H.push('<div class="stat-box"><div class="val ' + (highV>0?'caution':'ok') + '">' + highV + '</div><div class="lbl">Links &gt; 5 ft/s</div></div>');
+  H.push('</div>');
 
-  // Node results table
-  H.push(`<h2>Node Results (Top 100 by ${isEpanet?'Min Pressure':'Max Depth'})</h2>`);
-  H.push(`<table><thead><tr><th>Node</th><th>Zone</th><th>Elevation</th>`);
   if (isEpanet) {
-    H.push(`<th>Min Pressure</th><th>Max Pressure</th><th>Avg Pressure</th><th>Max Demand</th><th>Status</th>`);
-  } else {
-    H.push(`<th>Max Depth</th><th>Avg Depth</th><th>Max Inflow</th><th>Surcharge Hrs</th><th>Status</th>`);
+    let peakTS = 0, peakDemand = 0;
+    for (let t = 0; t < sr.timesteps.length; t++) { let td = 0; junctions.forEach(n => { const r = (sr.nodeResults[n.id]||[])[t]; if(r) td += r.demand; }); if (td > peakDemand) { peakDemand = td; peakTS = t; } }
+    let minP = Infinity, maxP2 = -Infinity, sumP = 0, cP = 0;
+    junctions.forEach(n => { const r = (sr.nodeResults[n.id]||[])[peakTS]; if (!r) return; if (r.pressure < minP) minP = r.pressure; if (r.pressure > maxP2) maxP2 = r.pressure; sumP += r.pressure; cP++; });
+    H.push('<h2>Peak Demand Statistics (T=' + sr.timesteps[peakTS].toFixed(1) + ' hr)</h2>');
+    H.push('<div class="stat-grid">');
+    H.push('<div class="stat-box"><div class="val">' + peakDemand.toFixed(0) + ' ' + flowU + '</div><div class="lbl">Total Demand</div></div>');
+    H.push('<div class="stat-box"><div class="val ' + (minP<20?'warn':'ok') + '">' + minP.toFixed(1) + ' ' + pU + '</div><div class="lbl">Min Pressure</div></div>');
+    H.push('<div class="stat-box"><div class="val">' + maxP2.toFixed(1) + ' ' + pU + '</div><div class="lbl">Max Pressure</div></div>');
+    H.push('<div class="stat-box"><div class="val">' + (cP>0?(sumP/cP).toFixed(1):'0') + ' ' + pU + '</div><div class="lbl">Avg Pressure</div></div>');
+    H.push('</div>');
   }
-  H.push(`</tr></thead><tbody>`);
+  H.push('</div>');
 
-  // Sort: EPANET by min pressure (ascending), SWMM by max depth (descending)
-  const sortedNodes = Object.entries(nodeStats).sort((a,b) => isEpanet ? a[1].minP-b[1].minP : b[1].maxDepth-a[1].maxDepth).slice(0,100);
-  sortedNodes.forEach(([id, s]) => {
+  // ── Tab 2: Node Results ──
+  H.push('<div class="tab-content" id="tab-nodes">');
+  H.push('<h2>Node Results &mdash; All ' + junctions.length + ' Junctions (sorted by ' + (isEpanet?'Min Pressure':'Max Depth') + ')</h2>');
+  H.push('<table><thead><tr><th>#</th><th>Node</th><th>Zone</th><th>Elev (' + hU + ')</th>');
+  if (isEpanet) H.push('<th>Min Press (' + pU + ')</th><th>Max Press (' + pU + ')</th><th>Avg Press (' + pU + ')</th><th>Max Demand (' + flowU + ')</th><th>Status</th>');
+  else H.push('<th>Max Depth (' + hU + ')</th><th>Avg Depth (' + hU + ')</th><th>Max Inflow (' + flowU + ')</th><th>Surcharge (hr)</th><th>Status</th>');
+  H.push('</tr></thead><tbody>');
+
+  const sortedNodes = Object.entries(nodeStats).sort((a,b) => isEpanet ? a[1].minP-b[1].minP : b[1].maxDepth-a[1].maxDepth);
+  sortedNodes.forEach(([id, s], i) => {
     const node = junctions.find(n=>n.id===id);
     const elev = node ? node.elev.toFixed(1) : '';
-    H.push(`<tr><td>${id}</td><td>${s.zone||''}</td><td>${elev}</td>`);
+    H.push('<tr><td>' + (i+1) + '</td><td>' + id + '</td><td>' + (s.zone||'') + '</td><td>' + elev + '</td>');
     if (isEpanet) {
       const cls = s.minP<20?'warn':s.minP<30?'caution':'ok';
-      H.push(`<td class="${cls}">${s.minP.toFixed(1)}</td><td>${s.maxP.toFixed(1)}</td><td>${s.avgP.toFixed(1)}</td><td>${s.maxDemand.toFixed(1)}</td>`);
-      H.push(`<td class="${cls}">${s.minP<20?'LOW PRESSURE':s.minP<30?'Marginal':'OK'}</td>`);
+      H.push('<td class="' + cls + '">' + s.minP.toFixed(1) + '</td><td>' + s.maxP.toFixed(1) + '</td><td>' + s.avgP.toFixed(1) + '</td><td>' + s.maxDemand.toFixed(1) + '</td>');
+      H.push('<td class="' + cls + '">' + (s.minP<20?'LOW':s.minP<30?'Marginal':'OK') + '</td>');
     } else {
       const mxD = node ? (node.maxDepth||6) : 6;
       const pctFull = s.maxDepth / mxD * 100;
       const cls = pctFull>95?'warn':pctFull>80?'caution':'ok';
-      H.push(`<td>${s.maxDepth.toFixed(2)}</td><td>${s.avgDepth.toFixed(2)}</td><td>${s.maxInflow.toFixed(3)}</td><td>${s.surchargeHrs.toFixed(1)}</td>`);
-      H.push(`<td class="${cls}">${pctFull>95?'SURCHARGING':pctFull>80?'Near Full':'OK'} (${pctFull.toFixed(0)}%)</td>`);
+      H.push('<td>' + s.maxDepth.toFixed(2) + '</td><td>' + s.avgDepth.toFixed(2) + '</td><td>' + s.maxInflow.toFixed(3) + '</td><td>' + s.surchargeHrs.toFixed(1) + '</td>');
+      H.push('<td class="' + cls + '">' + (pctFull>95?'SURCHARGE':pctFull>80?'Near Full':'OK') + ' (' + pctFull.toFixed(0) + '%)</td>');
     }
-    H.push(`</tr>`);
+    H.push('</tr>');
   });
-  H.push(`</tbody></table>`);
+  H.push('</tbody></table></div>');
 
-  // Link results table
-  H.push(`<h2>Link Results (Top 100 by Max Velocity)</h2>`);
-  H.push(`<table><thead><tr><th>Link</th><th>Diameter</th><th>Max Flow</th><th>Avg Flow</th><th>Max Velocity</th><th>Avg Velocity</th><th>Status</th></tr></thead><tbody>`);
+  // ── Tab 3: Link Results ──
+  H.push('<div class="tab-content" id="tab-links">');
+  H.push('<h2>Link Results &mdash; All ' + nd.pipes.length + ' Links (sorted by Max Velocity)</h2>');
+  H.push('<table><thead><tr><th>#</th><th>Link</th><th>Dia (in)</th><th>Max Flow (' + flowU + ')</th><th>Avg Flow (' + flowU + ')</th><th>Max Vel (ft/s)</th><th>Avg Vel (ft/s)</th><th>Status</th></tr></thead><tbody>');
 
-  const sortedLinks = Object.entries(linkStats).sort((a,b) => b[1].maxVel-a[1].maxVel).slice(0,100);
-  sortedLinks.forEach(([id, s]) => {
+  const sortedLinks = Object.entries(linkStats).sort((a,b) => b[1].maxVel-a[1].maxVel);
+  sortedLinks.forEach(([id, s], i) => {
     const cls = s.maxVel>8?'warn':s.maxVel>5?'caution':'ok';
     const velBar = Math.min(100, s.maxVel/10*100);
-    H.push(`<tr><td>${id}</td><td>${(s.diameter||12).toFixed(0)}"</td><td>${s.maxFlow.toFixed(2)}</td><td>${s.avgFlow.toFixed(2)}</td>`);
-    H.push(`<td class="${cls}">${s.maxVel.toFixed(2)} ft/s<div class="bar"><div class="bar-fill" style="width:${velBar}%;background:${s.maxVel>8?'#dc2626':s.maxVel>5?'#d97706':'#059669'}"></div></div></td>`);
-    H.push(`<td>${s.avgVel.toFixed(2)}</td>`);
-    H.push(`<td class="${cls}">${s.maxVel>8?'HIGH VELOCITY':s.maxVel>5?'Elevated':'OK'}</td></tr>`);
+    H.push('<tr><td>' + (i+1) + '</td><td>' + id + '</td><td>' + (s.diameter||12).toFixed(0) + '</td><td>' + s.maxFlow.toFixed(2) + '</td><td>' + s.avgFlow.toFixed(2) + '</td>');
+    H.push('<td class="' + cls + '">' + s.maxVel.toFixed(2) + '<div class="bar"><div class="bar-fill" style="width:' + velBar + '%;background:' + (s.maxVel>8?'#dc2626':s.maxVel>5?'#d97706':'#059669') + '"></div></div></td>');
+    H.push('<td>' + s.avgVel.toFixed(2) + '</td>');
+    H.push('<td class="' + cls + '">' + (s.maxVel>8?'HIGH VEL':s.maxVel>5?'Elevated':'OK') + '</td></tr>');
   });
-  H.push(`</tbody></table>`);
+  H.push('</tbody></table></div>');
 
-  // Zone summary
-  H.push(`<h2>Summary by Zone</h2>`);
+  // ── Tab 4: Per-Timestep ──
+  H.push('<div class="tab-content" id="tab-timestep">');
+  H.push('<h2>Per-Timestep Results (EPANET-UI Format)</h2>');
+  H.push('<div class="ts-select"><label>Timestep:</label><select id="tsSelect" onchange="showTimestep(this.value)">');
+  reportTS.forEach((t, i) => { H.push('<option value="' + t + '"' + (i===0?' selected':'') + '>' + fmtTime(sr.timesteps[t]) + ' hrs</option>'); });
+  H.push('</select></div>');
+
+  const maxShow = 200;
+  reportTS.forEach((t, ti) => {
+    H.push('<div class="ts-block" id="ts-' + t + '" style="' + (ti===0?'':'display:none;') + '">');
+    H.push('<h2>Node Results at ' + fmtTime(sr.timesteps[t]) + ' hrs</h2>');
+    if (isEpanet) {
+      H.push('<table><thead><tr><th>Node</th><th>Demand (' + flowU + ')</th><th>Head (' + hU + ')</th><th>Pressure (' + pU + ')</th><th>Chlorine (mg/L)</th></tr></thead><tbody>');
+      const showN = junctions.slice(0, maxShow);
+      showN.forEach(n => {
+        const r = (sr.nodeResults[n.id]||[])[t]; if (!r) return;
+        const cls = r.pressure<20?'warn':r.pressure<30?'caution':'';
+        H.push('<tr><td>' + n.id + '</td><td>' + r.demand.toFixed(2) + '</td><td>' + r.head.toFixed(2) + '</td><td class="' + cls + '">' + r.pressure.toFixed(2) + '</td><td>0.00</td></tr>');
+      });
+    } else {
+      H.push('<table><thead><tr><th>Node</th><th>Depth (' + hU + ')</th><th>Head (' + hU + ')</th><th>Inflow (' + flowU + ')</th></tr></thead><tbody>');
+      const showN = junctions.slice(0, maxShow);
+      showN.forEach(n => {
+        const r = (sr.nodeResults[n.id]||[])[t]; if (!r) return;
+        H.push('<tr><td>' + n.id + '</td><td>' + r.depth.toFixed(2) + '</td><td>' + r.head.toFixed(2) + '</td><td>' + (r.inflow||0).toFixed(3) + '</td></tr>');
+      });
+    }
+    if (junctions.length > maxShow) H.push('<tr><td colspan="5" style="text-align:center;color:#6b7280;">... ' + (junctions.length - maxShow) + ' more nodes</td></tr>');
+    H.push('</tbody></table>');
+
+    H.push('<h2>Link Results at ' + fmtTime(sr.timesteps[t]) + ' hrs</h2>');
+    if (isEpanet) {
+      H.push('<table><thead><tr><th>Link</th><th>Flow (' + flowU + ')</th><th>Velocity (ft/s)</th><th>Headloss (ft/Kft)</th><th>Status</th></tr></thead><tbody>');
+      const showL = nd.pipes.slice(0, maxShow);
+      showL.forEach(p => {
+        const r = (sr.linkResults[p.id]||[])[t]; if (!r) return;
+        const cls = r.velocity>8?'warn':r.velocity>5?'caution':'';
+        H.push('<tr><td>' + p.id + '</td><td>' + r.flow.toFixed(2) + '</td><td class="' + cls + '">' + r.velocity.toFixed(2) + '</td><td>' + (r.headloss||0).toFixed(2) + '</td><td>Open</td></tr>');
+      });
+    } else {
+      H.push('<table><thead><tr><th>Link</th><th>Flow (' + flowU + ')</th><th>Velocity (ft/s)</th><th>Depth (' + hU + ')</th><th>Status</th></tr></thead><tbody>');
+      const showL = nd.pipes.slice(0, maxShow);
+      showL.forEach(p => {
+        const r = (sr.linkResults[p.id]||[])[t]; if (!r) return;
+        H.push('<tr><td>' + p.id + '</td><td>' + r.flow.toFixed(2) + '</td><td>' + r.velocity.toFixed(2) + '</td><td>' + (r.depth||0).toFixed(2) + '</td><td>Open</td></tr>');
+      });
+    }
+    if (nd.pipes.length > maxShow) H.push('<tr><td colspan="5" style="text-align:center;color:#6b7280;">... ' + (nd.pipes.length - maxShow) + ' more links</td></tr>');
+    H.push('</tbody></table>');
+    H.push('</div>');
+  });
+  H.push('</div>');
+
+  // ── Tab 5: Zone Summary ──
+  H.push('<div class="tab-content" id="tab-zones">');
+  H.push('<h2>Summary by Pressure Zone</h2>');
   const zones = {};
   Object.entries(nodeStats).forEach(([id,s])=>{
     const z = s.zone || 'Unknown';
@@ -8265,30 +8372,50 @@ function generateResultsHTML() {
     if (isEpanet) { zones[z].pressures.push(s.minP); zones[z].demands.push(s.maxDemand); }
     else { zones[z].depths.push(s.maxDepth); zones[z].inflows.push(s.maxInflow); }
   });
-  H.push(`<table><thead><tr><th>Zone</th><th>Nodes</th>`);
-  H.push(isEpanet ? `<th>Min Pressure</th><th>Avg Min Pressure</th><th>Total Max Demand</th>` : `<th>Max Depth</th><th>Avg Max Depth</th><th>Total Max Inflow</th>`);
-  H.push(`</tr></thead><tbody>`);
-  Object.entries(zones).forEach(([z,d])=>{
-    H.push(`<tr><td>${z}</td><td>${d.count}</td>`);
+  H.push('<table><thead><tr><th>Zone</th><th>Nodes</th>');
+  H.push(isEpanet ? '<th>Min Press (' + pU + ')</th><th>Avg Min Press (' + pU + ')</th><th>Max Demand (' + flowU + ')</th><th>Total Demand (' + flowU + ')</th>' : '<th>Max Depth (' + hU + ')</th><th>Avg Depth (' + hU + ')</th><th>Total Inflow (' + flowU + ')</th>');
+  H.push('</tr></thead><tbody>');
+  Object.entries(zones).sort((a,b) => isEpanet ? safeMin(a[1].pressures)-safeMin(b[1].pressures) : safeMax(b[1].depths)-safeMax(a[1].depths)).forEach(([z,d])=>{
+    H.push('<tr><td><strong>' + z + '</strong></td><td>' + d.count + '</td>');
     if (isEpanet) {
-      H.push(`<td>${safeMin(d.pressures).toFixed(1)}</td><td>${(d.pressures.reduce((a,b)=>a+b,0)/d.pressures.length).toFixed(1)}</td><td>${d.demands.reduce((a,b)=>a+b,0).toFixed(0)}</td>`);
+      const mn = safeMin(d.pressures), avg = d.pressures.reduce((a,b)=>a+b,0)/d.pressures.length;
+      const cls = mn<20?'warn':mn<30?'caution':'ok';
+      H.push('<td class="' + cls + '">' + mn.toFixed(1) + '</td><td>' + avg.toFixed(1) + '</td><td>' + safeMax(d.demands).toFixed(1) + '</td><td>' + d.demands.reduce((a,b)=>a+b,0).toFixed(0) + '</td>');
     } else {
-      H.push(`<td>${safeMax(d.depths).toFixed(2)}</td><td>${(d.depths.reduce((a,b)=>a+b,0)/d.depths.length).toFixed(2)}</td><td>${d.inflows.reduce((a,b)=>a+b,0).toFixed(1)}</td>`);
+      H.push('<td>' + safeMax(d.depths).toFixed(2) + '</td><td>' + (d.depths.reduce((a,b)=>a+b,0)/d.depths.length).toFixed(2) + '</td><td>' + d.inflows.reduce((a,b)=>a+b,0).toFixed(1) + '</td>');
     }
-    H.push(`</tr>`);
+    H.push('</tr>');
   });
-  H.push(`</tbody></table>`);
+  H.push('</tbody></table></div>');
 
-  H.push(`<p style="color:#94a3b8;font-size:11px;margin-top:24px;border-top:1px solid #ddd;padding-top:12px;">Report generated by EPANET 2.3 & SWMM 5.2.4 Network Generator | ${sr._source === 'epanet_binary' || sr._source === 'swmm_binary' ? 'Results from solver binary output' : 'Results from demo/estimated data — run real WASM solver for computed results'}</p>`);
-  H.push(`</body></html>`);
+  // ── Tab 6: RPT Text ──
+  H.push('<div class="tab-content" id="tab-rpt">');
+  H.push('<h2>Full Text Report (RPT Format)</h2>');
+  const rptText = generatedRPT || '(Run solver to generate RPT text)';
+  const rptHtml = rptText.split('\n').map(l =>
+    l.includes('====') || l.includes('----') || l.includes('***') ? '<span class="h">' + l.replace(/</g,'&lt;') + '</span>' :
+    /^\s+(Node|Link)\s/.test(l) ? '<span class="a">' + l.replace(/</g,'&lt;') + '</span>' :
+    /^\s+(Minimum|Maximum|Average|Nodes <|Total Demand)/.test(l) ? '<span class="g">' + l.replace(/</g,'&lt;') + '</span>' :
+    l.replace(/</g,'&lt;')
+  ).join('\n');
+  H.push('<pre class="rpt">' + rptHtml + '</pre>');
+  H.push('</div>');
+
+  H.push('<div class="footer">Report generated by ' + engine + ' Network Generator &nbsp;|&nbsp; ' + (sr._source === 'epanet_binary' || sr._source === 'swmm_binary' ? 'Results from solver engine' : 'Estimated results') + ' &nbsp;|&nbsp; ' + now + '</div>');
+
+  H.push('<scr' + 'ipt>');
+  H.push('function switchTab(id){document.querySelectorAll(".tab-content").forEach(e=>e.classList.remove("active"));document.querySelectorAll(".tab-bar button").forEach(b=>b.classList.remove("active"));var t=document.getElementById("tab-"+id);if(t)t.classList.add("active");var btns=document.querySelectorAll(".tab-bar button");var tabs=["summary","nodes","links","timestep","zones","rpt"];var i=tabs.indexOf(id);if(i>=0&&btns[i])btns[i].classList.add("active");}');
+  H.push('function showTimestep(v){document.querySelectorAll(".ts-block").forEach(e=>e.style.display="none");var el=document.getElementById("ts-"+v);if(el)el.style.display="block";}');
+  H.push('</' + 'script>');
+  H.push('</body></html>');
 
   generatedResultsHTML = H.join('\n');
 
-  // Render inline in Results tab
   const container = document.getElementById('resultsContent');
   if (container) {
     const validHtml = renderValidationUI();
-    const stripped = generatedResultsHTML.replace(/<\/?html>|<\/?head>|<\/?body>|<style>[\s\S]*?<\/style>|<meta[^>]*>|<title>[\s\S]*?<\/title>|<!DOCTYPE[^>]*>/g, '');
+    const styleRe = new RegExp('<\\/?html[^>]*>|<\\/?head>|<\\/?body>|<style>[\\s\\S]*?<\\/style>|<meta[^>]*>|<title>[\\s\\S]*?<\\/title>|<!DOCTYPE[^>]*>|<scr' + 'ipt>[\\s\\S]*?<\\/scr' + 'ipt>', 'g');
+    const stripped = generatedResultsHTML.replace(styleRe, '');
     container.innerHTML = validHtml + stripped;
   }
 }
