@@ -1,0 +1,249 @@
+# **epanet-js: Comprehensive Grading & Feature Analysis**
+
+## **Overall Grade: B+ (82/100)**
+
+A strong product with a clear mission, excellent core execution, and smart positioning—held back by gaps in advanced features, incomplete delivery on promised functionality, and some strategic risks.
+
+---
+
+## **Grading Breakdown by Category**
+
+| Category | Score | Weight | Weighted |
+|----------|-------|--------|----------|
+| **Core Engine Fidelity** | 92/100 | 25% | 23.0 |
+| **User Experience** | 88/100 | 20% | 17.6 |
+| **Feature Completeness** | 65/100 | 20% | 13.0 |
+| **Business Model & Pricing** | 80/100 | 10% | 8.0 |
+| **Security & Privacy** | 90/100 | 10% | 9.0 |
+| **Documentation & Onboarding** | 70/100 | 5% | 3.5 |
+| **Community & Ecosystem** | 75/100 | 5% | 3.75 |
+| **Performance & Scalability** | 82/100 | 5% | 4.1 |
+| **Total** |  | **100%** | **82.0** |
+
+---
+
+## **Top 10 Good Features**
+
+### **1. Local-First Architecture (Grade: A+)**
+**What it does:** All data stays on the user's machine by default. No mandatory cloud upload, no account required to start modeling.
+
+**Why it matters from first principles:** In water infrastructure, model files often contain sensitive utility data (pipe locations, pressure zones, vulnerability points). Forcing cloud storage creates compliance friction with AWWA cybersecurity guidelines and utility IT policies.
+
+**The competitive edge:** Every major competitor (WaterGEMS, InfoWater, Innovyze) forces cloud or on-premise licensing servers. epanet-js eliminates the IT department as a gatekeeper. An engineer can open a browser tab and start working in 3 seconds.
+
+**Evidence from site:** *"epanet-js works directly with files on your local computer and is cloud-optional."*
+
+---
+
+### **2. Zero-Install, Cross-Platform Access (Grade: A+)**
+**What it does:** Runs entirely in the browser. Works on Mac, Linux, Windows, Chromebook, iPad.
+
+**Why it matters from first principles:** The classic EPANET 2.2 GUI is Windows-only (Win32 Delphi application from ~2000). Academic users on Mac/Linux have been locked out for 25 years unless they use Wine emulation or virtual machines.
+
+**The competitive edge:** This single feature unlocks an entire market segment (academia, developing nations, Mac-using consultants) that was previously excluded from EPANET's native UI.
+
+---
+
+### **3. EPANET`.inp` File Compatibility (Grade: A)**
+**What it does:** Native import/export of standard EPANET`.inp` files with no conversion step.
+
+**Why it matters from first principles:** The`.inp` format is the *lingua franca* of water distribution modeling. Thousands of utility models exist in this format. Any tool that requires format conversion creates a migration barrier and risks data loss.
+
+**Evidence from site:** *"EPANET file compatible — Compatible with .inp files — no conversion required."*
+
+**Minor deduction:** The site doesn't specify which EPANET version's`.inp` spec is supported (2.0, 2.2, 2.3). There may be edge cases with EPANET 2.3's newer keywords (e.g.,`[QUALITY]` reactive species).
+
+---
+
+### **4. Automated Elevations (Grade: A)**
+**What it does:** Automatically assigns node elevations from terrain data when drawing networks on the satellite basemap.
+
+**Why it matters from first principles:** Elevation assignment is the #1 time-consuming step in building a new EPANET model from scratch. Engineers typically export GIS contours, interpolate in ArcGIS, then import back. This collapses a multi-hour GIS workflow into a single click.
+
+**The competitive edge:** Classic EPANET has zero elevation automation. Commercial tools require separate DEM layers. epanet-js makes this a *default behavior*.
+
+---
+
+### **5. Undo/Redo (Grade: A)**
+**What it does:** Full undo/redo stack for all editing operations.
+
+**Why it matters from first principles:** Classic EPANET has **no undo**. One wrong deletion of a pipe in a 10,000-node model means reopening the file from the last save. This single missing feature has caused more lost work-hours than any bug in EPANET's history.
+
+**Evidence from site:** *"Make mistakes without starting over. Undo/redo is finally here!"*
+
+---
+
+### **6. Satellite Map Overlay (Grade: A-)**
+**What it does:** Displays network geometry over satellite imagery and street maps in real-time.
+
+**Why it matters from first principles:** Classic EPANET displays networks on a blank white canvas with no spatial context. Engineers must mentally map junction IDs to physical locations. Overlaying on satellite imagery enables instant spatial verification ("Is this pipe really crossing the river?").
+
+**Minor deduction:** The site doesn't specify the satellite tile provider (Google, Mapbox, OSM). Tile quality varies significantly by region, and some providers have usage limits that could affect large model visualization.
+
+---
+
+### **7. Instant Simulation (`Shift+Enter`) (Grade: A-)**
+**What it does:** One keyboard shortcut runs the full hydraulic simulation.
+
+**Why it matters from first principles:** Classic EPANET requires: File → Run → Wait → Close dialog → Navigate to results. This friction discourages iterative "what-if" analysis. A single keystroke encourages **rapid experimentation**, which is how engineers actually learn system behavior.
+
+**Why A- not A:** The site doesn't mention extended-period simulation (EPS) performance for large models (10,000+ nodes over 168-hour weeks). WASM execution speed for large EPS runs is the real test.
+
+---
+
+### **8. Visual Results (Color-Coded) (Grade: B+)**
+**What it does:** Displays pressures, flows, and velocities as color-coded overlays directly on the network map.
+
+**Why it matters from first principles:** Classic EPANET requires manually querying individual nodes/pipes or generating separate contour plots. Color-coded overlays allow **pattern recognition at a glance** — instantly spotting low-pressure zones or high-velocity pipes.
+
+**Deduction:** The site doesn't show time-animation of results (e.g., scrubbing through a 24-hour EPS to watch pressure changes). This is critical for understanding system dynamics.
+
+---
+
+### **9. Educational Pricing ($0) (Grade: A)**
+**What it does:** Free access for students and teachers with a school email.
+
+**Why it matters from first principles:** The entire water industry's modeling capability was built on EPANET being free. Making the modern version free for education ensures the next generation learns on the same platform they'll use professionally — creating a pipeline of future Pro/Teams subscribers.
+
+**Strategic brilliance:** This is the **Autodesk/GitHub playbook** (free for students → paid when they graduate → enterprise when they're managers).
+
+---
+
+### **10. FSL Open-Source License Model (Grade: B+)**
+**What it does:** Source code is public from day one. Fully MIT open-source after 2 years. Commercial use delayed by 2 years.
+
+**Why it matters from first principles:** This directly addresses the industry's original sin: vendors taking EPA's open-source EPANET code, building proprietary products, and contributing nothing back. The FSL model ensures epanet-js code *will* become fully open while giving the company runway to sustain development.
+
+**Deduction:** The 2-year delay creates uncertainty. A competitor could fork the code on day 731 and undercut pricing. The moat must be **product velocity**, not license restrictions.
+
+---
+
+## **Top 10 Bad Features (or Missing Features)**
+
+### **1. "Coming Soon" Features Listed as Selling Points (Grade: D)**
+**The Problem:** The Pro plan ($950/year) lists "Cloud storage," "Point in time restore," and "Demand Analysis" as **"Coming soon"** — but these are listed *under the paid tier*, implying they justify the price.
+
+**First Principles Violation:** *Affordance clarity.* A pricing page must describe what you get *today*, not what you might get *eventually*. This is a trust-eroding pattern that enterprise buyers scrutinize heavily.
+
+**Fix:** Move "Coming soon" features to a separate **Roadmap** page. Price the current tier based on *delivered* features only. Offer a "lock in at $950 now, price increases when cloud ships" early-adopter deal.
+
+---
+
+### **2. No Water Quality Simulation Visibility (Grade: D+)**
+**The Problem:** The site never mentions water quality modeling (chlorine decay, age analysis, source tracing). EPANET's water quality engine is one of its most powerful differentiators — used for disinfectant residual compliance (EPA Stage 2 DBP Rule).
+
+**First Principles:** Water quality is not optional for utilities. It's a *regulatory requirement*. If epanet-js doesn't support or surface WQ results, it cannot replace classic EPANET for compliance work.
+
+**Fix:** If WQ simulation is supported (the WASM engine likely includes it), **surface it prominently**. Add a "Water Quality" section to the feature list showing chlorine contours, age analysis, and source tracing.
+
+---
+
+### **3. No Advanced Calibration Tools (Grade: D+)**
+**The Problem:** No mention of calibration workflows — roughness adjustment, demand calibration, fire flow testing, or comparison with SCADA/field data.
+
+**First Principles:** An uncalibrated model is a toy, not a tool (per William James's rules). Without calibration features, epanet-js is limited to **conceptual modeling**, not operational decision support.
+
+**Fix:** Add a "Calibration Mode" that allows importing field measurements (pressure logger data, flow meter readings) and overlaying them against simulation results. Even a simple "measured vs. modeled" scatter plot would transform the tool.
+
+---
+
+### **4. No Transient Analysis (Grade: C-)**
+**The Problem:** No mention of water hammer or transient analysis capabilities.
+
+**First Principles:** Transient analysis is increasingly required for capital improvement projects (pump station upgrades, valve operations). While classic EPANET doesn't do transients either, competitors (Bentley HAMMER, InfoSurge) do — and epanet-js positions itself as a *modern* alternative.
+
+**Mitigation:** This is acceptable for v1 if the roadmap explicitly addresses it. Currently it's not mentioned at all.
+
+---
+
+### **5. Pricing Gap: $0 → $950 (Grade: C)**
+**The Problem:** There's no tier between Free and $950/year. A solo consultant who needs Scenarios but not cloud storage has no option except the full Pro price.
+
+**First Principles:** *Price anchoring.* The jump from $0 to $950 is psychologically massive. A $200-300/year "Solo" tier would capture the long tail of individual users who find $950 prohibitive but would gladly pay for scenarios.
+
+**Fix:** Add a **Solo tier at $250/year** with: Scenarios + Satellite maps + Local-only (no cloud). This captures freelancers, small utilities, and developing-nation engineers.
+
+---
+
+### **6. No API or Scripting Interface (Grade: C-)**
+**The Problem:** No mention of a JavaScript API, Python bindings, or scripting console for batch operations.
+
+**First Principles:** Power users automate. Utilities with 50+ models need batch-run capabilities. Researchers need programmatic access for Monte Carlo analysis. Without an API, epanet-js is limited to manual, one-model-at-a-time workflows.
+
+**Fix:** Expose the WASM engine via a documented JavaScript API. Even a simple`epanetjs.run(inpString)` →`results` would unlock massive value for programmatic users.
+
+---
+
+### **7. No Collaboration Features (Grade: C)**
+**The Problem:** "Team storage" and "Sharing of networks" are listed as "Coming soon." Currently, there is no way for two engineers to work on the same model or review each other's work.
+
+**First Principles:** Engineering is collaborative. Models are reviewed, QA'd, and revised by teams. Without version control or sharing, epanet-js cannot replace desktop tools for team workflows.
+
+**Fix:** Implement simple **file sharing via link** (like Google Docs "Share" button) before building full team storage. This is the minimum viable collaboration feature.
+
+---
+
+### **8. No GIS Import/Export (Grade: C-)**
+**The Problem:** No mention of shapefile, GeoJSON, or GIS integration. Most utility models are maintained in GIS (ESRI, QGIS) and exported to EPANET.
+
+**First Principles:** The`.inp` file is the *output* of a GIS workflow, not the *starting point*. If epanet-js can't import from GIS or export to GIS, it sits in an isolated silo.
+
+**Fix:** Support **GeoJSON import** (at minimum) to allow importing pipe networks from GIS. This is a single-format addition that covers QGIS, Mapbox, and most modern GIS tools.
+
+---
+
+### **9. Landing Page: Marketing Over Documentation (Grade: C+)**
+**The Problem:** The landing page is heavy on emotional messaging ("EPANET deserves better") and light on technical specifications. An engineer evaluating the tool needs to know: What EPANET version? What solver options? What output formats? Max model size?
+
+**First Principles:** Engineers buy on *specs*, not *feelings*. The marketing copy appeals to ideology (open source vs. vendors) but doesn't answer the question: "Can this tool handle my 15,000-node model with water quality?"
+
+**Fix:** Add a **Technical Specifications** section:
+- EPANET engine version (2.2.0? 2.3?)
+- Max tested model size
+- Supported analysis types (Steady-state, EPS, WQ)
+-`.inp` keyword compatibility list
+- Browser requirements (WebAssembly support)
+
+---
+
+### **10. No Offline/PWA Mode (Grade: C)**
+**The Problem:** Despite being "local-first," epanet-js requires an internet connection to load the application. If the CDN is down or the user is in a field location without connectivity, the tool is inaccessible.
+
+**First Principles:** *Local-first means local-first.* True local-first applications work offline via Service Workers / Progressive Web App (PWA) technology. The WASM engine and UI should be cached locally after first load.
+
+**Fix:** Implement PWA with Service Worker caching. After first visit, the app should work **completely offline** — including simulation. This would be a massive differentiator for field engineers and developing nations with unreliable internet.
+
+---
+
+## **Summary Scorecard**
+
+### **Top 10 Good**
+| # | Feature | Grade | Impact |
+|---|---------|-------|--------|
+| 1 | Local-First Architecture | A+ | Trust & compliance |
+| 2 | Zero-Install Cross-Platform | A+ | Market expansion |
+| 3 |`.inp` File Compatibility | A | Migration ease |
+| 4 | Automated Elevations | A | Workflow acceleration |
+| 5 | Undo/Redo | A | Productivity |
+| 6 | Satellite Map Overlay | A- | Spatial verification |
+| 7 | Instant Simulation | A- | Iterative analysis |
+| 8 | Visual Results | B+ | Pattern recognition |
+| 9 | Free Education Tier | A | Pipeline building |
+| 10 | FSL Open-Source Model | B+ | Industry trust |
+
+### **Top 10 Bad**
+| # | Feature | Grade | Risk |
+|---|---------|-------|------|
+| 1 | "Coming Soon" on Pricing | D | Trust erosion |
+| 2 | No Water Quality Visibility | D+ | Compliance gap |
+| 3 | No Calibration Tools | D+ | Toy vs. tool |
+| 4 | No Transient Analysis | C- | Feature gap |
+| 5 | $0 → $950 Pricing Gap | C | Conversion loss |
+| 6 | No API/Scripting | C- | Power user lock-out |
+| 7 | No Collaboration | C | Team workflow gap |
+| 8 | No GIS Integration | C- | Silo risk |
+| 9 | Marketing Over Specs | C+ | Engineer trust |
+| 10 | No Offline/PWA Mode | C | Local-first contradiction |
+
+### **Strategic Verdict**
+epanet-js has **nailed the foundation** (engine, UX, positioning) but is **selling the future instead of the present**. The immediate priority should be: ship calibration tools, surface water quality, add a mid-tier price point, and remove "Coming Soon" from the pricing page. The product is 80% of the way to being the **default EPANET interface for the next decade** — but the last 20% (calibration, WQ, API, GIS) is where professional credibility lives.
