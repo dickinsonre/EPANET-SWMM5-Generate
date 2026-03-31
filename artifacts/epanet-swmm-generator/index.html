@@ -1460,13 +1460,13 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <canvas id="networkCanvas" width="1200" height="800"></canvas>
       <div class="inspect-panel" id="inspectPanel" style="display:none;"></div>
     </div>
-    <div class="map-controls">
+    <div class="map-controls" style="flex-wrap:wrap;">
       <label class="map-toggle"><input type="checkbox" id="showCityMap" checked onchange="renderAll()"> City</label>
       <label class="map-toggle"><input type="checkbox" id="showNetwork" checked onchange="renderAll()"> Network</label>
       <label class="map-toggle"><input type="checkbox" id="showLabels" checked onchange="renderAll()"> Labels</label>
-      <label class="map-toggle"><input type="checkbox" id="showElevation" onchange="renderAll()"> Elev</label>
       <label class="map-toggle"><input type="checkbox" id="showVoronoi" onchange="renderAll()"> Voronoi</label>
-      <label class="map-toggle"><input type="checkbox" id="showPipeDia" onchange="renderAll()"> Pipe Dia</label>
+      <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">Nodes:<select id="nodeColorParam" onchange="renderAll()" style="background:var(--surface);color:var(--text-secondary);border:1px solid rgba(255,255,255,0.1);border-radius:3px;font-size:10px;padding:1px 2px;font-family:'JetBrains Mono',monospace;"><option value="none">None</option><option value="elevation" selected>Elevation</option><option value="baseDemand">Base Demand</option></select></span>
+      <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">Links:<select id="linkColorParam" onchange="renderAll()" style="background:var(--surface);color:var(--text-secondary);border:1px solid rgba(255,255,255,0.1);border-radius:3px;font-size:10px;padding:1px 2px;font-family:'JetBrains Mono',monospace;"><option value="none">None</option><option value="diameter" selected>Diameter</option><option value="roughness">Roughness</option><option value="length">Length</option></select></span>
       <label class="map-toggle" id="resultsToggleWrap" style="display:none;"><input type="checkbox" id="showResults" onchange="renderAll()"> Results</label>
     </div>
     <div id="timeSliderWrap" style="display:none;padding:4px 8px;">
@@ -3777,75 +3777,211 @@ function downloadDEM() {
   }
 }
 
+function epanetBandColor(bandIdx) {
+  const colors = ['#2563eb','#60a5fa','#4ade80','#facc15','#f97316'];
+  return colors[Math.min(bandIdx, 4)];
+}
+function computeBands(vals, count) {
+  if (!vals.length) return { min: 0, max: 1, step: 0.2, bands: [] };
+  const mn = Math.min(...vals), mx = Math.max(...vals);
+  const range = mx - mn || 1;
+  const step = range / count;
+  const bands = [];
+  for (let i = 0; i < count; i++) {
+    const lo = mn + i * step;
+    const hi = mn + (i + 1) * step;
+    bands.push({ lo, hi, color: epanetBandColor(i) });
+  }
+  return { min: mn, max: mx, step, bands };
+}
+function bandIndex(val, bandInfo) {
+  const idx = Math.floor((val - bandInfo.min) / bandInfo.step);
+  return Math.max(0, Math.min(4, idx));
+}
+
 function drawNetworkOverlay(ctx,W,H,tx,ty,nd){
   const nm={};nd.nodes.forEach(n=>nm[n.id]=n);nd.reservoirs.forEach(r=>nm[r.id]={x:r.x,y:r.y});nd.tanks.forEach(t=>nm[t.id]={x:t.x,y:t.y});
-  const showDia = document.getElementById('showPipeDia') && document.getElementById('showPipeDia').checked;
-  // Pipe diameter color scale
-  const allDia = nd.pipes.map(p=>p.diameter||12);
-  const minDia = safeMin(allDia), maxDia = safeMax(allDia), diaRange = maxDia - minDia || 1;
-  function diaColor(d) {
-    const t = (d - minDia) / diaRange; // 0=smallest, 1=largest
-    if (t < 0.25) return '#06b6d4'; // cyan = small
-    if (t < 0.5) return '#3b82f6';  // blue = medium
-    if (t < 0.75) return '#f59e0b'; // amber = large
-    return '#ef4444';                // red = trunk
+
+  const nodeParam = (document.getElementById('nodeColorParam')||{}).value || 'none';
+  const linkParam = (document.getElementById('linkColorParam')||{}).value || 'none';
+  const t = currentTimestep || 0;
+
+  function getNodeVal(n) {
+    if (nodeParam === 'elevation') return n.elev;
+    if (nodeParam === 'baseDemand') return n.demand || 0;
+    if (solverResults && solverResults.nodeResults) {
+      const r = (solverResults.nodeResults[n.id]||[])[t];
+      if (!r) return undefined;
+      if (nodeParam === 'pressure') return r.pressure;
+      if (nodeParam === 'head') return r.head;
+      if (nodeParam === 'demand') return r.demand;
+      if (nodeParam === 'quality') return r.quality;
+    }
+    return undefined;
   }
+  function getLinkVal(p) {
+    if (linkParam === 'diameter') return p.diameter || 12;
+    if (linkParam === 'roughness') return p.roughness || 100;
+    if (linkParam === 'length') return p.length || 100;
+    if (solverResults && solverResults.linkResults) {
+      const r = (solverResults.linkResults[p.id]||[])[t];
+      if (!r) return undefined;
+      if (linkParam === 'flow') return Math.abs(r.flow);
+      if (linkParam === 'velocity') return r.velocity;
+      if (linkParam === 'headloss') return r.headloss;
+    }
+    return undefined;
+  }
+
+  const junctions = nd.nodes.filter(n => n.type === 'junction');
+  let nodeBandInfo = null, linkBandInfo = null;
+  if (nodeParam !== 'none') {
+    const vals = junctions.map(n => getNodeVal(n)).filter(v => v !== undefined);
+    nodeBandInfo = computeBands(vals, 5);
+  }
+  if (linkParam !== 'none') {
+    const vals = nd.pipes.map(p => getLinkVal(p)).filter(v => v !== undefined);
+    linkBandInfo = computeBands(vals, 5);
+  }
+
   nd.pipes.forEach(p=>{const n1=nm[p.node1],n2=nm[p.node2];if(!n1||!n2)return;
-    if(showDia) {
-      ctx.strokeStyle = p.status==='Closed' ? 'rgba(239,68,68,0.5)' : diaColor(p.diameter||12);
-      ctx.lineWidth = Math.max(0.5, Math.min(5, ((p.diameter||12) - minDia) / diaRange * 4 + 0.5));
+    if(p.status==='Closed') {
+      ctx.strokeStyle='rgba(239,68,68,0.5)'; ctx.lineWidth=0.8;
+    } else if(linkParam !== 'none' && linkBandInfo) {
+      const v = getLinkVal(p);
+      if (v !== undefined) {
+        const bi = bandIndex(v, linkBandInfo);
+        ctx.strokeStyle = epanetBandColor(bi);
+        ctx.lineWidth = Math.max(0.8, Math.min(5, 0.8 + bi * 1.0));
+      } else {
+        ctx.strokeStyle='rgba(59,130,246,0.35)'; ctx.lineWidth=0.8;
+      }
     } else {
-      ctx.strokeStyle=p.status==='Closed'?'rgba(239,68,68,0.5)':'rgba(59,130,246,0.35)';
-      ctx.lineWidth=0.8;
+      ctx.strokeStyle='rgba(59,130,246,0.35)'; ctx.lineWidth=0.8;
     }
     ctx.beginPath();ctx.moveTo(tx(n1.x),ty(n1.y));ctx.lineTo(tx(n2.x),ty(n2.y));ctx.stroke();
   });
   ctx.lineWidth=0.8;
+
   const js=Math.max(0.8,Math.min(3,800/nd.nodes.length));
-  nd.nodes.forEach(n=>{if(n.type!=='junction')return;ctx.fillStyle=n.emitter?'#06b6d4':'rgba(59,130,246,0.7)';ctx.beginPath();ctx.arc(tx(n.x),ty(n.y),n.emitter?js+1.5:js,0,Math.PI*2);ctx.fill();});
+  junctions.forEach(n=>{
+    if(nodeParam !== 'none' && nodeBandInfo) {
+      const v = getNodeVal(n);
+      if (v !== undefined) {
+        const bi = bandIndex(v, nodeBandInfo);
+        ctx.fillStyle = epanetBandColor(bi);
+        const sz = Math.max(js, Math.min(js+2, js + 0.5));
+        ctx.beginPath();ctx.arc(tx(n.x),ty(n.y),sz,0,Math.PI*2);ctx.fill();
+        return;
+      }
+    }
+    ctx.fillStyle=n.emitter?'#06b6d4':'rgba(59,130,246,0.7)';
+    ctx.beginPath();ctx.arc(tx(n.x),ty(n.y),n.emitter?js+1.5:js,0,Math.PI*2);ctx.fill();
+  });
+
   nd.reservoirs.forEach(r=>{ctx.fillStyle='#22c55e';ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(tx(r.x),ty(r.y),7,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 9px JetBrains Mono';ctx.textAlign='center';ctx.fillText(r.id,tx(r.x),ty(r.y)-10);});
   nd.tanks.forEach(t=>{ctx.fillStyle='#f59e0b';ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.fillRect(tx(t.x)-6,ty(t.y)-6,12,12);ctx.strokeRect(tx(t.x)-6,ty(t.y)-6,12,12);ctx.fillStyle='#fff';ctx.font='bold 9px JetBrains Mono';ctx.textAlign='center';ctx.fillText(t.id,tx(t.x),ty(t.y)-10);});
   nd.pumps.forEach(p=>{const n1=nm[p.node1],n2=nm[p.node2];if(!n1||!n2)return;const mx=(tx(n1.x)+tx(n2.x))/2,my=(ty(n1.y)+ty(n2.y))/2;ctx.fillStyle='#ef4444';ctx.beginPath();ctx.moveTo(mx,my-6);ctx.lineTo(mx+6,my+4);ctx.lineTo(mx-6,my+4);ctx.closePath();ctx.fill();});
   nd.valves.forEach(v=>{const n1=nm[v.node1],n2=nm[v.node2];if(!n1||!n2)return;const mx=(tx(n1.x)+tx(n2.x))/2,my=(ty(n1.y)+ty(n2.y))/2;ctx.fillStyle='#a855f7';ctx.beginPath();ctx.arc(mx,my,4,0,Math.PI*2);ctx.fill();});
 
-  // ═══ MAP LEGEND OVERLAY (top-right) ═══
-  const lgX = W - 135, lgY = 12, lgW = 125, lgH = showDia ? 145 : 120;
-  ctx.fillStyle = 'rgba(10,14,26,0.75)';
-  ctx.beginPath(); ctx.roundRect(lgX-8, lgY-4, lgW, lgH, 6); ctx.fill();
+  // ═══ EPANET-UI STYLE MAP LEGEND (left sidebar) ═══
+  const lgX = 10, lgY = 10;
+  let curY = lgY;
+  const lgW = 155;
+
+  const nodeParamLabel = {none:'',elevation:'Elevation',baseDemand:'Base Demand',pressure:'Pressure',head:'Head',demand:'Demand',quality:'Quality'};
+  const linkParamLabel = {none:'',diameter:'Diameter',roughness:'Roughness',length:'Length',flow:'Flow',velocity:'Velocity',headloss:'Headloss'};
+  const nodeUnit = currentUnits === 'SI'
+    ? {elevation:'m',baseDemand:'LPS',pressure:'m',head:'m',demand:'LPS',quality:'mg/L'}
+    : {elevation:'ft',baseDemand:'GPM',pressure:'psi',head:'ft',demand:'GPM',quality:'mg/L'};
+  const linkUnit = currentUnits === 'SI'
+    ? {diameter:'mm',roughness:'',length:'m',flow:'LPS',velocity:'m/s',headloss:'m/km'}
+    : {diameter:'in',roughness:'',length:'ft',flow:'GPM',velocity:'ft/s',headloss:'ft/kft'};
+
+  const showNodeLegend = nodeParam !== 'none' && nodeBandInfo && nodeBandInfo.bands.length > 0;
+  const showLinkLegend = linkParam !== 'none' && linkBandInfo && linkBandInfo.bands.length > 0;
+  const showElemLegend = true;
+
+  const elemItems = [
+    ['#3b82f6','●','Junction'],['#22c55e','●','Reservoir'],['#f59e0b','■','Tank'],
+    ['#ef4444','▲','Pump'],['#a855f7','●','Valve'],['#06b6d4','●','Emitter']
+  ];
+  const elemH = 18 + elemItems.length * 13;
+  const nodeH = showNodeLegend ? 22 + 5 * 13 + 8 : 0;
+  const linkH = showLinkLegend ? 22 + 5 * 13 + 8 : 0;
+  const totalH = elemH + (showNodeLegend ? nodeH + 8 : 0) + (showLinkLegend ? linkH + 8 : 0) + 12;
+
+  ctx.fillStyle = 'rgba(10,14,26,0.8)';
+  ctx.beginPath(); ctx.roundRect(lgX, lgY, lgW, totalH, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(lgX, lgY, lgW, totalH, 6); ctx.stroke();
+
+  ctx.textAlign = 'left';
   ctx.font = 'bold 10px JetBrains Mono';
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.textAlign = 'left';
-  ctx.fillText('LEGEND', lgX, lgY + 10);
-  const items = [
-    ['#3b82f6','●','Junction'],['#22c55e','●','Reservoir'],['#f59e0b','■','Tank'],
-    ['#ef4444','▲','Pump'],['#a855f7','●','Valve'],['#06b6d4','●','Emitter'],
-    ['rgba(239,68,68,0.5)','—','Closed pipe']
-  ];
-  items.forEach(([c,sym,label], i) => {
-    const y = lgY + 24 + i * 14;
-    ctx.fillStyle = c; ctx.font = '11px JetBrains Mono';
-    ctx.fillText(sym, lgX, y);
+  curY += 14;
+  ctx.fillText('Map Legend', lgX + 8, curY);
+  curY += 6;
+
+  elemItems.forEach(([c,sym,label]) => {
+    curY += 13;
+    ctx.fillStyle = c; ctx.font = '10px JetBrains Mono';
+    ctx.fillText(sym, lgX + 10, curY);
     ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '10px DM Sans';
-    ctx.fillText(label, lgX + 16, y);
+    ctx.fillText(label, lgX + 24, curY);
   });
-  if (showDia) {
-    const dy = lgY + 24 + items.length * 14 + 4;
-    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '9px JetBrains Mono';
-    ctx.fillText('PIPE DIA:', lgX, dy);
-    [['#06b6d4','Small'],['#3b82f6','Med'],['#f59e0b','Large'],['#ef4444','Trunk']].forEach(([c,l],i)=>{
-      ctx.fillStyle = c;
-      ctx.fillRect(lgX + i*28, dy+4, 20, 3);
-      ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '8px DM Sans';
+
+  if (showNodeLegend) {
+    curY += 18;
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(lgX + 6, curY - 10, lgW - 12, 1);
+    ctx.font = 'bold 9px JetBrains Mono';
+    ctx.fillStyle = '#60a5fa';
+    const nLabel = (nodeParamLabel[nodeParam]||nodeParam) + (nodeUnit[nodeParam] ? ' (' + nodeUnit[nodeParam] + ')' : '');
+    ctx.fillText('☑ Nodes', lgX + 8, curY);
+    curY += 2;
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '8px DM Sans';
+    ctx.fillText(nLabel, lgX + 10, curY + 10);
+    curY += 14;
+    nodeBandInfo.bands.forEach((b, i) => {
+      curY += 13;
+      ctx.fillStyle = b.color;
+      ctx.fillRect(lgX + 10, curY - 7, 14, 9);
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 0.5;
+      ctx.strokeRect(lgX + 10, curY - 7, 14, 9);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '9px DM Sans';
+      const lo = b.lo, hi = b.hi;
+      const fmt = Math.abs(hi - lo) < 1 ? 2 : (Math.abs(hi - lo) < 10 ? 1 : 0);
+      if (i === 0) ctx.fillText('< ' + hi.toFixed(fmt), lgX + 28, curY + 1);
+      else if (i === 4) ctx.fillText('> ' + lo.toFixed(fmt), lgX + 28, curY + 1);
+      else ctx.fillText(lo.toFixed(fmt) + ' - ' + hi.toFixed(fmt), lgX + 28, curY + 1);
     });
   }
-  const ibX = W - 135, ibY = lgY + lgH + 8, ibW = 125, ibH = 38;
-  ctx.fillStyle = 'rgba(10,14,26,0.65)';
-  ctx.beginPath(); ctx.roundRect(ibX - 8, ibY, ibW, ibH, 5); ctx.fill();
-  ctx.fillStyle = 'rgba(245,158,11,0.7)'; ctx.font = '8px JetBrains Mono'; ctx.textAlign = 'left';
-  ctx.fillText('C-factor / Age', ibX, ibY + 11);
-  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '7px DM Sans';
-  ctx.fillText('Center=old(C80) Edge=new(C130)', ibX, ibY + 23);
-  ctx.fillText('1950s downtown \u2192 2020s suburban', ibX, ibY + 33);
+
+  if (showLinkLegend) {
+    curY += 18;
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(lgX + 6, curY - 10, lgW - 12, 1);
+    ctx.font = 'bold 9px JetBrains Mono';
+    ctx.fillStyle = '#60a5fa';
+    const lLabel = (linkParamLabel[linkParam]||linkParam) + (linkUnit[linkParam] ? ' (' + linkUnit[linkParam] + ')' : '');
+    ctx.fillText('☑ Links', lgX + 8, curY);
+    curY += 2;
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.font = '8px DM Sans';
+    ctx.fillText(lLabel, lgX + 10, curY + 10);
+    curY += 14;
+    linkBandInfo.bands.forEach((b, i) => {
+      curY += 13;
+      ctx.fillStyle = b.color;
+      ctx.fillRect(lgX + 10, curY - 5, 20, 3);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '9px DM Sans';
+      const lo = b.lo, hi = b.hi;
+      const fmt = Math.abs(hi - lo) < 1 ? 2 : (Math.abs(hi - lo) < 10 ? 1 : 0);
+      if (i === 0) ctx.fillText('< ' + hi.toFixed(fmt), lgX + 34, curY + 1);
+      else if (i === 4) ctx.fillText('> ' + lo.toFixed(fmt), lgX + 34, curY + 1);
+      else ctx.fillText(lo.toFixed(fmt) + ' - ' + hi.toFixed(fmt), lgX + 34, curY + 1);
+    });
+  }
 }
 
 // ═══════ PRESSURE HEATMAP (Quick Sim) ═══════
@@ -3923,7 +4059,6 @@ function renderCanvas(forExport=false,exportWithNetwork=true){
   if (!forExport) lastCanvasTransform = { txF, tyF, sc, oX, oY, minX, minY, W, H };
   ctx.fillStyle='#0a0e1a';ctx.fillRect(0,0,W,H);
   if((forExport||(document.getElementById('showCityMap')&&document.getElementById('showCityMap').checked))&&cityMapData)drawCityMap(ctx,W,H,txF,tyF,sc,cityMapData);
-  if(!forExport&&document.getElementById('showElevation')&&document.getElementById('showElevation').checked){ctx.globalAlpha=0.25;const jNodes=nd.nodes.filter(n=>n.type==='junction');const elevs=jNodes.map(n=>n.elev),eMin=safeMin(elevs),eMax=safeMax(elevs),er=eMax-eMin||1;jNodes.forEach(n=>{const t=(n.elev-eMin)/er;ctx.fillStyle=`rgb(${Math.round(40+t*180)},${Math.round(80+(1-Math.abs(t-0.5)*2)*120)},${Math.round(180-t*140)})`;ctx.beginPath();ctx.arc(txF(n.x),tyF(n.y),6,0,Math.PI*2);ctx.fill();});ctx.globalAlpha=1;}
   // Voronoi polygons
   if(!forExport&&document.getElementById('showVoronoi')&&document.getElementById('showVoronoi').checked){drawVoronoi(ctx,W,H,txF,tyF,nd);}
   if(forExport?exportWithNetwork:(document.getElementById('showNetwork')&&document.getElementById('showNetwork').checked))drawNetworkOverlay(ctx,W,H,txF,tyF,nd);
@@ -6724,6 +6859,37 @@ let solverResults = null;    // parsed results
 let currentTimestep = 0;
 let animTimer = null;
 
+function addSolverParamOptions() {
+  const nodeSel = document.getElementById('nodeColorParam');
+  const linkSel = document.getElementById('linkColorParam');
+  if (!nodeSel || !linkSel) return;
+  const nodeResultOpts = [
+    {value:'pressure', text:'Pressure'},
+    {value:'head', text:'Head'},
+    {value:'demand', text:'Demand'},
+    {value:'quality', text:'Quality'}
+  ];
+  const linkResultOpts = [
+    {value:'flow', text:'Flow'},
+    {value:'velocity', text:'Velocity'},
+    {value:'headloss', text:'Headloss'}
+  ];
+  nodeResultOpts.forEach(o => {
+    if (!nodeSel.querySelector('option[value="'+o.value+'"]')) {
+      const opt = document.createElement('option'); opt.value = o.value; opt.textContent = o.text;
+      nodeSel.appendChild(opt);
+    }
+  });
+  linkResultOpts.forEach(o => {
+    if (!linkSel.querySelector('option[value="'+o.value+'"]')) {
+      const opt = document.createElement('option'); opt.value = o.value; opt.textContent = o.text;
+      linkSel.appendChild(opt);
+    }
+  });
+  nodeSel.value = 'pressure';
+  linkSel.value = 'velocity';
+}
+
 function setSolverStatus(msg) {
   const el = document.getElementById('solverStatus');
   el.style.display = 'block';
@@ -6853,6 +7019,7 @@ async function runSolver() {
       slider.value = 0;
       currentTimestep = 0;
       onTimeSliderChange();
+      addSolverParamOptions();
       analyzeValidation();
       renderAll();
       setTimeout(renderHGL, 100);
