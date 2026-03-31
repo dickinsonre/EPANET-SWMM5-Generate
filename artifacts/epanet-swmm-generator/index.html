@@ -2221,6 +2221,197 @@ Typical values:
         <p style="color:var(--text-dim);font-size:10px;margin-top:8px;font-style:italic;">Source: EPA EPANET 2.2 documentation (Rossman et al.), EPANET Analysis Algorithms, William James's "Rules for Responsible Modeling" (2005), AWWA M32 standards, OpenWaterAnalytics. Educational reference only — not for regulatory compliance or substitute for licensed professional engineering judgment.</p>
       </div>
 
+      <h3 style="color:var(--accent-cyan);font-size:15px;margin:28px 0 8px;">EPANET Ecosystem: Tools, Techniques &amp; Practice</h3>
+      <p style="color:var(--text-dim);font-size:12px;margin-bottom:12px;">Deep dive into Classic EPANET 2.2, Python tools (WNTR/EPyT), the Network Generator, calibration exercises, and solver benchmarks — with code examples and workflows.</p>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px;">
+
+        <details style="background:rgba(100,120,255,0.04);border:1px solid rgba(100,120,255,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:#7c9aff;font-size:13px;font-weight:600;">Part 1: Classic EPANET 2.2 (The Foundation)</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:10px;color:#8ff;">EPANET 2.2 IDENTITY CARD
+Developer:       US EPA + Open Water Analytics (OWA)
+Original Author: Lewis A. Rossman, EPA ORD
+Language:        C (engine), Delphi/Pascal (GUI)
+Platform:        Windows only (XP through 11)
+License:         Public Domain (engine), Free (GUI)
+Source Code:     github.com/USEPA/EPANET2.2
+File Format:     .inp (input), .rpt (report), .out (binary)
+Max Model Size:  Unlimited (tested to 500,000+ nodes)</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Key Changes from 2.0 to 2.2 (2008→2020):</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;width:35%;">Pressure-Dependent Demand (PDA)</td><td style="padding:3px 6px;">Demand reduces when pressure is low — critical for failure modeling</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;">Improved convergence</td><td style="padding:3px 6px;">Faster for large networks, better low-flow handling, flow oscillation damping</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;">Full valve/pump status reporting</td><td style="padding:3px 6px;">Know exactly WHY a PRV is active/open/closed</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;">50+ new API functions</td><td style="padding:3px 6px;">Full programmatic control, mid-simulation modification, thread-safe</td></tr>
+              <tr><td style="padding:3px 6px;color:#22c55e;">50+ bug fixes</td><td style="padding:3px 6px;">Accumulated fixes over 12 years (2008-2020)</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">GUI Capabilities vs Limitations:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;">Can do</td><td style="padding:3px 6px;">Visual editor, color-coded maps, time series graphs, profile plots, contour plots, calibration reports, energy reports</td></tr>
+              <tr><td style="padding:3px 6px;color:#ef4444;">Cannot do</td><td style="padding:3px 6px;">No undo/redo, no satellite maps, no GIS import/export, no batch scenarios, no optimization, Windows only, no auto-save</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Programmer's Toolkit (C API):</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:10px;color:#8ff;">Key API groups:
+  EN_open/close       Load/unload model
+  EN_solveH/solveQ    Run complete hydraulic/WQ simulation
+  EN_openH/nextH      Step-by-step solving (EPS control)
+  EN_getnodevalue     Read: pressure, head, demand, quality
+  EN_getlinkvalue     Read: flow, velocity, headloss
+  EN_setnodevalue     Modify node parameters mid-run
+  EN_setlinkvalue     Modify link parameters mid-run
+  EN_addnode/addlink  Add elements to model dynamically
+  EN_deletenode/link  Remove elements from model</pre>
+          </div>
+        </details>
+
+        <details style="background:rgba(100,120,255,0.04);border:1px solid rgba(100,120,255,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:#7c9aff;font-size:13px;font-weight:600;">Part 2: WNTR and EPyT (Python Tools)</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">WNTR — Water Network Tool for Resilience:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:10px;color:#8ff;">Developer:  US EPA + Sandia National Laboratories
+License:    Revised BSD (open source)
+Install:    pip install wntr
+Requires:   Python 3.10-3.13, NumPy, SciPy, NetworkX, Pandas</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:4px 0;">WNTR Key Capabilities Beyond EPANET:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;width:30%;">Pipe break simulation</td><td style="padding:3px 6px;">Close pipes, add leaks with area/timing, PDA for realistic failure</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;">Resilience metrics</td><td style="padding:3px 6px;">Todini resilience index, population impacted by low pressure</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;">Graph analysis</td><td style="padding:3px 6px;">NetworkX integration — shortest paths, bridges (critical pipes), betweenness centrality</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:#22c55e;">Water quality</td><td style="padding:3px 6px;">Water age analysis, stagnation detection, WQ mapping</td></tr>
+              <tr><td style="padding:3px 6px;color:#22c55e;">Fragility/earthquake</td><td style="padding:3px 6px;">PGA-based damage, lognormal fragility curves for leak/break states</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">EPyT — EPANET-Python Toolkit:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:10px;color:#8ff;">Developer:  KIOS CoE, University of Cyprus
+License:    EUPL 1.2
+Install:    pip install epyt
+Wraps:      EPANET C library via ctypes</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:4px 0;">WNTR vs EPyT — When to Use Which:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Criterion</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">WNTR</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">EPyT</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Primary use</td><td style="padding:3px 6px;text-align:center;">Resilience, disaster scenarios</td><td style="padding:3px 6px;text-align:center;">Direct API access, education</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Simulator</td><td style="padding:3px 6px;text-align:center;">EPANET OR custom WNTR solver</td><td style="padding:3px 6px;text-align:center;">EPANET only (via DLL)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Network mods during sim</td><td style="padding:3px 6px;text-align:center;">Add/remove pipes, leaks</td><td style="padding:3px 6px;text-align:center;">Change properties only</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Graph analysis</td><td style="padding:3px 6px;text-align:center;">Full NetworkX</td><td style="padding:3px 6px;text-align:center;">Basic connectivity</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Learning curve</td><td style="padding:3px 6px;text-align:center;">Moderate</td><td style="padding:3px 6px;text-align:center;">Low (mirrors EPANET API)</td></tr>
+              <tr><td style="padding:3px 6px;">Best for</td><td style="padding:3px 6px;text-align:center;">Research, optimization</td><td style="padding:3px 6px;text-align:center;">Teaching, batch runs</td></tr>
+            </table>
+          </div>
+        </details>
+
+        <details style="background:rgba(100,120,255,0.04);border:1px solid rgba(100,120,255,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:#7c9aff;font-size:13px;font-weight:600;">Part 3: The EPANET/SWMM Network Generator</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:10px;color:#8ff;">GENERATOR IDENTITY CARD
+Platform:      Browser (single HTML file, ~160 KB)
+Dependencies:  None (fully self-contained)
+Engine:        JavaScript with seeded PRNG (Mulberry32)
+Output:        .inp files (EPANET 2.2+ or SWMM 5.2+)
+Model Range:   50 to 100,000 nodes
+Author:        Robert Dickinson
+License:       Free for education and testing</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">What Makes Generated Models "Hydraulically Valid":</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li><strong>Connectivity Guarantee</strong> — BFS from all reservoirs, every junction confirmed reachable, isolated nodes = 0</li>
+              <li><strong>Pump Sizing via Critical Path</strong> — BFS traces farthest node, H-W friction calculation, 3-point curve brackets operating point</li>
+              <li><strong>Pressure Zone Detection</strong> — if elevation range &gt;80 ft, auto-divides into ~70 ft zones with PRVs at boundaries</li>
+              <li><strong>Supply-Demand Balance</strong> — supply capacity computed from reservoir heads + pumps, S/D ratio displayed</li>
+              <li><strong>Realistic Spatial Patterns</strong> — demand zones (Industrial NW, Commercial center), C-factors correlated with position, pipe ages 1950s→2020s</li>
+            </ol>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Recommended Usage:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:var(--text-dim);width:25%;">Education</td><td style="padding:3px 6px;">Small (150 nodes) — quick to generate, easy to visualize, import into any tool</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:var(--text-dim);">Calibration practice</td><td style="padding:3px 6px;">Medium/Large (750-2,500) — enable emitters, WQ, secondary demands. Generate "truth" model, corrupt it, practice calibrating back.</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:3px 6px;color:var(--text-dim);">Solver testing</td><td style="padding:3px 6px;">Giant/City (50K-100K) — stress test EPANET/WNTR solver performance, benchmark execution time</td></tr>
+              <tr><td style="padding:3px 6px;color:var(--text-dim);">SWMM models</td><td style="padding:3px 6px;">Switch to SWMM mode — subcatchments, conduits, design storms, LID, RDII, DWF, water quality</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Step-by-Step Workflow:</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li>Open generator → select mode (EPANET/SWMM), units, preset</li>
+              <li>Adjust terrain, enable calibration features (emitters, WQ, tags)</li>
+              <li>Click "Generate" → review Stats tab (connectivity, S/D ratio)</li>
+              <li>Download .inp</li>
+              <li>Import: Classic EPANET (File→Open), epanet-js (Import), WNTR (<code style="color:#8ff;">WaterNetworkModel('model.inp')</code>), EPyT (<code style="color:#8ff;">epanet('model.inp')</code>)</li>
+            </ol>
+          </div>
+        </details>
+
+        <details style="background:rgba(100,120,255,0.04);border:1px solid rgba(100,120,255,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:#7c9aff;font-size:13px;font-weight:600;">Part 4: Calibration Practice Exercises</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Exercise 1: Manual Roughness Calibration (Beginner)</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li>Generate Medium model (750 nodes), save as "truth_model.inp"</li>
+              <li>Run in EPANET/WNTR, record pressures at 20 random nodes (your "field measurements")</li>
+              <li>Copy to "calibration_model.inp", change ALL C-factors to 120 (destroy spatial variation)</li>
+              <li>Adjust C-factors until pressures match within ±3 psi — no peeking at truth model!</li>
+            </ol>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:10px;color:#8ff;">Python (WNTR):
+  wn_truth = wntr.network.WaterNetworkModel('truth_model.inp')
+  results = wntr.sim.EpanetSimulator(wn_truth).run_sim()
+  # Record "field" pressures at 20 random nodes at hour 12
+  # Then corrupt, calibrate, compute RMSE
+  # Target: RMSE &lt; 2.1 m (&lt; 3.0 psi)</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Exercise 2: Automated Calibration with Optimization (Intermediate)</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li>Group pipes by diameter: Large (&gt;12"), Medium (8-12"), Small (&lt;8")</li>
+              <li>Define objective function: RMSE between model and "field" pressures</li>
+              <li>Use <code style="color:#8ff;">scipy.optimize.differential_evolution</code> with bounds [60, 150] for C-factors</li>
+              <li>Optimizer finds optimal C-factor per group automatically</li>
+            </ol>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Exercise 3: Demand Pattern Calibration (Advanced)</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li>Compare model total system flow to "observed" SCADA hourly data (24 values)</li>
+              <li>Scale pattern multipliers: target = observed_flow / (total_base_demand × conversion)</li>
+              <li>Apply calibrated multipliers to pattern, re-run, verify flow match</li>
+              <li>Plot model vs SCADA overlay to visualize calibration quality</li>
+            </ol>
+          </div>
+        </details>
+
+        <details style="background:rgba(100,120,255,0.04);border:1px solid rgba(100,120,255,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:#7c9aff;font-size:13px;font-weight:600;">Part 5: Solver Performance Benchmarks</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Benchmark 1: Execution Time vs Model Size</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Nodes</th><th style="padding:4px 6px;text-align:right;color:var(--text-primary);">Links</th><th style="padding:4px 6px;text-align:right;color:var(--text-primary);">Time (s)</th><th style="padding:4px 6px;text-align:right;color:var(--text-primary);">Rate</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">51</td><td style="padding:3px 6px;text-align:right;">85</td><td style="padding:3px 6px;text-align:right;">0.015</td><td style="padding:3px 6px;text-align:right;">3,400/s</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">751</td><td style="padding:3px 6px;text-align:right;">1,425</td><td style="padding:3px 6px;text-align:right;">0.025</td><td style="padding:3px 6px;text-align:right;">30,040/s</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">2,501</td><td style="padding:3px 6px;text-align:right;">4,900</td><td style="padding:3px 6px;text-align:right;">0.045</td><td style="padding:3px 6px;text-align:right;">55,578/s</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">10,001</td><td style="padding:3px 6px;text-align:right;">19,800</td><td style="padding:3px 6px;text-align:right;">0.165</td><td style="padding:3px 6px;text-align:right;">60,612/s</td></tr>
+              <tr><td style="padding:3px 6px;">50,626</td><td style="padding:3px 6px;text-align:right;">100,350</td><td style="padding:3px 6px;text-align:right;">1.250</td><td style="padding:3px 6px;text-align:right;">40,501/s</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Benchmark 2: Head Loss Formula Comparison</p>
+            <p style="font-size:11px;">Compare H-W vs D-W vs C-M on same model. Convert C-factors to roughness heights for D-W (C&gt;130→ε=0.0001m, C&gt;100→0.001m, else→0.005m). Measure mean/max pressure differences between formulas.</p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Benchmark 3: Convergence Stress Test</p>
+            <p style="font-size:11px;">Progressively multiply all demands (×0.5, ×1.0, ×2.0, ×5.0, ×10.0) until solver fails to converge. Track minimum pressure and count of negative-pressure nodes at each multiplier. Reveals the model's "breaking point."</p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Benchmark 4: EPS Timestep Sensitivity</p>
+            <p style="font-size:11px;">Compare 24-hour EPS at different hydraulic timesteps (1, 5, 15, 30, 60 min). Smaller timestep = more accurate but slower. Compare pressure differences between 1-min and 60-min results at shared hourly outputs. Typical difference: &lt;0.5 psi for well-conditioned models.</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(100,120,255,0.04);border:1px solid rgba(100,120,255,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:#7c9aff;font-size:13px;font-weight:600;">Which Tool for Which Task — Quick Reference</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Task</th><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Best Tool</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Learn EPANET basics</td><td style="padding:3px 6px;">Classic EPANET 2.2 (Windows) or epanet-js (browser)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Quick model check</td><td style="padding:3px 6px;">epanet-js (no install, Shift+Enter)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Generate test models</td><td style="padding:3px 6px;">EPANET/SWMM Network Generator</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Batch calibration</td><td style="padding:3px 6px;">WNTR or EPyT (Python scripting)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Resilience analysis</td><td style="padding:3px 6px;">WNTR (pipe breaks, earthquakes)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Optimization</td><td style="padding:3px 6px;">WNTR + scipy.optimize</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Water quality</td><td style="padding:3px 6px;">Classic EPANET 2.2 or WNTR</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Solver benchmarking</td><td style="padding:3px 6px;">WNTR (Python timing + plotting)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Real-time operations</td><td style="padding:3px 6px;">Commercial (WaterGEMS, InfoWater)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Transient (water hammer)</td><td style="padding:3px 6px;">Bentley HAMMER, InfoSurge, AFT Impulse</td></tr>
+              <tr><td style="padding:3px 6px;">Modeling ethics/philosophy</td><td style="padding:3px 6px;">Rules for Responsible Modeling</td></tr>
+            </table>
+          </div>
+        </details>
+
+        <p style="color:var(--text-dim);font-size:10px;margin-top:8px;font-style:italic;">Source: Classic EPANET 2.2, WNTR/EPyT documentation, OWA EPANET project, solver benchmarking with generated test models. All code examples designed to run with freely available tools. For regulatory compliance, use calibrated models validated by a licensed professional engineer.</p>
+      </div>
+
       <h3 style="color:#f0c040;font-size:15px;margin:28px 0 8px;">16.4 An Eyewitness Account — The Workshop That Started It All</h3>
       <div style="background:rgba(240,192,64,0.04);border:1px solid rgba(240,192,64,0.15);border-radius:8px;padding:18px 20px;margin:8px 0 20px;font-style:italic;line-height:1.7;color:#ccc;">
         <p style="margin:0 0 12px;">By the late 1980s, the water distribution modeling world had made impressive strides in hydraulic simulation — steady-state solvers, extended-period simulation, calibration methods — but water quality modeling in pipe networks was still in its infancy. A handful of researchers were working on the problem, but there was no consensus tool, no standard approach, and no coordination between the groups.</p>
