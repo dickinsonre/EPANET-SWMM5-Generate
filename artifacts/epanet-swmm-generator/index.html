@@ -1450,8 +1450,8 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <button class="tab-btn" onclick="switchTab('docs',this)">Docs</button>
       <button class="tab-btn" onclick="switchTab('hgl',this)">HGL</button>
       <button class="tab-btn" onclick="switchTab('log',this)" id="logTabBtn" style="display:none;">Log</button>
-      <button class="tab-btn" onclick="switchTab('rpt',this)" id="rptTabBtn" style="display:none;">RPT</button>
-      <button class="tab-btn" onclick="switchTab('results',this)" id="resultsTabBtn" style="display:none;">Results</button>
+      <button class="tab-btn" onclick="switchTab('rpt',this)" id="rptTabBtn">RPT</button>
+      <button class="tab-btn" onclick="switchTab('results',this)" id="resultsTabBtn">Results</button>
     </div>
   </div>
 
@@ -2777,7 +2777,7 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
       <button class="download-btn" onclick="downloadRPT()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download .rpt</button>
       <button class="download-btn" onclick="copyRPT()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--accent-cyan);color:var(--accent-cyan);">📋 Copy</button>
     </div>
-    <div class="inp-preview" id="rptPreview" style="user-select:text;-webkit-user-select:text;max-height:60vh;overflow-y:auto;">
+    <div class="inp-preview" id="rptPreview" style="user-select:text;-webkit-user-select:text;max-height:calc(100vh - 200px);overflow:auto;font-size:12px;min-width:700px;">
       <span class="comment">; Run solver to generate report</span>
     </div>
   </div>
@@ -7866,169 +7866,220 @@ function generateRPT() {
   const nd = networkData, sr = solverResults;
   const isEpanet = sr.type === 'epanet';
   const L = [], a = s => L.push(s), nl = () => L.push('');
-  const divider = '  ' + '─'.repeat(72);
+  const W = 80;
+  const divider = '  ' + '-'.repeat(W);
+  const hdivider = '  ' + '='.repeat(W);
   const now = new Date().toLocaleString();
   const engine = isEpanet ? 'EPANET 2.3' : 'SWMM 5.2.4';
+  const flowU = currentUnits === 'SI' ? (isEpanet ? 'LPS' : 'CMS') : (isEpanet ? 'GPM' : 'CFS');
+  const pU = currentUnits === 'SI' ? 'm' : 'psi';
+  const hU = currentUnits === 'SI' ? 'm' : 'ft';
+  const qU = 'mg/L';
 
-  a(`  ******************************************************************`);
-  a(`  *                     ${engine.padEnd(20)}                       *`);
-  a(`  *                   Hydraulic Analysis Report                    *`);
-  a(`  ******************************************************************`);
+  const pad = (v, w) => String(v).padStart(w);
+  const padr = (v, w) => String(v).padEnd(w);
+  const fmtTime = hrs => {
+    const h = Math.floor(hrs), m = Math.round((hrs - h) * 60);
+    return `${h}:${String(m).padStart(2,'0')}:00`;
+  };
+
+  a(`  **********************************************************************`);
+  a(`  *                          ${engine}                                *`);
+  a(`  *                    Hydraulic Analysis Report                       *`);
+  a(`  **********************************************************************`);
   nl();
   a(`  Analysis Run at ${now}`);
   a(`  Input File:  Generated Model (${nd.cfg.gridRows}x${nd.cfg.gridCols} grid)`);
   nl();
-  a(divider);
+  a(hdivider);
   a(`  Network Summary`);
-  a(divider);
+  a(hdivider);
 
   const junctions = nd.nodes.filter(n => n.type === 'junction');
   if (isEpanet) {
-    a(`    Junctions:          ${junctions.length}`);
-    a(`    Reservoirs:         ${nd.reservoirs.length}`);
-    a(`    Tanks:              ${(nd.tanks||[]).length}`);
-    a(`    Pipes:              ${nd.pipes.length}`);
-    a(`    Pumps:              ${nd.pumps.length}`);
-    a(`    Valves:             ${(nd.valves||[]).length}`);
-    a(`    Simulation Duration: ${nd.cfg.simDuration||72} hours`);
-    a(`    Hydraulic Timestep:  ${nd.cfg.hydTimestep||15} min`);
-    a(`    Flow Units:          ${currentUnits==='SI'?'LPS':'GPM'}`);
+    a(`    Junctions:            ${junctions.length}`);
+    a(`    Reservoirs:           ${nd.reservoirs.length}`);
+    a(`    Tanks:                ${(nd.tanks||[]).length}`);
+    a(`    Pipes:                ${nd.pipes.length}`);
+    a(`    Pumps:                ${nd.pumps.length}`);
+    a(`    Valves:               ${(nd.valves||[]).length}`);
+    a(`    Simulation Duration:  ${nd.cfg.simDuration||72} hours`);
+    a(`    Hydraulic Timestep:   ${nd.cfg.hydTimestep||15} min`);
+    a(`    Flow Units:           ${flowU}`);
   } else {
-    a(`    Junctions:          ${junctions.length}`);
-    a(`    Outfalls:           ${nd.outfallCount||0}`);
-    a(`    Subcatchments:      ${nd.subcatchments||0}`);
-    a(`    Conduits:           ${nd.conduitCount||0}`);
-    a(`    Pumps:              ${nd.pumpCount||0}`);
-    a(`    Routing:            Dynamic Wave`);
-    a(`    Flow Units:          ${currentUnits==='SI'?'CMS':'CFS'}`);
+    a(`    Junctions:            ${junctions.length}`);
+    a(`    Outfalls:             ${nd.outfallCount||0}`);
+    a(`    Subcatchments:        ${nd.subcatchments||0}`);
+    a(`    Conduits:             ${nd.conduitCount||0}`);
+    a(`    Pumps:                ${nd.pumpCount||0}`);
+    a(`    Routing:              Dynamic Wave`);
+    a(`    Flow Units:           ${flowU}`);
   }
   nl();
 
-  // Time-step summary
-  a(divider);
-  a(`  Timestep Results Summary (${sr.timesteps.length} reporting periods)`);
-  a(divider);
-  nl();
+  // Per-timestep Node Results (EPANET-UI style)
+  const maxNodesPerTS = 200;
+  const reportTimesteps = [];
+  if (sr.timesteps.length <= 12) {
+    for (let t = 0; t < sr.timesteps.length; t++) reportTimesteps.push(t);
+  } else {
+    const step = Math.max(1, Math.floor(sr.timesteps.length / 8));
+    for (let t = 0; t < sr.timesteps.length; t += step) reportTimesteps.push(t);
+    const last = sr.timesteps.length - 1;
+    if (reportTimesteps[reportTimesteps.length - 1] !== last) reportTimesteps.push(last);
+  }
 
-  // Node results table
   if (isEpanet) {
-    a(`  ──────────────────────────────────────────────────────────────────────`);
-    a(`  Node Results at Peak Demand (maximum demand timestep)`);
-    a(`  ──────────────────────────────────────────────────────────────────────`);
-    a(`  ${'Node'.padEnd(14)} ${'Demand'.padStart(10)} ${'Head'.padStart(10)} ${'Pressure'.padStart(10)} ${'Quality'.padStart(10)}`);
-    a(`  ${''.padEnd(14)} ${'GPM'.padStart(10)} ${'ft'.padStart(10)} ${'psi'.padStart(10)} ${'mg/L'.padStart(10)}`);
-    a(`  ──────────────────────────────────────────────────────────────────────`);
+    for (const t of reportTimesteps) {
+      const timeStr = fmtTime(sr.timesteps[t]);
+      nl();
+      a(divider);
+      a(`  Node Results at ${timeStr} hrs:`);
+      a(divider);
+      a(`  ${padr('', 16)} ${pad('Demand', 12)} ${pad('Head', 12)} ${pad('Pressure', 12)} ${pad('Chlorine', 12)}`);
+      a(`  ${padr('Node', 16)} ${pad(flowU, 12)} ${pad(hU, 12)} ${pad(pU, 12)} ${pad(qU, 12)}`);
+      a(divider);
 
-    // Find peak demand timestep
+      const showN = junctions.slice(0, maxNodesPerTS);
+      showN.forEach(n => {
+        const r = (sr.nodeResults[n.id]||[])[t];
+        if (!r) return;
+        a(`  ${padr(n.id, 16)} ${pad(r.demand.toFixed(2), 12)} ${pad(r.head.toFixed(2), 12)} ${pad(r.pressure.toFixed(2), 12)} ${pad('0.00', 12)}`);
+      });
+      if (junctions.length > maxNodesPerTS) a(`  ... (${junctions.length - maxNodesPerTS} more nodes)`);
+    }
+    nl();
+
+    // Pressure Statistics
     let peakTS = 0, peakDemand = 0;
     for (let t = 0; t < sr.timesteps.length; t++) {
       let totalD = 0;
       junctions.forEach(n => { const r = (sr.nodeResults[n.id]||[])[t]; if(r) totalD += r.demand; });
       if (totalD > peakDemand) { peakDemand = totalD; peakTS = t; }
     }
-
-    // Show first 50 nodes + stats
-    const showNodes = junctions.slice(0, 50);
     let minP = Infinity, maxP = -Infinity, sumP = 0, countP = 0;
-    let negPressure = 0;
-
     junctions.forEach(n => {
       const r = (sr.nodeResults[n.id]||[])[peakTS];
       if (!r) return;
       if (r.pressure < minP) minP = r.pressure;
       if (r.pressure > maxP) maxP = r.pressure;
-      sumP += r.pressure;
-      countP++;
-      if (r.pressure < 0) negPressure++;
+      sumP += r.pressure; countP++;
     });
 
-    showNodes.forEach(n => {
-      const r = (sr.nodeResults[n.id]||[])[peakTS];
-      if (!r) return;
-      a(`  ${n.id.padEnd(14)} ${r.demand.toFixed(2).padStart(10)} ${r.head.toFixed(2).padStart(10)} ${r.pressure.toFixed(2).padStart(10)} ${'0.00'.padStart(10)}`);
-    });
-    if (junctions.length > 50) a(`  ... (${junctions.length - 50} more nodes)`);
     nl();
-
-    a(`  ──────────────────────────────────────────────────────────────────────`);
+    a(hdivider);
     a(`  Pressure Statistics at Peak Demand (T=${sr.timesteps[peakTS].toFixed(1)} hr)`);
-    a(`  ──────────────────────────────────────────────────────────────────────`);
-    a(`    Minimum Pressure:    ${minP.toFixed(2)} psi`);
-    a(`    Maximum Pressure:    ${maxP.toFixed(2)} psi`);
-    a(`    Average Pressure:    ${(sumP/countP).toFixed(2)} psi`);
-    a(`    Nodes < 20 psi:      ${negPressure < 0 ? negPressure : junctions.filter(n=>{const r=(sr.nodeResults[n.id]||[])[peakTS];return r&&r.pressure<20;}).length}`);
-    a(`    Total Demand:        ${peakDemand.toFixed(1)} GPM`);
+    a(hdivider);
+    a(`    Minimum Pressure:      ${minP.toFixed(2)} ${pU}`);
+    a(`    Maximum Pressure:      ${maxP.toFixed(2)} ${pU}`);
+    a(`    Average Pressure:      ${countP > 0 ? (sumP/countP).toFixed(2) : '0.00'} ${pU}`);
+    a(`    Nodes < 20 ${pU}:        ${junctions.filter(n=>{const r=(sr.nodeResults[n.id]||[])[peakTS];return r&&r.pressure<20;}).length}`);
+    a(`    Total Demand:          ${peakDemand.toFixed(1)} ${flowU}`);
 
   } else {
-    // SWMM output
-    a(`  ──────────────────────────────────────────────────────────────────────`);
-    a(`  Node Results at Peak Storm Response`);
-    a(`  ──────────────────────────────────────────────────────────────────────`);
-    a(`  ${'Node'.padEnd(14)} ${'MaxDepth'.padStart(10)} ${'MaxHGL'.padStart(10)} ${'MaxInflow'.padStart(10)} ${'Flooding'.padStart(10)}`);
-    a(`  ${''.padEnd(14)} ${'ft'.padStart(10)} ${'ft'.padStart(10)} ${'CFS'.padStart(10)} ${'hrs'.padStart(10)}`);
-    a(`  ──────────────────────────────────────────────────────────────────────`);
+    for (const t of reportTimesteps) {
+      const timeStr = fmtTime(sr.timesteps[t]);
+      nl();
+      a(divider);
+      a(`  Node Results at ${timeStr} hrs:`);
+      a(divider);
+      a(`  ${padr('', 16)} ${pad('Depth', 12)} ${pad('Head', 12)} ${pad('Inflow', 12)} ${pad('Flooding', 12)}`);
+      a(`  ${padr('Node', 16)} ${pad(hU, 12)} ${pad(hU, 12)} ${pad(flowU, 12)} ${pad('hrs', 12)}`);
+      a(divider);
 
-    let maxFloodNodes = 0, totalFloodVol = 0;
-    const showNodes = junctions.slice(0, 50);
-    showNodes.forEach(n => {
-      const results = sr.nodeResults[n.id] || [];
-      let maxD = 0, maxH = 0, maxIn = 0, floodHrs = 0;
-      results.forEach(r => {
-        if (r.depth > maxD) maxD = r.depth;
-        if (r.head > maxH) maxH = r.head;
-        if (r.inflow > maxIn) maxIn = r.inflow;
-        if (r.depth > (n.maxDepth||6) * 0.95) floodHrs += 0.5;
+      const showN = junctions.slice(0, maxNodesPerTS);
+      showN.forEach(n => {
+        const r = (sr.nodeResults[n.id]||[])[t];
+        if (!r) return;
+        const floodHrs = r.depth > (n.maxDepth||6) * 0.95 ? 0.5 : 0;
+        a(`  ${padr(n.id, 16)} ${pad(r.depth.toFixed(2), 12)} ${pad(r.head.toFixed(2), 12)} ${pad((r.inflow||0).toFixed(3), 12)} ${pad(floodHrs.toFixed(1), 12)}`);
       });
-      if (floodHrs > 0) maxFloodNodes++;
-      a(`  ${n.id.padEnd(14)} ${maxD.toFixed(2).padStart(10)} ${maxH.toFixed(2).padStart(10)} ${maxIn.toFixed(3).padStart(10)} ${floodHrs.toFixed(1).padStart(10)}`);
-    });
-    if (junctions.length > 50) a(`  ... (${junctions.length - 50} more nodes)`);
+      if (junctions.length > maxNodesPerTS) a(`  ... (${junctions.length - maxNodesPerTS} more nodes)`);
+    }
     nl();
 
-    a(`  ──────────────────────────────────────────────────────────────────────`);
+    let maxFloodNodes = 0;
+    junctions.forEach(n => {
+      const results = sr.nodeResults[n.id] || [];
+      let floodHrs = 0;
+      results.forEach(r => { if (r.depth > (n.maxDepth||6) * 0.95) floodHrs += 0.5; });
+      if (floodHrs > 0) maxFloodNodes++;
+    });
+    a(hdivider);
     a(`  Flooding Summary`);
-    a(`  ──────────────────────────────────────────────────────────────────────`);
+    a(hdivider);
     a(`    Nodes with surcharging:  ${maxFloodNodes}`);
   }
   nl();
 
-  // Link results
-  a(divider);
-  a(`  Link Results Summary`);
-  a(divider);
-  a(`  ${'Link'.padEnd(14)} ${'MaxFlow'.padStart(10)} ${'MaxVeloc'.padStart(10)} ${'Status'.padStart(10)}`);
-  a(`  ${''.padEnd(14)} ${(isEpanet?'GPM':'CFS').padStart(10)} ${'ft/s'.padStart(10)} ${''.padStart(10)}`);
-  a(`  ──────────────────────────────────────────────────────────────────────`);
+  // Per-timestep Link Results
+  if (isEpanet) {
+    for (const t of reportTimesteps) {
+      const timeStr = fmtTime(sr.timesteps[t]);
+      nl();
+      a(divider);
+      a(`  Link Results at ${timeStr} hrs:`);
+      a(divider);
+      a(`  ${padr('', 16)} ${pad('Flow', 12)} ${pad('Velocity', 12)} ${pad('Headloss', 12)} ${pad('Status', 12)}`);
+      a(`  ${padr('Link', 16)} ${pad(flowU, 12)} ${pad('ft/s', 12)} ${pad('ft/Kft', 12)} ${pad('', 12)}`);
+      a(divider);
 
-  const showLinks = nd.pipes.slice(0, 50);
-  let maxV = 0, sumV = 0, countV = 0;
-  showLinks.forEach(p => {
-    const results = sr.linkResults[p.id] || [];
-    let maxF = 0, maxVel = 0;
-    results.forEach(r => { if(r.flow > maxF) maxF = r.flow; if(r.velocity > maxVel) maxVel = r.velocity; });
-    if (maxVel > maxV) maxV = maxVel;
-    sumV += maxVel; countV++;
-    a(`  ${p.id.padEnd(14)} ${maxF.toFixed(2).padStart(10)} ${maxVel.toFixed(2).padStart(10)} ${'Open'.padStart(10)}`);
-  });
-  if (nd.pipes.length > 50) a(`  ... (${nd.pipes.length - 50} more links)`);
+      const showL = nd.pipes.slice(0, maxNodesPerTS);
+      showL.forEach(p => {
+        const r = (sr.linkResults[p.id]||[])[t];
+        if (!r) return;
+        a(`  ${padr(p.id, 16)} ${pad(r.flow.toFixed(2), 12)} ${pad(r.velocity.toFixed(2), 12)} ${pad((r.headloss||0).toFixed(2), 12)} ${pad('Open', 12)}`);
+      });
+      if (nd.pipes.length > maxNodesPerTS) a(`  ... (${nd.pipes.length - maxNodesPerTS} more links)`);
+    }
+  } else {
+    for (const t of reportTimesteps) {
+      const timeStr = fmtTime(sr.timesteps[t]);
+      nl();
+      a(divider);
+      a(`  Link Results at ${timeStr} hrs:`);
+      a(divider);
+      a(`  ${padr('', 16)} ${pad('Flow', 12)} ${pad('Velocity', 12)} ${pad('Depth', 12)} ${pad('Status', 12)}`);
+      a(`  ${padr('Link', 16)} ${pad(flowU, 12)} ${pad('ft/s', 12)} ${pad(hU, 12)} ${pad('', 12)}`);
+      a(divider);
+
+      const showL = nd.pipes.slice(0, maxNodesPerTS);
+      showL.forEach(p => {
+        const r = (sr.linkResults[p.id]||[])[t];
+        if (!r) return;
+        a(`  ${padr(p.id, 16)} ${pad(r.flow.toFixed(2), 12)} ${pad(r.velocity.toFixed(2), 12)} ${pad((r.depth||0).toFixed(2), 12)} ${pad('Open', 12)}`);
+      });
+      if (nd.pipes.length > maxNodesPerTS) a(`  ... (${nd.pipes.length - maxNodesPerTS} more links)`);
+    }
+  }
   nl();
 
-  a(divider);
+  // System Performance
+  let maxV = 0, sumV = 0, countV = 0;
+  nd.pipes.forEach(p => {
+    const results = sr.linkResults[p.id] || [];
+    let maxVel = 0;
+    results.forEach(r => { if(r.velocity > maxVel) maxVel = r.velocity; });
+    if (maxVel > maxV) maxV = maxVel;
+    sumV += maxVel; countV++;
+  });
+  nl();
+  a(hdivider);
   a(`  System Performance Summary`);
-  a(divider);
-  a(`    Maximum Velocity:    ${maxV.toFixed(2)} ft/s`);
-  a(`    Average Max Velocity: ${countV > 0 ? (sumV/countV).toFixed(2) : '0.00'} ft/s`);
-  a(`    Timesteps Computed:  ${sr.timesteps.length}`);
-  a(`    Simulation Period:   ${sr.timesteps.length > 0 ? sr.timesteps[sr.timesteps.length-1].toFixed(1) : '0'} hours`);
+  a(hdivider);
+  a(`    Maximum Velocity:       ${maxV.toFixed(2)} ft/s`);
+  a(`    Average Max Velocity:   ${countV > 0 ? (sumV/countV).toFixed(2) : '0.00'} ft/s`);
+  a(`    Timesteps Computed:     ${sr.timesteps.length}`);
+  a(`    Simulation Period:      ${sr.timesteps.length > 0 ? sr.timesteps[sr.timesteps.length-1].toFixed(1) : '0'} hours`);
   nl();
 
   const valText = getValidationSummaryText();
   if (valText) a(valText);
 
   if (wasmRPT) {
-    a(`  ══════════════════════════════════════════════════════════════════════`);
+    a(`  ======================================================================`);
     a(`  Full Engine Report Output`);
-    a(`  ══════════════════════════════════════════════════════════════════════`);
+    a(`  ======================================================================`);
     nl();
     a(wasmRPT);
   } else {
@@ -8037,12 +8088,12 @@ function generateRPT() {
 
   generatedRPT = L.join('\n');
 
-  // Render in RPT tab
   const el = document.getElementById('rptPreview');
   if (el) {
     el.innerHTML = generatedRPT.split('\n').map(l =>
-      l.includes('═') || l.includes('─') || l.includes('***') ? `<span style="color:var(--accent-cyan)">${esc(l)}</span>` :
-      l.trim().startsWith('Node') || l.trim().startsWith('Link') || l.trim().startsWith('$') ? `<span style="color:var(--accent-amber)">${esc(l)}</span>` :
+      l.includes('====') || l.includes('----') || l.includes('***') ? `<span style="color:var(--accent-cyan)">${esc(l)}</span>` :
+      /^\s+(Node|Link)\s/.test(l) ? `<span style="color:var(--accent-amber)">${esc(l)}</span>` :
+      /^\s+(Minimum|Maximum|Average|Nodes <|Total Demand)/.test(l) ? `<span style="color:#4ade80">${esc(l)}</span>` :
       esc(l)
     ).join('\n');
   }
