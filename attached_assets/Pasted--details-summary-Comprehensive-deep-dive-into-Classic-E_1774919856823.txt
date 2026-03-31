@@ -1,0 +1,1204 @@
+<details>
+<summary>Comprehensive deep dive into Classic EPANET 2.2, Python tools (WNTR/EPyT), the Network Generator, calibration practice, and solver performance testing — with code examples, workflows, and practical exercises.</summary>
+
+# The EPANET Ecosystem: Tools, Techniques & Practice
+
+## From Desktop to Python to Browser-Based Generation
+
+</details>
+
+---
+
+## Part 1: Classic EPANET 2.2 (The Foundation)
+
+### What It Is
+
+EPANET 2.2 is the official EPA desktop application for modeling water distribution systems. Released in its current form in 2020, it represents a collaboration between EPA and the Open Water Analytics (OWA) community. It is the direct descendant of Lewis Rossman's original EPANET, first created in the 1990s.
+
+```
+EPANET 2.2 IDENTITY CARD
+═════════════════════════
+Developer:       US EPA + Open Water Analytics (OWA)
+Original Author: Lewis A. Rossman, EPA ORD
+Language:        C (engine), Delphi/Pascal (GUI)
+Platform:        Windows only (XP through 11)
+License:         Public Domain (engine), Free (GUI)
+Current Version: 2.2.0 (with patches)
+Download:        epa.gov/water-research/epanet
+Source Code:     github.com/USEPA/EPANET2.2
+File Format:     .inp (input), .rpt (report), .out (binary)
+Max Model Size:  Unlimited (tested to 500,000+ nodes)
+```
+
+### What Changed from EPANET 2.0 to 2.2
+
+```
+EPANET 2.00.12 (2008)          →  EPANET 2.2.0 (2020)
+──────────────────────             ────────────────────
+Last Rossman solo release          Community collaboration
+
+HYDRAULIC ENGINE IMPROVEMENTS:
+├── Pressure-Dependent Demand (PDA) model
+│   → Demand reduces when pressure is low
+│   → Critical for modeling system failures
+│   → [OPTIONS] DEMAND MODEL PDA
+│
+├── Improved convergence algorithm
+│   → Faster solution for large networks
+│   → Better handling of low-flow conditions
+│   → Damping of flow oscillations
+│
+├── Full status reporting for valves/pumps
+│   → Know exactly WHY a PRV is active/open/closed
+│
+└── Bug fixes accumulated over 12 years (2008-2020)
+    → Over 50 documented fixes
+
+WATER QUALITY IMPROVEMENTS:
+├── Improved tank mixing models
+│   → FIFO (plug flow) model fixes
+│   → 2-compartment model improvements
+│
+├── Source mass balance tracking
+│   → Track where water quality mass goes
+│
+└── Faster quality routing algorithm
+
+API IMPROVEMENTS (Programmer's Toolkit):
+├── 50+ new API functions
+│   → Full programmatic control of simulation
+│   → Access to intermediate results during EPS
+│   → Ability to modify network during simulation
+│
+├── Thread-safe operation
+│   → Multiple models can run simultaneously
+│   → Critical for parallel optimization
+│
+└── Improved error reporting
+    → Meaningful error codes and messages
+```
+
+### Installation and First Run
+
+```
+STEP 1: DOWNLOAD
+  Go to: epa.gov/water-research/epanet
+  Download: EPANET 2.2 setup program
+  Size: ~15 MB
+  Requirements: Windows 7/8/10/11, 64-bit recommended
+
+STEP 2: INSTALL
+  Run setup executable
+  Default location: C:\Program Files (x86)\EPANET 2.2
+  Installs: Epanet2w.exe (GUI), epanet2.dll (engine),
+            example .inp files, help documentation
+
+STEP 3: FIRST RUN
+  Launch EPANET 2.2 from Start Menu
+  File → Open → Navigate to:
+    C:\Program Files (x86)\EPANET 2.2\examples\
+  Open: Net1.inp (simplest example)
+  
+  Click: Project → Run Analysis (or press F5)
+  
+  You should see:
+  ├── Green checkmarks on all nodes/links (successful)
+  ├── Status bar: "Run was successful"
+  └── Map shows network with default coloring
+
+STEP 4: VIEW RESULTS
+  Click on any node → Properties panel shows:
+    Elevation, Demand, Head, Pressure, Quality
+  
+  Click on any pipe → Properties panel shows:
+    Length, Diameter, Roughness, Flow, Velocity, Headloss
+  
+  View → Graph → Time Series:
+    Select a node → See pressure over 24 hours
+  
+  View → Graph → Profile:
+    Select path from source to dead-end
+    See HGL profile along the path
+
+STEP 5: EXPLORE EXAMPLE NETWORKS
+  Net1.inp  → Simple 9-node network (tutorial)
+  Net2.inp  → Medium network with multiple sources
+  Net3.inp  → Large network (92 nodes, complex controls)
+```
+
+### The EPANET 2.2 GUI — What It Can and Cannot Do
+
+```
+WHAT THE GUI DOES WELL:
+  ✓ Visual network editor (draw nodes, pipes, click to connect)
+  ✓ Property editor for all network elements
+  ✓ Color-coded maps (pressure, velocity, flow, WQ)
+  ✓ Time series graphs (any parameter at any element)
+  ✓ Profile plots (HGL along a path)
+  ✓ Contour plots (spatial interpolation of results)
+  ✓ Tabular reports (all nodes, all links, or filtered)
+  ✓ Energy usage report (pump costs)
+  ✓ Calibration report (model vs observed data)
+  ✓ Data export to text files
+
+WHAT THE GUI CANNOT DO (limitations):
+  ✗ No undo/redo (one wrong delete = reopen from save)
+  ✗ No satellite/basemap overlay (white canvas only)
+  ✗ No GIS import/export (no shapefiles, no GeoJSON)
+  ✗ No automated elevation assignment
+  ✗ No demand allocation tools
+  ✗ No batch scenario management
+  ✗ No optimization (manual calibration only)
+  ✗ No scripting or automation interface in GUI
+  ✗ Windows only (no Mac, no Linux, no browser)
+  ✗ No multi-user collaboration
+  ✗ Dated interface (Windows 95/98 era design)
+  ✗ No auto-save or version control
+
+THESE LIMITATIONS ARE WHY TOOLS LIKE epanet-js,
+WNTR, AND EPyT EXIST — they fill specific gaps.
+```
+
+### The EPANET Programmer's Toolkit (API)
+
+The real power of EPANET 2.2 is not the GUI but the **C API** (epanet2.h). This is the engine that all commercial products and Python wrappers use:
+
+```c
+// Example: Run a steady-state simulation in C
+
+#include "epanet2_2.h"
+
+int main() {
+    EN_Project ph;
+    
+    // Create project and open input file
+    EN_createproject(&ph);
+    EN_open(ph, "mymodel.inp", "report.rpt", "");
+    
+    // Run hydraulic simulation
+    EN_solveH(ph);
+    
+    // Get results: pressure at node index 5
+    double pressure;
+    EN_getnodevalue(ph, 5, EN_PRESSURE, &pressure);
+    printf("Pressure at node 5: %.2f psi\n", pressure);
+    
+    // Get results: flow in link index 3
+    double flow;
+    EN_getlinkvalue(ph, 3, EN_FLOW, &flow);
+    printf("Flow in link 3: %.2f GPM\n", flow);
+    
+    // Cleanup
+    EN_close(ph);
+    EN_deleteproject(ph);
+    
+    return 0;
+}
+```
+```
+KEY API FUNCTION GROUPS:
+  ┌──────────────────┬──────────────────────────────────┐
+  │ Function Group   │ Purpose                          │
+  ├──────────────────┼──────────────────────────────────┤
+  │ EN_open/close    │ Load/unload model                │
+  │ EN_solveH        │ Run complete hydraulic simulation │
+  │ EN_solveQ        │ Run complete WQ simulation        │
+  │ EN_openH/nextH   │ Step-by-step hydraulic solving   │
+  │ EN_openQ/nextQ   │ Step-by-step WQ solving          │
+  │ EN_getnodevalue  │ Read node results (P, H, D, Q)   │
+  │ EN_getlinkvalue  │ Read link results (Q, V, hL)     │
+  │ EN_setnodevalue  │ Modify node parameters mid-run   │
+  │ EN_setlinkvalue  │ Modify link parameters mid-run   │
+  │ EN_getcount      │ Number of nodes, links, patterns │
+  │ EN_getnodeid     │ Get node ID string from index    │
+  │ EN_addnode       │ Add new node to model            │
+  │ EN_addlink       │ Add new link to model            │
+  │ EN_deletenode    │ Remove node from model           │
+  │ EN_deletelink    │ Remove link from model           │
+  │ EN_report        │ Generate formatted report        │
+  └──────────────────┴──────────────────────────────────┘
+```
+
+---
+
+## Part 2: WNTR and EPyT (Python Tools)
+
+### WNTR: Water Network Tool for Resilience
+
+```
+WNTR IDENTITY CARD
+═══════════════════
+Developer:    US EPA + Sandia National Laboratories
+Lead Authors: Katherine Klise, Regan Murray, Terra Haxton
+Language:     Python
+License:      Revised BSD (fully open source)
+Install:      pip install wntr
+Repository:   github.com/USEPA/WNTR
+Documentation: usepa.github.io/WNTR/
+Requires:     Python 3.10-3.13, NumPy, SciPy, 
+              NetworkX, Pandas, Matplotlib
+```
+
+### WNTR: Getting Started
+
+```python
+# Install WNTR
+# pip install wntr
+
+import wntr
+
+# Load an EPANET model
+wn = wntr.network.WaterNetworkModel('Net3.inp')
+
+# Inspect the network
+print(f"Junctions: {wn.num_junctions}")
+print(f"Reservoirs: {wn.num_reservoirs}")
+print(f"Tanks: {wn.num_tanks}")
+print(f"Pipes: {wn.num_pipes}")
+print(f"Pumps: {wn.num_pumps}")
+print(f"Valves: {wn.num_valves}")
+
+# Run hydraulic simulation using EPANET engine
+sim = wntr.sim.EpanetSimulator(wn)
+results = sim.run_sim()
+
+# Access results
+pressure = results.node['pressure']
+flow = results.link['flowrate']
+velocity = results.link['velocity']
+
+# Get pressure at node '123' at hour 5
+p_at_5hr = pressure.loc[5*3600, '123']
+print(f"Pressure at node 123 at t=5hr: {p_at_5hr:.1f} m")
+
+# Plot pressure at all nodes at hour 5
+pressure_at_5hr = pressure.loc[5*3600, :]
+wntr.graphics.plot_network(
+    wn, 
+    node_attribute=pressure_at_5hr,
+    node_size=30,
+    title='Pressure at 5 hours'
+)
+```
+
+### WNTR: Key Capabilities Beyond Basic EPANET
+
+```python
+# ═══════════════════════════════════════════
+# CAPABILITY 1: PIPE BREAK SIMULATION
+# ═══════════════════════════════════════════
+
+# Simulate breaking pipe '123' at hour 12
+wn.get_link('123').status = wntr.network.LinkStatus.Closed
+
+# Or more realistically, add a leak
+wn = wntr.morph.split_pipe(wn, '123', 'leak_node', 'pipe_A', 'pipe_B')
+leak_node = wn.get_node('leak_node')
+leak_node.add_leak(wn, area=0.001, start_time=12*3600, end_time=24*3600)
+
+# Run with pressure-dependent demand (realistic failure behavior)
+sim = wntr.sim.WNTRSimulator(wn)  # Note: WNTRSimulator, not EpanetSimulator
+results = sim.run_sim()
+
+# ═══════════════════════════════════════════
+# CAPABILITY 2: RESILIENCE METRICS
+# ═══════════════════════════════════════════
+
+# Calculate todini resilience index
+todini = wntr.metrics.hydraulic.todini_index(
+    pressure.loc[5*3600, :],
+    wn,
+    results.link['flowrate'].loc[5*3600, :],
+    Pstar=21.1  # minimum required pressure in meters (30 psi)
+)
+print(f"Todini Resilience Index: {todini:.3f}")
+
+# Calculate population impacted by low pressure
+pop = wntr.metrics.population_impacted(
+    pressure, wn, 
+    pressure_threshold=21.1  # 30 psi minimum
+)
+print(f"Population impacted: {pop}")
+
+# ═══════════════════════════════════════════
+# CAPABILITY 3: NETWORK GRAPH ANALYSIS
+# ═══════════════════════════════════════════
+
+# Convert to NetworkX graph for topological analysis
+G = wn.to_graph()
+
+# Find shortest path between two nodes
+import networkx as nx
+path = nx.shortest_path(G, source='River', target='Lake')
+print(f"Shortest path: {path}")
+
+# Find bridges (critical pipes whose failure disconnects network)
+bridges = list(nx.bridges(G.to_undirected()))
+print(f"Critical pipes (bridges): {bridges[:5]}")
+
+# Calculate betweenness centrality (most important nodes)
+centrality = nx.betweenness_centrality(G)
+top_5 = sorted(centrality.items(), key=lambda x: x[1], reverse=True)[:5]
+print(f"Most critical nodes: {top_5}")
+
+# ═══════════════════════════════════════════
+# CAPABILITY 4: WATER QUALITY ANALYSIS
+# ═══════════════════════════════════════════
+
+# Set up water age simulation
+wn.options.quality.parameter = 'AGE'
+
+sim = wntr.sim.EpanetSimulator(wn)
+results = sim.run_sim()
+
+age = results.node['quality']  # Water age in seconds
+
+# Find nodes where water age exceeds 48 hours
+stagnant_nodes = age.columns[age.max() > 48*3600]
+print(f"Stagnant nodes (>48hr): {list(stagnant_nodes)}")
+
+# Plot water age map
+age_at_24hr = age.loc[24*3600, :] / 3600  # Convert to hours
+wntr.graphics.plot_network(
+    wn,
+    node_attribute=age_at_24hr,
+    node_size=20,
+    title='Water Age at 24 hours (hours)',
+    node_colorbar_label='Age (hr)'
+)
+
+# ═══════════════════════════════════════════
+# CAPABILITY 5: FRAGILITY AND EARTHQUAKE
+# ═══════════════════════════════════════════
+
+# Define earthquake scenario
+epicenter = (32.3, -110.9)  # Latitude, longitude
+magnitude = 6.5
+depth = 10  # km
+
+# Calculate peak ground acceleration at each pipe
+from scipy.spatial.distance import cdist
+# (Simplified — WNTR has full fragility curve support)
+
+# Apply damage to pipes based on PGA
+fc = wntr.scenario.FragilityCurve()
+fc.add_state('leak', 1, {'Default': 
+    wntr.scenario.Lognormal(0.3, 0.4)})
+fc.add_state('break', 2, {'Default': 
+    wntr.scenario.Lognormal(0.5, 0.4)})
+```
+
+### EPyT: EPANET-Python Toolkit
+
+```
+EPyT IDENTITY CARD
+═══════════════════
+Developer:    KIOS CoE, University of Cyprus
+Lead Authors: Marios Kyriakou, Demetrios Eliades
+Language:     Python (wrapping EPANET C library via ctypes)
+License:      EUPL 1.2
+Install:      pip install epyt
+Repository:   github.com/OpenWaterAnalytics/EPyT
+Documentation: epanet-python-toolkit-epyt.readthedocs.io
+```
+```python
+# Install EPyT
+# pip install epyt
+
+from epyt import epanet
+
+# Load model
+d = epanet('Net1.inp')
+
+# Network information
+print(d.getNodeCount())
+print(d.getLinkCount())
+print(d.getNodeElevations())
+print(d.getNodeBaseDemands())
+
+# Run simulation
+d.solveCompleteHydraulics()
+
+# Get ALL pressures at ALL timesteps
+pressures = d.getComputedHydraulicTimeSeries().Pressure
+flows = d.getComputedHydraulicTimeSeries().Flow
+velocities = d.getComputedHydraulicTimeSeries().Velocity
+
+# Modify network on the fly
+d.setNodeBaseDemands(1, 100)          # Set node 1 demand to 100 GPM
+d.setLinkDiameter(5, 12)             # Set link 5 diameter to 12 inches
+d.setLinkRoughnessCoeff(5, 110)      # Set C-factor to 110
+d.setNodeElevation(3, 750)           # Set node 3 elevation
+
+# Run again with modifications
+d.solveCompleteHydraulics()
+new_pressures = d.getComputedHydraulicTimeSeries().Pressure
+
+# Compare before and after
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots()
+ax.plot(pressures[:, 0], label='Before')
+ax.plot(new_pressures[:, 0], label='After')
+ax.set_xlabel('Timestep')
+ax.set_ylabel('Pressure (psi)')
+ax.legend()
+plt.show()
+
+# Save modified model
+d.saveInputFile('Net1_modified.inp')
+
+# Cleanup
+d.unload()
+```
+
+### WNTR vs EPyT: When to Use Which
+
+```
+┌───────────────────┬──────────────────────┬──────────────────────┐
+│ Criterion         │ WNTR                 │ EPyT                 │
+├───────────────────┼──────────────────────┼──────────────────────┤
+│ Primary use       │ Resilience analysis, │ Direct EPANET API    │
+│                   │ disaster scenarios   │ access, education    │
+├───────────────────┼──────────────────────┼──────────────────────┤
+│ Simulator         │ EPANET 2.2 OR        │ EPANET 2.2 only     │
+│                   │ custom WNTR solver   │ (via ctypes/DLL)     │
+├───────────────────┼──────────────────────┼──────────────────────┤
+│ Pressure-dep      │ Yes (WNTR solver)    │ Yes (EPANET 2.2 PDA)│
+│ demand            │                      │                      │
+├───────────────────┼──────────────────────┼──────────────────────┤
+│ Network mods      │ Add/remove pipes,    │ Change properties    │
+│ during sim        │ add leaks, break     │ (demands, roughness, │
+│                   │ pipes programmatically│ diameters)           │
+├───────────────────┼──────────────────────┼──────────────────────┤
+│ Graph analysis    │ Full NetworkX        │ Basic connectivity   │
+│                   │ integration          │                      │
+├───────────────────┼──────────────────────┼──────────────────────┤
+│ Visualization     │ Built-in network     │ Basic matplotlib     │
+│                   │ plotting with        │                      │
+│                   │ attribute coloring   │                      │
+├───────────────────┼──────────────────────┼──────────────────────┤
+│ Learning curve    │ Moderate (new        │ Low (mirrors EPANET  │
+│                   │ object model)        │ API directly)        │
+├───────────────────┼──────────────────────┼──────────────────────┤
+│ Best for          │ Research, resilience │ Teaching, batch runs │
+│                   │ studies, optimization│ simple automation    │
+└───────────────────┴──────────────────────┴──────────────────────┘
+```
+
+---
+
+## Part 3: The EPANET/SWMM Network Generator
+
+### What It Is
+
+The [EPANET/SWMM Network Generator](https://epanet-swmm-5-generate.replit.app/) is a browser-based tool that procedurally generates hydraulically valid water distribution and stormwater models of any size — from 50-node teaching examples to 100,000-node city-scale networks.
+
+```
+GENERATOR IDENTITY CARD
+═══════════════════════
+Platform:      Browser (single HTML file, ~160 KB)
+Dependencies:  None (fully self-contained)
+Engine:        JavaScript with seeded PRNG (Mulberry32)
+Output:        .inp files (EPANET 2.2+ or SWMM 5.2+)
+Model Range:   50 to 100,000 nodes
+Features:      Procedural city map, terrain, demand zones,
+               pump sizing, PRV placement, pipe aging,
+               calibration features, water quality
+Author:        Robert Dickinson
+License:       Free for education and testing
+```
+
+### What Makes Generated Models "Hydraulically Valid"
+
+```
+The generator doesn't just scatter random nodes and pipes.
+It applies real engineering logic:
+
+1. CONNECTIVITY GUARANTEE
+   → BFS (breadth-first search) from all reservoirs
+   → Every junction confirmed reachable
+   → Isolated nodes: 0 (displayed in Stats tab)
+
+2. PUMP SIZING VIA CRITICAL PATH ANALYSIS
+   → BFS traces from each reservoir through the network
+   → Uses Hazen-Williams friction to find farthest node
+   → Pump head = elevation deficit + friction loss + safety margin
+   → Three-point curve brackets the operating point
+   → Prevents "pump exceeds max flow" warnings
+
+3. PRESSURE ZONE DETECTION
+   → If terrain elevation range > 80 ft:
+     System auto-divides into zones (~70 ft each)
+   → PRVs placed at zone boundary pipes
+   → Settings computed: downstream elevation + 50 psi target
+
+4. SUPPLY-DEMAND BALANCE
+   → Total supply capacity computed from reservoir heads + pumps
+   → Total demand computed from all junction base demands × peak factor
+   → Supply/Demand ratio displayed (green = adequate, red = deficit)
+   → If S/D < 1.0, model is intentionally undersized for
+     calibration practice (learn to diagnose supply problems)
+
+5. REALISTIC SPATIAL PATTERNS
+   → Demands not random: Industrial clustered NW, Commercial center
+   → C-factors correlated with position: old downtown = low C
+   → Pipe diameters grade from transmission to distribution
+   → Pipe ages correlated with distance from center (1950s→2020s)
+```
+
+### Using the Generator Effectively
+
+```
+FOR EDUCATION:
+  Preset: "Small" (150 nodes)
+  → Quick to generate, easy to visualize
+  → Good for learning EPANET GUI navigation
+  → Import into Classic EPANET, epanet-js, or WNTR
+
+FOR CALIBRATION PRACTICE:
+  Preset: "Medium" (750 nodes) or "Large" (2,500 nodes)
+  → Enable Emitter Nodes (simulated leaks/hydrants)
+  → Enable Chlorine Water Quality
+  → Enable Secondary Demands (unaccounted-for water)
+  → Generate, then deliberately CORRUPT the model:
+    - Change some C-factors to wrong values
+    - Shift some demands to wrong nodes
+    - Close a pipe that should be open
+  → Practice calibrating back to the "truth"
+
+FOR SOLVER TESTING:
+  Preset: "Giant" (50K) or "City" (100K)
+  → Stress test EPANET/WNTR solver performance
+  → Compare convergence across head loss formulas
+  → Benchmark execution time vs model size
+
+FOR SWMM MODELS:
+  Switch to SWMM 5.2.4 mode
+  → Generates subcatchments, conduits, outfalls
+  → Design storms (SCS Type II, Chicago, Uniform)
+  → LID controls, RDII, DWF, water quality
+  → Import into EPA SWMM, PySWMM, or ICM
+```
+
+### Step-by-Step: Generate and Import a Model
+
+```
+STEP 1: Open the generator
+  → Navigate to: epanet-swmm-5-generate.replit.app
+
+STEP 2: Configure settings
+  → Select mode: EPANET 2.3 (water distribution)
+  → Select units: US Customary
+  → Select preset: Medium (750 nodes)
+  → Adjust terrain: Rolling Hills
+  → Enable calibration features:
+    ✓ Emitter Nodes
+    ✓ Chlorine Water Quality
+    ✓ Secondary Demands
+    ✓ Node/Pipe Tags
+
+STEP 3: Generate
+  → Click "GENERATE NETWORK + MAP"
+  → Wait 2-5 seconds
+  → Review Stats tab:
+    Junctions: ~750
+    Pipes: ~1,400
+    Connectivity: 99-100%
+    Supply/Demand Ratio: check for green
+
+STEP 4: Export
+  → Click "Download .inp"
+  → File saves as model.inp
+
+STEP 5: Import into your tool
+  → Classic EPANET: File → Open → select .inp
+  → epanet-js: Open browser → Import .inp
+  → WNTR: wn = wntr.network.WaterNetworkModel('model.inp')
+  → EPyT: d = epanet('model.inp')
+```
+
+---
+
+## Part 4: Practicing Calibration Techniques
+
+### Exercise 1: Manual Roughness Calibration (Beginner)
+
+```
+SETUP:
+  1. Generate a "Medium" model (750 nodes) with the generator
+  2. Save as "truth_model.inp"
+  3. Run in EPANET/WNTR, record pressures at 20 random nodes
+     → These are your "field measurements"
+  4. Copy file to "calibration_model.inp"
+  5. In calibration_model.inp, change ALL C-factors to 120
+     (destroy the spatial variation)
+  
+TASK:
+  Adjust C-factors in calibration_model.inp until pressures
+  match your "field measurements" within ±3 psi.
+
+RULES:
+  → You may NOT look at truth_model.inp during calibration
+  → You may only adjust pipe roughness (not demands)
+  → Document every change you make and why
+
+PYTHON AUTOMATION:
+```
+```python
+import wntr
+import numpy as np
+
+# Load the "truth" model
+wn_truth = wntr.network.WaterNetworkModel('truth_model.inp')
+sim_truth = wntr.sim.EpanetSimulator(wn_truth)
+results_truth = sim_truth.run_sim()
+
+# Select 20 random "monitoring" nodes
+np.random.seed(42)
+all_junctions = list(wn_truth.junction_name_list)
+monitor_nodes = list(np.random.choice(all_junctions, 20, replace=False))
+
+# Record "field measurements" at hour 12 (peak demand)
+truth_pressures = {}
+for node_id in monitor_nodes:
+    p = results_truth.node['pressure'].loc[12*3600, node_id]
+    truth_pressures[node_id] = p
+
+print("=== SIMULATED FIELD MEASUREMENTS (hour 12) ===")
+for node_id, p in truth_pressures.items():
+    print(f"  Node {node_id}: {p:.1f} m ({p*1.422:.1f} psi)")
+
+# Load the "corrupted" calibration model
+wn_cal = wntr.network.WaterNetworkModel('calibration_model.inp')
+
+# Set all pipes to C=120 (destroy spatial variation)
+for pipe_name, pipe in wn_cal.pipes():
+    pipe.roughness = 120
+
+# Run calibration model
+sim_cal = wntr.sim.EpanetSimulator(wn_cal)
+results_cal = sim_cal.run_sim()
+
+# Compare
+print("\n=== CALIBRATION COMPARISON (before adjustment) ===")
+print(f"{'Node':<10} {'Truth (m)':<12} {'Model (m)':<12} {'Error (m)':<10}")
+print("-" * 45)
+total_error = 0
+for node_id in monitor_nodes:
+    p_truth = truth_pressures[node_id]
+    p_model = results_cal.node['pressure'].loc[12*3600, node_id]
+    error = p_model - p_truth
+    total_error += error**2
+    print(f"{node_id:<10} {p_truth:<12.1f} {p_model:<12.1f} {error:<10.1f}")
+
+rmse = np.sqrt(total_error / len(monitor_nodes))
+print(f"\nRMSE: {rmse:.2f} m ({rmse*1.422:.2f} psi)")
+print(f"Target: < 2.1 m (< 3.0 psi)")
+```
+
+### Exercise 2: Automated Calibration with Optimization (Intermediate)
+
+```python
+import wntr
+import numpy as np
+from scipy.optimize import differential_evolution
+
+# Load truth model and get "field data"
+wn_truth = wntr.network.WaterNetworkModel('truth_model.inp')
+sim = wntr.sim.EpanetSimulator(wn_truth)
+results_truth = sim.run_sim()
+
+# Monitor nodes and truth pressures
+monitor_nodes = ['J1', 'J50', 'J100', 'J200', 'J350', 
+                 'J500', 'J650', 'J750']
+truth_p = {n: results_truth.node['pressure'].loc[12*3600, n] 
+           for n in monitor_nodes}
+
+# Define pipe groups for calibration (by diameter)
+# Group 1: Large pipes (>12")  Group 2: Medium (8-12")  
+# Group 3: Small (<8")
+def get_pipe_groups(wn):
+    groups = {'large': [], 'medium': [], 'small': []}
+    for name, pipe in wn.pipes():
+        d = pipe.diameter * 1000  # Convert to mm
+        if d > 300:
+            groups['large'].append(name)
+        elif d > 200:
+            groups['medium'].append(name)
+        else:
+            groups['small'].append(name)
+    return groups
+
+# Objective function: RMSE between model and "field" pressures
+def objective(params):
+    c_large, c_medium, c_small = params
+    
+    wn = wntr.network.WaterNetworkModel('truth_model.inp')
+    groups = get_pipe_groups(wn)
+    
+    # Apply grouped C-factors
+    for name in groups['large']:
+        wn.get_link(name).roughness = c_large
+    for name in groups['medium']:
+        wn.get_link(name).roughness = c_medium
+    for name in groups['small']:
+        wn.get_link(name).roughness = c_small
+    
+    try:
+        sim = wntr.sim.EpanetSimulator(wn)
+        results = sim.run_sim()
+        
+        errors = []
+        for node_id in monitor_nodes:
+            p_model = results.node['pressure'].loc[12*3600, node_id]
+            p_truth = truth_p[node_id]
+            errors.append((p_model - p_truth)**2)
+        
+        return np.sqrt(np.mean(errors))
+    except:
+        return 1000  # Penalty for failed simulation
+
+# Run differential evolution optimizer
+bounds = [(60, 150), (60, 150), (60, 150)]  # C-factor range
+result = differential_evolution(
+    objective, 
+    bounds, 
+    maxiter=50, 
+    seed=42,
+    tol=0.01,
+    disp=True
+)
+
+print(f"\nOptimal C-factors:")
+print(f"  Large pipes:  {result.x[0]:.0f}")
+print(f"  Medium pipes: {result.x[1]:.0f}")
+print(f"  Small pipes:  {result.x[2]:.0f}")
+print(f"  Final RMSE:   {result.fun:.2f} m ({result.fun*1.422:.2f} psi)")
+```
+
+### Exercise 3: Demand Calibration with Pattern Adjustment (Advanced)
+
+```python
+import wntr
+import numpy as np
+
+# This exercise adjusts demand PATTERNS to match
+# observed SCADA flow data over 24 hours
+
+# Load model
+wn = wntr.network.WaterNetworkModel('medium_model.inp')
+
+# "Observed" total system flow (from production SCADA)
+# 24 hourly values in GPM
+observed_flow = np.array([
+    2100, 1800, 1600, 1500, 1600, 2200,  # Hours 1-6
+    3500, 4200, 4000, 3600, 3200, 2900,  # Hours 7-12
+    2800, 2900, 3100, 3400, 4100, 4800,  # Hours 13-18
+    4500, 3800, 3200, 2600, 2300, 2100   # Hours 19-24
+])
+
+# Current model pattern multipliers
+current_pattern = np.array([
+    0.5, 0.4, 0.4, 0.3, 0.4, 0.6,
+    1.0, 1.3, 1.2, 1.0, 0.9, 0.8,
+    0.8, 0.8, 0.9, 1.0, 1.2, 1.4,
+    1.3, 1.1, 0.9, 0.7, 0.6, 0.5
+])
+
+# Calibrate: Scale pattern to match observed flows
+total_base_demand = sum(j.base_demand for _, j in wn.junctions())
+target_multipliers = observed_flow / (total_base_demand * 15850.3)
+# 15850.3 converts m³/s to GPM for comparison
+
+# Apply calibrated pattern
+pat = wn.get_pattern('PAT_RES')
+for i, mult in enumerate(target_multipliers):
+    pat.multipliers[i] = mult
+
+# Run calibrated model
+sim = wntr.sim.EpanetSimulator(wn)
+results = sim.run_sim()
+
+# Verify: Compare total system flow
+model_flow = []
+for t in range(0, 24*3600, 3600):
+    total_q = sum(results.node['demand'].loc[t, :])
+    model_flow.append(total_q * 15850.3)  # Convert to GPM
+
+# Plot comparison
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(figsize=(12, 6))
+hours = range(1, 25)
+ax.plot(hours, observed_flow, 'ro-', label='Observed (SCADA)', linewidth=2)
+ax.plot(hours, model_flow, 'bs--', label='Model (calibrated)', linewidth=2)
+ax.set_xlabel('Hour of Day')
+ax.set_ylabel('Total System Flow (GPM)')
+ax.set_title('Demand Calibration: Model vs SCADA')
+ax.legend()
+ax.grid(True)
+plt.tight_layout()
+plt.savefig('demand_calibration.png', dpi=150)
+plt.show()
+```
+
+---
+
+## Part 5: Testing Solver Performance
+
+### Benchmark 1: Execution Time vs Model Size
+
+```python
+import wntr
+import time
+import numpy as np
+
+# Generate models of increasing size using the Network Generator
+# Or create synthetic models programmatically:
+
+def create_grid_model(n_rows, n_cols, spacing=500):
+    """Create a simple grid network for benchmarking."""
+    wn = wntr.network.WaterNetworkModel()
+    
+    # Add reservoir
+    wn.add_reservoir('R1', base_head=300, 
+                     coordinates=(0, n_rows * spacing / 2))
+    
+    # Add junctions in grid
+    node_id = 1
+    for r in range(n_rows):
+        for c in range(n_cols):
+            name = f'J{node_id}'
+            elev = 100 + np.random.uniform(-10, 10)
+            wn.add_junction(name, base_demand=0.001,
+                          elevation=elev,
+                          coordinates=(c * spacing, r * spacing))
+            node_id += 1
+    
+    # Connect reservoir to first node
+    wn.add_pipe('P0', 'R1', 'J1', length=spacing, 
+                diameter=0.6, roughness=120)
+    
+    # Add horizontal pipes
+    pipe_id = 1
+    for r in range(n_rows):
+        for c in range(n_cols - 1):
+            n1 = f'J{r * n_cols + c + 1}'
+            n2 = f'J{r * n_cols + c + 2}'
+            wn.add_pipe(f'P{pipe_id}', n1, n2,
+                       length=spacing, diameter=0.3, roughness=110)
+            pipe_id += 1
+    
+    # Add vertical pipes
+    for r in range(n_rows - 1):
+        for c in range(n_cols):
+            n1 = f'J{r * n_cols + c + 1}'
+            n2 = f'J{(r+1) * n_cols + c + 1}'
+            wn.add_pipe(f'P{pipe_id}', n1, n2,
+                       length=spacing, diameter=0.3, roughness=110)
+            pipe_id += 1
+    
+    # Set simulation options
+    wn.options.time.duration = 0  # Steady-state
+    wn.options.hydraulic.headloss = 'H-W'
+    
+    return wn
+
+# Benchmark different model sizes
+sizes = [
+    (5, 10),     # 50 nodes
+    (10, 15),    # 150 nodes
+    (25, 30),    # 750 nodes
+    (50, 50),    # 2,500 nodes
+    (70, 72),    # ~5,000 nodes
+    (100, 100),  # 10,000 nodes
+    (225, 225),  # ~50,000 nodes
+]
+
+print(f"{'Nodes':<10} {'Links':<10} {'Time (s)':<12} {'Rate (nodes/s)':<15}")
+print("=" * 50)
+
+for rows, cols in sizes:
+    wn = create_grid_model(rows, cols)
+    n_nodes = wn.num_junctions + wn.num_reservoirs
+    n_links = wn.num_pipes
+    
+    # Time the simulation
+    start = time.time()
+    sim = wntr.sim.EpanetSimulator(wn)
+    results = sim.run_sim()
+    elapsed = time.time() - start
+    
+    rate = n_nodes / elapsed if elapsed > 0 else float('inf')
+    print(f"{n_nodes:<10} {n_links:<10} {elapsed:<12.3f} {rate:<15.0f}")
+
+# Expected output (approximate, depends on hardware):
+# Nodes     Links     Time (s)    Rate (nodes/s)
+# ==================================================
+# 51        85        0.015       3,400
+# 151       275       0.018       8,389
+# 751       1,425     0.025       30,040
+# 2,501     4,900     0.045       55,578
+# 5,041     9,930     0.082       61,476
+# 10,001    19,800    0.165       60,612
+# 50,626    100,350   1.250       40,501
+```
+
+### Benchmark 2: Head Loss Formula Comparison
+
+```python
+import wntr
+import time
+import numpy as np
+
+# Load a medium-sized model
+wn_base = wntr.network.WaterNetworkModel('medium_model.inp')
+
+formulas = {
+    'H-W': 'H-W',
+    'D-W': 'D-W',
+    'C-M': 'C-M'
+}
+
+print(f"{'Formula':<10} {'Time (s)':<12} {'Iterations':<12} {'Max ΔP (psi)':<15}")
+print("=" * 55)
+
+results_dict = {}
+for name, formula in formulas.items():
+    wn = wntr.network.WaterNetworkModel('medium_model.inp')
+    wn.options.hydraulic.headloss = formula
+    
+    # For D-W, roughness means roughness height (mm), not C-factor
+    if formula == 'D-W':
+        for pipe_name, pipe in wn.pipes():
+            # Convert C-factor to approximate roughness height
+            # C=120 ≈ ε = 0.5mm, C=100 ≈ ε = 2mm, C=80 ≈ ε = 5mm
+            c = pipe.roughness
+            if c > 130:
+                pipe.roughness = 0.0001  # New smooth pipe (m)
+            elif c > 100:
+                pipe.roughness = 0.001   # Moderate (m)
+            else:
+                pipe.roughness = 0.005   # Old rough pipe (m)
+    
+    start = time.time()
+    sim = wntr.sim.EpanetSimulator(wn)
+    results = sim.run_sim()
+    elapsed = time.time() - start
+    
+    results_dict[name] = results
+    
+    # Get pressure stats
+    p = results.node['pressure'].loc[0, :]
+    print(f"{name:<10} {elapsed:<12.3f} {'N/A':<12} {p.max()-p.min():<15.1f}")
+
+# Compare pressure differences between formulas
+print("\n=== PRESSURE DIFFERENCES: H-W vs D-W ===")
+p_hw = results_dict['H-W'].node['pressure'].loc[0, :]
+p_dw = results_dict['D-W'].node['pressure'].loc[0, :]
+diff = (p_hw - p_dw).abs()
+print(f"Mean absolute difference: {diff.mean():.2f} m ({diff.mean()*1.422:.2f} psi)")
+print(f"Max absolute difference:  {diff.max():.2f} m ({diff.max()*1.422:.2f} psi)")
+print(f"Nodes with >5 psi diff:   {(diff > 3.5).sum()}")
+```
+
+### Benchmark 3: Convergence Stress Test
+
+```python
+import wntr
+import numpy as np
+
+# Test how EPANET handles progressively harder problems
+
+def stress_test_convergence(model_path, demand_multipliers):
+    """
+    Increase demands until the solver fails to converge.
+    This reveals the model's "breaking point."
+    """
+    results_log = []
+    
+    for mult in demand_multipliers:
+        wn = wntr.network.WaterNetworkModel(model_path)
+        
+        # Scale all demands
+        for junc_name, junc in wn.junctions():
+            junc.demand_timeseries_list[0].base_value *= mult
+        
+        # Set tight convergence
+        wn.options.hydraulic.accuracy = 0.001
+        wn.options.hydraulic.trials = 40
+        wn.options.time.duration = 0  # Steady-state
+        
+        try:
+            sim = wntr.sim.EpanetSimulator(wn)
+            results = sim.run_sim()
+            
+            # Check for negative pressures
+            p = results.node['pressure'].loc[0, :]
+            neg_count = (p < 0).sum()
+            min_p = p.min()
+            
+            results_log.append({
+                'multiplier': mult,
+                'converged': True,
+                'neg_pressure_nodes': neg_count,
+                'min_pressure_m': min_p,
+                'mean_pressure_m': p.mean()
+            })
+            
+            status = "✓" if neg_count == 0 else f"⚠ {neg_count} neg"
+            print(f"  Demand ×{mult:.1f}: {status}, "
+                  f"min P = {min_p:.1f} m ({min_p*1.422:.1f} psi)")
+            
+        except Exception as e:
+            results_log.append({
+                'multiplier': mult,
+                'converged': False,
+                'error': str(e)
+            })
+            print(f"  Demand ×{mult:.1f}: ✗ FAILED — {str(e)[:60]}")
+            break
+    
+    return results_log
+
+# Run stress test
+print("=== CONVERGENCE STRESS TEST ===")
+print("Progressively increasing demands until failure:\n")
+
+multipliers = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.5, 10.0]
+log = stress_test_convergence('medium_model.inp', multipliers)
+
+# Plot results
+import matplotlib.pyplot as plt
+
+converged = [r for r in log if r['converged']]
+if converged:
+    mults = [r['multiplier'] for r in converged]
+    min_p = [r['min_pressure_m'] * 1.422 for r in converged]  # psi
+    neg_n = [r['neg_pressure_nodes'] for r in converged]
+    
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    
+    ax1.plot(mults, min_p, 'ro-', linewidth=2)
+    ax1.axhline(y=0, color='r', linestyle='--', label='Zero pressure')
+    ax1.axhline(y=20, color='orange', linestyle='--', label='Min standard (20 psi)')
+    ax1.set_ylabel('Minimum Pressure (psi)')
+    ax1.legend()
+    ax1.grid(True)
+    ax1.set_title('Convergence Stress Test')
+    
+    ax2.bar(mults, neg_n, color='red', alpha=0.7)
+    ax2.set_xlabel('Demand Multiplier')
+    ax2.set_ylabel('Nodes with Negative Pressure')
+    ax2.grid(True)
+    
+    plt.tight_layout()
+    plt.savefig('stress_test.png', dpi=150)
+    plt.show()
+```
+
+### Benchmark 4: EPS Performance (24-Hour Simulation)
+
+```python
+import wntr
+import time
+import numpy as np
+
+def benchmark_eps(model_path, timesteps_minutes):
+    """
+    Compare EPS execution time at different hydraulic timesteps.
+    Smaller timestep = more accurate but slower.
+    """
+    print(f"\n{'Timestep':<12} {'# Steps':<10} {'Time (s)':<12} {'Max Tank ΔL':<15}")
+    print("=" * 50)
+    
+    results_dict = {}
+    
+    for ts_min in timesteps_minutes:
+        wn = wntr.network.WaterNetworkModel(model_path)
+        wn.options.time.duration = 24 * 3600  # 24 hours
+        wn.options.time.hydraulic_timestep = ts_min * 60
+        wn.options.time.report_timestep = 3600  # Report hourly
+        
+        start = time.time()
+        sim = wntr.sim.EpanetSimulator(wn)
+        results = sim.run_sim()
+        elapsed = time.time() - start
+        
+        n_steps = int(24 * 60 / ts_min)
+        
+        # Check tank level variation
+        if wn.num_tanks > 0:
+            tank_name = list(wn.tank_name_list)[0]
+            tank_levels = results.node['pressure'].loc[:, tank_name]
+            max_delta = tank_levels.max() - tank_levels.min()
+        else:
+            max_delta = 0
+        
+        results_dict[ts_min] = results
+        print(f"{ts_min} min{'':<7} {n_steps:<10} {elapsed:<12.3f} {max_delta:<15.2f}")
+    
+    return results_dict
+
+# Run benchmark
+timesteps = [1, 5, 15, 30, 60]
+results = benchmark_eps('medium_model.inp', timesteps)
+
+# Compare accuracy: Does 1-min timestep differ from 60-min?
+if 1 in results and 60 in results:
+    p_1min = results[1].node['pressure']
+    p_60min = results[60].node['pressure']
+    
+    # Compare at shared timesteps (every hour)
+    common_times = [t for t in p_60min.index if t in p_1min.index]
+    
+    diffs = []
+    for t in common_times:
+        diff = (p_1min.loc[t, :] - p_60min.loc[t, :]).abs()
+        diffs.append(diff.mean())
+    
+    print(f"\nMean pressure difference (1-min vs 60-min): "
+          f"{np.mean(diffs):.3f} m ({np.mean(diffs)*1.422:.3f} psi)")
+    print(f"Max pressure difference: "
+          f"{np.max(diffs):.3f} m ({np.max(diffs)*1.422:.3f} psi)")
+```
+
+---
+
+## Summary: Which Tool for Which Task
+
+```
+┌────────────────────────┬───────────────────────────────────────┐
+│ Task                   │ Best Tool                             │
+├────────────────────────┼───────────────────────────────────────┤
+│ Learn EPANET basics    │ Classic EPANET 2.2 (Windows)          │
+│                        │ or epanet-js (browser)                │
+├────────────────────────┼───────────────────────────────────────┤
+│ Quick model check      │ epanet-js (no install, Shift+Enter)   │
+├────────────────────────┼───────────────────────────────────────┤
+│ Generate test models   │ EPANET/SWMM Network Generator         │
+│                        │ (epanet-swmm-5-generate.replit.app)   │
+├────────────────────────┼───────────────────────────────────────┤
+│ Batch calibration      │ WNTR or EPyT (Python scripting)       │
+├────────────────────────┼───────────────────────────────────────┤
+│ Resilience analysis    │ WNTR (pipe breaks, earthquakes)       │
+├────────────────────────┼───────────────────────────────────────┤
+│ Optimization           │ WNTR + scipy.optimize                 │
+├────────────────────────┼───────────────────────────────────────┤
+│ Water quality          │ Classic EPANET 2.2 or WNTR            │
+├────────────────────────┼───────────────────────────────────────┤
+│ Solver benchmarking    │ WNTR (Python timing + plotting)       │
+├────────────────────────┼───────────────────────────────────────┤
+│ Real-time operations   │ Commercial tools (WaterGEMS, InfoWater)│
+├────────────────────────┼───────────────────────────────────────┤
+│ Transient analysis     │ Bentley HAMMER, InfoSurge, AFT Impulse│
+│ (water hammer)         │ (EPANET CANNOT do this)               │
+├────────────────────────┼───────────────────────────────────────┤
+│ Learn modeling ethics  │ Rules for Responsible Modeling          │
+│ and philosophy         │ (rulesforresponsiblemodeling           │
+│                        │  .lovable.app)                        │
+└────────────────────────┴───────────────────────────────────────┘
+```
+
+---
+
+*This guide covers Classic EPANET 2.2, Python tools (WNTR and EPyT), the EPANET/SWMM Network Generator, calibration practice exercises, and solver performance benchmarking. All code examples are designed to run with freely available tools and generated test models. For regulatory compliance work, always use calibrated models validated against field data by a licensed professional engineer.*

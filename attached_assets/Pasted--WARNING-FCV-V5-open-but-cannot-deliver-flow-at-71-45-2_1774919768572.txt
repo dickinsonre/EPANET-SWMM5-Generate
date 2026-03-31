@@ -1,0 +1,59 @@
+  WARNING: FCV V5 open but cannot deliver flow at 71:45:27 hrs.
+   
+    72:00:00: Balancing the network:
+
+              Trial  1: relative flow change = 0.027338
+              Trial  2: relative flow change = 0.002484
+              Pipe P739 switched from closed to open
+              Pipe P740 switched from closed to open
+              Pipe P770 switched from open to closed
+              Pipe P771 switched from open to closed
+              Pipe P1723 switched from closed to open
+              Pipe P1787 switched from open to closed
+              Trial  3: relative flow change = 0.697764
+              Trial  4: relative flow change = 0.631834
+              Trial  5: relative flow change = 0.361215
+              Trial  6: relative flow change = 0.169704
+              Trial  7: relative flow change = 0.048264
+              Trial  8: relative flow change = 0.010450
+              Trial  9: relative flow change = 0.001328
+              Trial 10: relative flow change = 0.000119
+                        maximum  flow change = 0.8731 for Link P582
+                        maximum  head error  = 0.0001 for Link P582
+
+    72:00:00: Balanced after 10 trials
+    72:00:00: Tank T1 is emptying at 25.00 ft
+    72:00:00: Tank T4 is filling at 24.87 ft
+    72:00:00: Pipe P739 changed from temporarily closed to open
+    72:00:00: Pipe P740 changed from temporarily closed to open
+    72:00:00: Pipe P770 changed from open to temporarily closed
+    72:00:00: Pipe P771 changed from open to temporarily closed
+    72:00:00: Pipe P1723 changed from temporarily closed to open
+    72:00:00: Pipe P1787 changed from open to temporarily closed
+   
+  WARNING: FCV V5 open but cannot deliver flow at 72:00:00 hrs.
+   
+  Hydraulic Flow Balance (gpm)
+  ================================
+  Total Inflow:         13657.823
+  Consumer Demand:       7310.236
+  Demand Deficit:           0.000
+  Emitter Flow:           524.871
+  Leakage Flow:             0.000
+  Total Outflow:         8348.118
+  Storage Flow:          5309.697
+  Flow Ratio:               1.000
+  ================================
+
+  Water Quality Mass Balance (mg)
+  ================================
+  Initial Mass:       4.99939e+06
+  Mass Inflow:        2.23405e+08
+  Mass Outflow:       1.10756e+08
+  Mass Reacted:       1.04711e+08
+  Final Mass:         1.30536e+07
+  Mass Ratio:         1.00051
+  Total Segments:     9253
+  ================================
+
+  Analysis ended Tue Mar 31 09:12:47 2026

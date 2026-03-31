@@ -1741,6 +1741,486 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Architecture</h3>
       <p>Single self-contained HTML file with no external dependencies. All generation logic, rendering, city map procedural generation, BFS algorithms, Hazen-Williams friction calculator, design storm hyetographs, and .inp file builders run entirely in the browser. Seeded PRNG (Mulberry32) ensures reproducible results for the same grid dimensions. Mobile-optimized with bottom drawer controls, 44px touch targets, and iOS zoom prevention.</p>
 
+      <h3 style="color:var(--accent-cyan);font-size:15px;margin:28px 0 8px;">EPANET Fundamentals Reference</h3>
+      <p style="color:var(--text-dim);font-size:12px;margin-bottom:12px;">A comprehensive guide from first principles of hydraulics through professional practice standards. Based on EPA EPANET 2.2 documentation, William James's Rules for Responsible Modeling, and AWWA standards. Click any section to expand.</p>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px;">
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 1: Introduction to Hydraulics</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p>A hydraulic model is a <strong>mathematical representation</strong> of a real water distribution system using conservation of mass and energy to simulate pressures, flows, velocities, and water quality at every point.</p>
+            <p>EPANET solves one fundamental problem at every timestep: <strong>Energy In = Energy Out + Energy Lost</strong></p>
+            <p style="margin:8px 0 4px;color:var(--text-primary);font-weight:600;">The Two Conservation Laws:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">For every node:  ΣQ_in = ΣQ_out + Demand   (Conservation of Mass)
+For every loop:  Σh_L around loop = 0       (Conservation of Energy)</pre>
+            <p style="margin:8px 0 4px;color:var(--text-primary);font-weight:600;">The Modeling Hierarchy:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:var(--text-dim);">Level 1: Sketch</td><td style="padding:4px 6px;">10-50 nodes, no calibration, 30min-2hr build</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:var(--text-dim);">Level 2: Planning</td><td style="padding:4px 6px;">100-2,000 nodes, ±15% pressure/±20% flow, 1-4 weeks</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:var(--text-dim);">Level 3: Operational</td><td style="padding:4px 6px;">2,000-50,000+ nodes, ±5% pressure/±10% flow, 2-6 months</td></tr>
+              <tr><td style="padding:4px 6px;color:var(--text-dim);">Level 4: All-Pipes</td><td style="padding:4px 6px;">10,000-500,000+ nodes, comprehensive field testing, 6-18 months</td></tr>
+            </table>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 2: The Three Analysis Types</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">A. Steady-State Analysis</p>
+            <p>A single snapshot in time. All demands, tank levels, and pump statuses are fixed. EPANET finds the unique set of flows and pressures satisfying both conservation laws. Set <code style="color:#8ff;">DURATION 0:00</code> in [TIMES].</p>
+            <p>Use for: fire flow analysis, pipe break scenarios, new development impact, quick model validation.</p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">B. Extended Period Simulation (EPS)</p>
+            <p>A sequence of steady-state solutions linked by time-varying demands, tank level changes, and pump control logic. Between each timestep, EPANET updates demand multipliers, evaluates controls, updates tank levels, and re-solves.</p>
+            <p><strong>Why 72 hours, not 24?</strong> Day 1 is influenced by assumed initial conditions. Days 2-3 reach a repeating daily cycle representing true operational behavior. A well-calibrated EPS shows tank levels returning to approximately the same level after 24 hours.</p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">C. Transient Analysis (Water Hammer)</p>
+            <p><strong>EPANET does NOT model transients.</strong> Rapid pressure waves from sudden valve closure or pump trip require dedicated software (Bentley HAMMER, InfoSurge, AFT Impulse). Per AWWA M51, transient analysis is mandatory when pump station &gt;100 HP, pipe diameter &gt;24", pipeline &gt;1 mile without surge protection, or valve closure &lt;10 seconds.</p>
+            <p>Joukowsky equation: ΔP = ρ × a × ΔV / g. Example: V changes 5→0 ft/s with wave speed 4000 ft/s → 269 psi surge on top of normal 60 psi = 329 psi peak.</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 3: Why Hydraulic Theory Matters</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">The Black Box Trap</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:var(--text-dim);width:35%;">Conservation of Mass ignored</td><td style="padding:4px 6px;">"System Unbalanced" error</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:var(--text-dim);">Conservation of Energy ignored</td><td style="padding:4px 6px;">Negative pressures at hilltop nodes</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:var(--text-dim);">Wrong friction formula/C-factors</td><td style="padding:4px 6px;">Wildly wrong pressures everywhere</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:var(--text-dim);">Pump Affinity Laws violated</td><td style="padding:4px 6px;">"Pump exceeds maximum flow" warning</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:var(--text-dim);">Tank mass balance wrong</td><td style="padding:4px 6px;">Tanks drain empty or overflow forever</td></tr>
+              <tr><td style="padding:4px 6px;color:var(--text-dim);">Minor losses at fittings</td><td style="padding:4px 6px;">5-15% headloss error in heavily-fitted runs</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Hierarchy of Errors (highest impact first):</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li><strong>Topology</strong> — disconnected nodes, wrong connections → entire zones show zero flow</li>
+              <li><strong>Demands</strong> — wrong magnitude/spatial allocation → system-wide pressure bias</li>
+              <li><strong>Elevations</strong> — wrong datum/unit conversion → individual nodes show impossible pressures</li>
+              <li><strong>Roughness</strong> — wrong C-factors → gradient of pressure drop along pipe runs</li>
+              <li><strong>Control Logic</strong> — wrong tank triggers/pump schedules → EPS cycling doesn't match SCADA</li>
+              <li><strong>Minor Losses</strong> — missing K-factors → small (&lt;5%) local headloss errors</li>
+            </ol>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 4: EPANET Network Components</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Nodes (Points Where Things Happen)</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;width:25%;">JUNCTIONS</td><td style="padding:4px 6px;">Demand points. Properties: ID, Elevation, Base Demand, Pattern. EPANET calculates Pressure, Head, Quality.</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;">RESERVOIRS</td><td style="padding:4px 6px;">Infinite sources (treatment plants, wells). Fixed Total Head — water level NEVER changes.</td></tr>
+              <tr><td style="padding:4px 6px;color:#22c55e;">TANKS</td><td style="padding:4px 6px;">Finite storage. Level CHANGES based on net inflow/outflow. Properties: Bottom Elev, Init/Min/Max Level, Diameter.</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Links (Things That Connect Nodes)</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;width:25%;">PIPES</td><td style="padding:4px 6px;">Conduits. All pipes assumed full. Flow direction: higher head → lower head.</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;">PUMPS</td><td style="padding:4px 6px;">Add head to flow. Types: 3-point curve (required), single-point, constant power. Need at least 3 points for proper curve.</td></tr>
+              <tr><td style="padding:4px 6px;color:#22c55e;">VALVES</td><td style="padding:4px 6px;">PRV (limits downstream P), PSV (maintains upstream P), PBV (fixed P drop), FCV (limits flow), TCV (throttle), GPV (custom headloss curve).</td></tr>
+            </table>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 5: The Mathematics — Global Gradient Algorithm</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p>EPANET uses Todini and Pilati's (1988) <strong>Global Gradient Algorithm (GGA)</strong> — a Newton-Raphson variant that simultaneously solves all unknown heads and flows.</p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Core Equations:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">Pipe headloss:    h_L(ij) = r × Q(ij) × |Q(ij)|^(n-1) + m × Q(ij) × |Q(ij)|
+  r = resistance coefficient, n = flow exponent (1.852 H-W, 2.0 D-W)
+
+Energy conservation:  H(i) - H(j) = h_L(ij)
+Mass conservation:    Σ Q(ij) - D(i) = 0
+
+Solved iteratively: |ΔH| &lt; ACCURACY AND |ΔQ| &lt; ACCURACY</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Convergence Behavior:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;">Healthy model</td><td style="padding:4px 6px;">6 iterations: 45.2 → 12.8 → 3.1 → 0.4 → 0.02 → 0.0008 ft → CONVERGED</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#eab308;">Slow convergence</td><td style="padding:4px 6px;">40 iterations, still 12.3 ft → "System Unbalanced" warning</td></tr>
+              <tr><td style="padding:4px 6px;color:#ef4444;">Divergence</td><td style="padding:4px 6px;">45.2 → 89.4 → 500+ ft → "Equations cannot be solved" error</td></tr>
+            </table>
+            <p style="font-size:11px;margin-top:6px;">Controls: <code style="color:#8ff;">ACCURACY 0.001</code> (default), <code style="color:#8ff;">TRIALS 40</code>, <code style="color:#8ff;">UNBALANCED CONTINUE 10</code></p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 6: Head Loss Formulas</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Hazen-Williams (Most Common in US Practice)</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">h_L = 4.727 × L × Q^1.852 / (C^1.852 × D^4.871)
+  [OPTIONS] HEADLOSS H-W</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">C-Factor Reference Table:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Pipe Material</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">New</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">30-50 yr</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">PVC / HDPE</td><td style="padding:3px 6px;text-align:center;">150</td><td style="padding:3px 6px;text-align:center;">140-145</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Ductile Iron (lined)</td><td style="padding:3px 6px;text-align:center;">140</td><td style="padding:3px 6px;text-align:center;">120-130</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Ductile Iron (unlined)</td><td style="padding:3px 6px;text-align:center;">130</td><td style="padding:3px 6px;text-align:center;">90-100</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Cast Iron (lined)</td><td style="padding:3px 6px;text-align:center;">130</td><td style="padding:3px 6px;text-align:center;">100-110</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Cast Iron (unlined)</td><td style="padding:3px 6px;text-align:center;">130</td><td style="padding:3px 6px;text-align:center;">60-80</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Steel (lined)</td><td style="padding:3px 6px;text-align:center;">140</td><td style="padding:3px 6px;text-align:center;">110-120</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Concrete</td><td style="padding:3px 6px;text-align:center;">130</td><td style="padding:3px 6px;text-align:center;">110-120</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Asbestos Cement</td><td style="padding:3px 6px;text-align:center;">140</td><td style="padding:3px 6px;text-align:center;">120-130</td></tr>
+              <tr><td style="padding:3px 6px;">Galvanized Steel</td><td style="padding:3px 6px;text-align:center;">120</td><td style="padding:3px 6px;text-align:center;">60-80</td></tr>
+            </table>
+            <p>H-W limitations: Only valid for water at 40-75°F, turbulent flow (Re&gt;4000), empirical (not physics-derived). Still standard US practice because C-factors are extensively documented.</p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Darcy-Weisbach (More Rigorous)</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">h_L = f × (L/D) × (V²/2g)
+  f via Swamee-Jain: f = 0.25 / [log₁₀(ε/(3.7D) + 5.74/Re⁰·⁹)]²
+  [OPTIONS] HEADLOSS D-W</pre>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Pipe Material</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">ε (ft)</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">PVC, HDPE</td><td style="padding:3px 6px;text-align:center;">0.000005</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">New steel/DI (lined)</td><td style="padding:3px 6px;text-align:center;">0.0001</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Concrete</td><td style="padding:3px 6px;text-align:center;">0.001-0.01</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Corroded cast iron</td><td style="padding:3px 6px;text-align:center;">0.001-0.01</td></tr>
+              <tr><td style="padding:3px 6px;">Heavily tuberculated</td><td style="padding:3px 6px;text-align:center;">0.01-0.1</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Chezy-Manning</p>
+            <p>Rarely used for pressurized pipe. Primarily for open channels and gravity sewers (SWMM standard). <code style="color:#8ff;">[OPTIONS] HEADLOSS C-M</code></p>
+            <p><strong>Decision:</strong> Typical US water distribution → H-W. Non-water fluid, very low flows, or international → D-W. Open channel → C-M. Only ONE formula per model.</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 7: Pressure Head and Elevation</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">The Fundamental Relationship:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">Pressure (psi) = [Head (ft) - Elevation (ft)] × 0.4333
+Head (ft) = Elevation (ft) + Pressure Head (ft)
+
+Unit conversions:
+  1 psi = 2.307 ft of water head
+  1 ft of water = 0.4333 psi
+  1 meter of water = 9.81 kPa = 1.422 psi</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Pressure Standards:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Condition</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Min psi</th><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Source</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Normal operating</td><td style="padding:3px 6px;text-align:center;">35</td><td style="padding:3px 6px;">AWWA M31</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Peak hour demand</td><td style="padding:3px 6px;text-align:center;">20-35</td><td style="padding:3px 6px;">State regulations</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Fire flow</td><td style="padding:3px 6px;text-align:center;">20</td><td style="padding:3px 6px;">AWWA M31/NFPA</td></tr>
+              <tr><td style="padding:3px 6px;">Emergency (1 source out)</td><td style="padding:3px 6px;text-align:center;">20</td><td style="padding:3px 6px;">AWWA M32</td></tr>
+            </table>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Condition</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Max psi</th><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Source</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Service pressure (PRV req'd above)</td><td style="padding:3px 6px;text-align:center;">80</td><td style="padding:3px 6px;">Plumbing code</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">With customer PRV</td><td style="padding:3px 6px;text-align:center;">80-150</td><td style="padding:3px 6px;">Utility policy</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Warning threshold</td><td style="padding:3px 6px;text-align:center;">&gt;100</td><td style="padding:3px 6px;">Leak/stress risk</td></tr>
+              <tr><td style="padding:3px 6px;">New main hydro test</td><td style="padding:3px 6px;text-align:center;">200</td><td style="padding:3px 6px;">AWWA C600</td></tr>
+            </table>
+            <p><strong>Ideal operating range: 40-80 psi</strong> (92-185 ft head above node). Below 40 psi → customer complaints. Above 80 psi → increased leakage, pipe stress.</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 8: Demand Modeling</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p>EPANET multiplies base demand by a pattern factor: <code style="color:#8ff;">Q_actual(t) = Q_base × Multiplier(t)</code></p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Residential 24-Hour Pattern:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">Hour:  1    2    3    4    5    6    7    8    9   10   11   12
+Mult: 0.3  0.2  0.2  0.2  0.3  0.6  1.2  1.5  1.4  1.1  0.9  0.8
+Hour: 13   14   15   16   17   18   19   20   21   22   23   24
+Mult: 0.8  0.8  0.9  1.0  1.3  1.6  1.5  1.2  0.9  0.6  0.4  0.3
+Peak = 1.6 at 6 PM   Minimum = 0.2 at 3 AM</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Demand Category Rates:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Category</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Typical Rate</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Pattern</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Residential (SF)</td><td style="padding:3px 6px;text-align:center;">0.25 GPM/conn (~80 gpcd)</td><td style="padding:3px 6px;text-align:center;">AM/PM peaks</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Multi-family</td><td style="padding:3px 6px;text-align:center;">0.15 GPM/unit (~60 gpcd)</td><td style="padding:3px 6px;text-align:center;">Similar to SF</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Commercial</td><td style="padding:3px 6px;text-align:center;">0.5-5 GPM/account</td><td style="padding:3px 6px;text-align:center;">Midday peak</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Industrial</td><td style="padding:3px 6px;text-align:center;">10-500 GPM/meter</td><td style="padding:3px 6px;text-align:center;">Flat daytime</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">UAW (leaks, theft)</td><td style="padding:3px 6px;text-align:center;">15-25% of metered</td><td style="padding:3px 6px;text-align:center;">Constant</td></tr>
+              <tr><td style="padding:3px 6px;">Fire flow</td><td style="padding:3px 6px;text-align:center;">500-5,000 GPM</td><td style="padding:3px 6px;text-align:center;">Single event</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Allocation Methods:</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li><strong>Manual</strong> — count connections per node (&lt;100 nodes)</li>
+              <li><strong>Proportional by pipe length</strong> — distribute zone demand by half-length of connected pipes</li>
+              <li><strong>Thiessen polygons</strong> — GIS-based Voronoi areas, sum meter demands</li>
+              <li><strong>Nearest pipe</strong> — snap meters to nearest pipe, split to end nodes</li>
+              <li><strong>Pressure-dependent (PDA)</strong> — EPANET 2.2+: demand varies with pressure</li>
+            </ol>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 9: Pumps and Energy</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p><strong>Critical:</strong> EPANET needs at least 3 points for a proper pump curve — shutoff head (zero flow), design point (near BEP), and maximum flow.</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">[CURVES]
+;ID      Flow(GPM)  Head(ft)
+PUMP1    0          180     ; Shutoff head
+PUMP1    500        150     ; Design point (near BEP)
+PUMP1    1000       100     ; Maximum flow</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Pump Affinity Laws (VFD speed changes):</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">Q₂/Q₁ = N₂/N₁         (flow ∝ speed)
+H₂/H₁ = (N₂/N₁)²     (head ∝ speed²)
+P₂/P₁ = (N₂/N₁)³     (power ∝ speed³)
+
+At 85% speed: Flow=85%, Head=72.25%, Power=61.4% → huge savings!</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Energy Cost Calculation:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">Power (kW) = Q × H × SG / (3960 × η)
+  Q=800 GPM, H=120 ft, η=0.75 → 32.3 kW
+  18 hr/day at $0.10/kWh → $58.14/day
+  + demand charge 32.3 kW × $50/kW = $1,615/mo</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Pump Controls:</p>
+            <p style="font-size:11px;">Simple: <code style="color:#8ff;">LINK PUMP1 OPEN IF NODE TANK1 BELOW 20.0</code>. Rule-based: IF/AND/OR/THEN with priority. Rules override simple controls; last matching rule wins.</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 10: Valves and Pressure Management</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">PRV — Three Operating Modes:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;width:20%;">ACTIVE</td><td style="padding:4px 6px;">Upstream P &gt; Setting — valve throttles to maintain downstream P = setting</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#eab308;">FULLY OPEN</td><td style="padding:4px 6px;">Upstream can't reach setting even wide open — acts like a pipe</td></tr>
+              <tr><td style="padding:4px 6px;color:#ef4444;">CLOSED</td><td style="padding:4px 6px;">Downstream P &gt; Upstream P — prevents reverse flow (like check valve)</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Other Valve Types:</p>
+            <p style="font-size:11px;"><strong>PSV</strong> — maintains upstream pressure at minimum value. <strong>FCV</strong> — limits flow to set rate (only limits, not guarantees). <strong>PBV</strong> — fixed pressure drop. <strong>TCV</strong> — simulates partially closed valve. <strong>GPV</strong> — custom headloss vs flow curve.</p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Pressure Zone Design Rule:</p>
+            <p style="font-size:11px;">If elevation range &gt;150 ft, multiple pressure zones needed. Rule of thumb: one zone per ~100-150 ft of elevation range. Target: 40-80 psi throughout each zone.</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 11: Water Quality Modeling</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Three WQ Simulation Modes:</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li><strong>Chemical concentration</strong> — track chlorine decay, DBP growth, or conservative tracers</li>
+              <li><strong>Water age</strong> — hours since water entered from any source (identifies stagnation)</li>
+              <li><strong>Source tracing</strong> — % of water at each node from a specific source</li>
+            </ol>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Chlorine Decay Model:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">Bulk decay: dC/dt = -Kb × C^n  (in water column)
+Wall decay: Rate = Kw × C       (at pipe wall)
+
+Typical values:
+  Kb (bulk):  -0.5 to -1.5 /day
+  Kw (wall):  -0.5 to -2.0 ft/day
+  Source:     1.5 to 2.5 mg/L
+  Target:     &gt;0.2 mg/L (EPA minimum)</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Water Age Standards:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#22c55e;">&lt;24 hours</td><td style="padding:3px 6px;">Good — no action needed</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#eab308;">24-48 hours</td><td style="padding:3px 6px;">Monitor chlorine residual</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#f97316;">48-72 hours</td><td style="padding:3px 6px;">Consider flushing program</td></tr>
+              <tr><td style="padding:3px 6px;color:#ef4444;">&gt;72 hours</td><td style="padding:3px 6px;">Active intervention: flushing, looping, blow-offs, booster chlorination</td></tr>
+            </table>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 12: Building Your First EPANET Model</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Step-by-Step Workflow:</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li><strong>Define Purpose &amp; Scope</strong> — what decision will this model inform? What level of accuracy is needed?</li>
+              <li><strong>Gather Data</strong> — pipe inventory, elevations (DEM/LiDAR), demands (billing), tank dimensions, pump curves, valve locations, SCADA data</li>
+              <li><strong>Build Skeleton</strong> — reservoirs → tanks → transmission mains → pumps → distribution grid → smaller pipes → assign elevations → assign diameters/roughness</li>
+              <li><strong>Assign Demands</strong> — total from production records, allocate to nodes, add UAW (15-25%), assign patterns</li>
+              <li><strong>Set Controls &amp; Options</strong> — units, headloss formula, timesteps, 72-hour EPS duration</li>
+              <li><strong>Run &amp; Debug</strong> — check for System Unbalanced, negative pressures, pump errors</li>
+              <li><strong>Calibrate</strong> — compare to field measurements, adjust: demands → roughness → valves → pumps</li>
+              <li><strong>Analyze &amp; Report</strong> — run scenarios, document assumptions, communicate uncertainty</li>
+            </ol>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Common First-Run Problems:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;width:40%;">System Unbalanced</td><td style="padding:3px 6px;">Disconnected nodes</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;">Negative pressures</td><td style="padding:3px 6px;">Elevation errors (unit mismatch?)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;">Pump exceeds max flow</td><td style="padding:3px 6px;">Pump curve has &lt;3 points</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;">Zero flow everywhere</td><td style="padding:3px 6px;">All pipes CLOSED</td></tr>
+              <tr><td style="padding:3px 6px;color:#ef4444;">Tank empties in 1 hour</td><td style="padding:3px 6px;">Demand >> supply</td></tr>
+            </table>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 13: Calibration Fundamentals</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Calibration Targets (AWWA M32):</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Level</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Pressure</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Flow</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Tank Levels</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Level 1: Basic (Planning)</td><td style="padding:3px 6px;text-align:center;">±5 psi</td><td style="padding:3px 6px;text-align:center;">±15%</td><td style="padding:3px 6px;text-align:center;">±2 ft</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Level 2: Standard (Design)</td><td style="padding:3px 6px;text-align:center;">±3 psi</td><td style="padding:3px 6px;text-align:center;">±10%</td><td style="padding:3px 6px;text-align:center;">±1 ft</td></tr>
+              <tr><td style="padding:3px 6px;">Level 3: Comprehensive (Ops)</td><td style="padding:3px 6px;text-align:center;">±1 psi</td><td style="padding:3px 6px;text-align:center;">±5%</td><td style="padding:3px 6px;text-align:center;">±0.5 ft</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Adjustment Priority (highest impact first):</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li><strong>Demands</strong> — total matches production? UAW added? Spatial distribution reasonable? Patterns match SCADA?</li>
+              <li><strong>Roughness / C-factors</strong> — appropriate for pipe material &amp; age? Old unlined CI: C=60-90. New PVC: C=140-150</li>
+              <li><strong>Valve settings</strong> — PRV settings field-verified? Closed/partially-closed valves documented? (#1 hidden error)</li>
+              <li><strong>Pump curves</strong> — from recent field test (not nameplate)? Worn impellers reduce head 10-20%</li>
+              <li><strong>Tank operations</strong> — trigger levels match SCADA setpoints?</li>
+            </ol>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">The Critical Rule:</p>
+            <p style="font-size:11px;font-style:italic;">"Calibration without validation is self-deception." — William James</p>
+            <p style="font-size:11px;">Calibrate with Dataset A, then validate with Dataset B (NO further adjustments). If validation fails → model is overfit to Dataset A, not the physics.</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 14: Practice Standards</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Industry Standards Framework:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);background:rgba(239,68,68,0.1);"><td colspan="2" style="padding:4px 6px;color:#ef4444;font-weight:600;">Tier 1: Regulatory (Must Comply)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;width:40%;">EPA SDWA</td><td style="padding:3px 6px;">Surface Water Treatment, Stage 2 DBP, Lead &amp; Copper, Ground Water Rules</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">State regulations</td><td style="padding:3px 6px;">Min pressure 20-35 psi, storage requirements, &gt;0.2 mg/L free Cl₂</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">Fire codes</td><td style="padding:3px 6px;">NFPA 1, ISO fire flow requirements</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);background:rgba(234,179,8,0.1);"><td colspan="2" style="padding:4px 6px;color:#eab308;font-weight:600;">Tier 2: Industry Standards (Should Follow)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">AWWA M32</td><td style="padding:3px 6px;">Computer Modeling — THE reference for model building &amp; calibration</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">AWWA M31</td><td style="padding:3px 6px;">Distribution System Requirements for Fire Protection</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">AWWA M36</td><td style="padding:3px 6px;">Water Audits &amp; Loss Control Programs</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">AWWA M51</td><td style="padding:3px 6px;">Air Valves — transient analysis triggers</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">Ten States Standards</td><td style="padding:3px 6px;">Min pipe 6"/8"(fire), min pressure 35/20 psi, max velocity 5 ft/s</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);background:rgba(34,197,94,0.1);"><td colspan="2" style="padding:4px 6px;color:#22c55e;font-weight:600;">Tier 3: Professional Guidance (Best Practice)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">William James (2005)</td><td style="padding:3px 6px;">Rules for Responsible Modeling — uncertainty, calibration, ethics</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px 3px 16px;">Walski et al. (2003)</td><td style="padding:3px 6px;">Advanced Water Distribution Modeling (Haestad Methods)</td></tr>
+              <tr><td style="padding:3px 6px 3px 16px;">Rossman (2000)</td><td style="padding:3px 6px;">EPANET 2 Users Manual (EPA/600/R-00/057) — free from EPA</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Velocity Standards:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1);"><th style="padding:4px 6px;text-align:left;color:var(--text-primary);">Application</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Min ft/s</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Max ft/s</th><th style="padding:4px 6px;text-align:center;color:var(--text-primary);">Ideal ft/s</th></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Transmission (&gt;16")</td><td style="padding:3px 6px;text-align:center;">0.5</td><td style="padding:3px 6px;text-align:center;">5.0</td><td style="padding:3px 6px;text-align:center;">2.0-3.5</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">Distribution (6-16")</td><td style="padding:3px 6px;text-align:center;">0.2</td><td style="padding:3px 6px;text-align:center;">5.0</td><td style="padding:3px 6px;text-align:center;">1.0-3.0</td></tr>
+              <tr><td style="padding:3px 6px;">Service (&lt;6")</td><td style="padding:3px 6px;text-align:center;">0.1</td><td style="padding:3px 6px;text-align:center;">8.0</td><td style="padding:3px 6px;text-align:center;">1.0-5.0</td></tr>
+            </table>
+            <p style="font-size:11px;">V&lt;0.5 → sediment, biofilm, WQ degradation. V&gt;5 → excessive headloss, noise. V&gt;8 → erosion risk. V&gt;10 → water hammer risk. V&gt;15 → near-certain failure.</p>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Storage Standards:</p>
+            <p style="font-size:11px;">Total = Equalization (25% of max daily demand) + Fire (flow × duration) + Emergency (0.5-1.0 × avg daily) + Dead (5-10% tank volume).</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 15: Common Mistakes and Troubleshooting</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Error: "System Unbalanced"</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li><strong>Disconnected nodes</strong> (most common) — junction has no open pipe path to any source. Run connectivity check.</li>
+              <li><strong>Impossible demands</strong> — total demand exceeds supply capacity. Verify peak × base is realistic.</li>
+              <li><strong>Pump curve errors</strong> — shutoff head lower than highest node. Provide 3-point curve.</li>
+              <li><strong>PRV/PSV conflicts</strong> — two PRVs in series with conflicting settings, or PSV downstream of PRV.</li>
+              <li><strong>Tight convergence</strong> — relax ACCURACY to 0.01, increase TRIALS to 100, set UNBALANCED CONTINUE 10.</li>
+            </ol>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Error: Negative Pressures</p>
+            <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li>Check elevation units (ft entered as m? km as m?)</li>
+              <li>Check source head — reservoir head high enough? Pump provides enough head?</li>
+              <li>Check connectivity — open hydraulic path from source to node?</li>
+              <li>Check demand magnitude — unit error? (m³/hr in GPM field?)</li>
+              <li>Consider PDA mode: <code style="color:#8ff;">DEMAND MODEL PDA, MINIMUM PRESSURE 0, REQUIRED PRESSURE 25</code></li>
+            </ol>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Error: "Pump Cannot Deliver Flow/Head"</p>
+            <p style="font-size:11px;">System demands more flow than curve allows, or system head exceeds shutoff. Fix: add 3 curve points, increase speed, add pumps in series (head) or parallel (flow), reduce downstream demand, or increase pipe sizes.</p>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 16: The EPANET .inp File Format</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Complete Section Reference:</p>
+            <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:10px;color:#8ff;">[TITLE]       Project description
+[JUNCTIONS]   ID, Elevation, Demand, Pattern
+[RESERVOIRS]  ID, Head, Pattern
+[TANKS]       ID, Elev, Levels, Diameter
+[PIPES]       ID, Node1, Node2, Length, Diameter, C
+[PUMPS]       ID, Node1, Node2, Properties
+[VALVES]      ID, Node1, Node2, Diameter, Type, Setting
+[EMITTERS]    ID, Coefficient
+[CURVES]      Pump, Efficiency, Volume, Headloss
+[PATTERNS]    Time-varying multipliers
+[CONTROLS]    Simple IF/THEN
+[RULES]       Complex IF/AND/OR/THEN
+[ENERGY]      Efficiency, price, demand charge
+[REACTIONS]   Bulk, wall decay parameters
+[SOURCES]     WQ source concentrations
+[MIXING]      MIXED, 2COMP, FIFO, LIFO
+[OPTIONS]     Units, headloss, accuracy
+[TIMES]       Duration, timesteps
+[REPORT]      Output options
+[COORDINATES] Node X-Y map positions
+[VERTICES]    Pipe bend points
+[LABELS]      Map text labels
+[BACKDROP]    Background image settings
+[TAGS]        Node/link grouping tags
+[DEMANDS]     Multiple demand categories
+[QUALITY]     Initial WQ at nodes
+[STATUS]      Initial link status
+[END]         Required file terminator</pre>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Critical Rules:</p>
+            <ul style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li>[END] MUST be the last section</li>
+              <li>Semicolons (;) denote comments</li>
+              <li>Columns are whitespace-separated (spaces or tabs)</li>
+              <li>Node/Link IDs are case-sensitive in some implementations</li>
+              <li>Empty sections can be omitted entirely</li>
+            </ul>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 17: The EPANET Resource Ecosystem</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Official EPA Resources:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;width:40%;">EPANET 2.2 Users Manual</td><td style="padding:3px 6px;">Free PDF — usepa.github.io/EPANET2.2</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">EPANET Source Code</td><td style="padding:3px 6px;">github.com/OpenWaterAnalytics/EPANET (MIT license)</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">EPANET-MSX</td><td style="padding:3px 6px;">Multi-Species Extension for complex WQ reactions</td></tr>
+              <tr><td style="padding:3px 6px;">Programmer's Toolkit</td><td style="padding:3px 6px;">OWA-EPANET 2.3 C API (epanet2.h)</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Open-Source Tools:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">epanet-js (browser)</td><td style="padding:3px 6px;">Zero-install, cross-platform, satellite maps</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">WNTR (Python)</td><td style="padding:3px 6px;">Resilience analysis, disaster scenarios, PDA</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">EPyT (Python)</td><td style="padding:3px 6px;">EPANET-Python Toolkit, smart water networks</td></tr>
+              <tr><td style="padding:3px 6px;">viswaternet (Python)</td><td style="padding:3px 6px;">Publication-quality network visualization</td></tr>
+            </table>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Commercial Tools Built on EPANET:</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">WaterGEMS (Bentley)</td><td style="padding:3px 6px;">$5,000-15,000/yr</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">WaterCAD (Bentley)</td><td style="padding:3px 6px;">$3,000-8,000/yr</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">InfoWater Pro (Autodesk)</td><td style="padding:3px 6px;">$8,000-20,000/yr</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;">PIPE2000 (KYPipe)</td><td style="padding:3px 6px;">$2,000-8,000/yr</td></tr>
+              <tr><td style="padding:3px 6px;">WDNetXL (UniNA)</td><td style="padding:3px 6px;">$500-2,000/yr</td></tr>
+            </table>
+          </div>
+        </details>
+
+        <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">QA/QC Checklist</summary>
+          <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Pre-Simulation QA (Before Running):</p>
+            <ul style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li>All nodes hydraulically connected (run connectivity check)</li>
+              <li>Pipe diameters physically reasonable (no 0.01" or 999")</li>
+              <li>Node elevations in correct units and consistent datum</li>
+              <li>Demands sum to expected total (±10%)</li>
+              <li>Demand patterns match expected diurnal shapes</li>
+              <li>Pump curves have 3+ points and decrease monotonically</li>
+              <li>Tank dimensions match physical records</li>
+              <li>PRV settings field-verified (not design drawings)</li>
+              <li>All pipe roughness explicitly assigned (no accidental defaults)</li>
+              <li>Check valves placed in correct direction</li>
+              <li>Units consistent throughout (GPM vs LPS, ft vs m)</li>
+            </ul>
+            <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Post-Simulation QC (After Running):</p>
+            <ul style="margin:4px 0;padding-left:20px;font-size:11px;">
+              <li>No "System Unbalanced" warnings at any timestep</li>
+              <li>No negative pressures (or physically explained)</li>
+              <li>No velocities &gt;10 ft/s (or documented)</li>
+              <li>No headloss &gt;10 ft/1000 ft in any pipe</li>
+              <li>Tank levels return to ±1 ft after 24 hours (EPS)</li>
+              <li>All pumps within curve range</li>
+              <li>Supply-demand ratio &gt;1.0 at all timesteps</li>
+              <li>Water quality results physically reasonable</li>
+            </ul>
+          </div>
+        </details>
+
+        <p style="color:var(--text-dim);font-size:10px;margin-top:8px;font-style:italic;">Source: EPA EPANET 2.2 documentation (Rossman et al.), EPANET Analysis Algorithms, William James's "Rules for Responsible Modeling" (2005), AWWA M32 standards, OpenWaterAnalytics. Educational reference only — not for regulatory compliance or substitute for licensed professional engineering judgment.</p>
+      </div>
+
       <h3 style="color:#f0c040;font-size:15px;margin:28px 0 8px;">16.4 An Eyewitness Account — The Workshop That Started It All</h3>
       <div style="background:rgba(240,192,64,0.04);border:1px solid rgba(240,192,64,0.15);border-radius:8px;padding:18px 20px;margin:8px 0 20px;font-style:italic;line-height:1.7;color:#ccc;">
         <p style="margin:0 0 12px;">By the late 1980s, the water distribution modeling world had made impressive strides in hydraulic simulation — steady-state solvers, extended-period simulation, calibration methods — but water quality modeling in pipe networks was still in its infancy. A handful of researchers were working on the problem, but there was no consensus tool, no standard approach, and no coordination between the groups.</p>
