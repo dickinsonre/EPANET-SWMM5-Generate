@@ -1575,6 +1575,169 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <p><strong>Demand Zones:</strong> Four zones are spatially seeded: Industrial (NW quadrant), Commercial (central spine), Mixed (defined area), Residential (fill). Each junction is assigned to the nearest zone seed point.</p>
       <p><strong>Pipe Diameters:</strong> Transmission mains (24-36") near reservoirs and along every 5th row/column. Distribution pipes (6-12") elsewhere. Diameter decreases with distance from sources.</p>
 
+      <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Technical Specifications</h3>
+      <div style="background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.2);border-radius:8px;padding:14px 16px;margin:8px 0 16px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);width:40%;">EPANET Engine Version</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">2.3 (WASM compiled via Emscripten)</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">SWMM Engine Version</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">5.2.4 (WASM compiled via Emscripten)</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">Model Size Range</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">50 to 100,000 nodes (8 presets + custom grid)</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">EPANET Analysis Types</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">Steady-state, Extended Period Simulation (EPS)</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">SWMM Analysis Types</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">Dynamic Wave routing, Water Quality, RDII, LID, Snowmelt, Groundwater</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">Flow Units</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">US Customary (GPM/CFS) and SI/Metric (LPS/CMS)</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">Export Formats</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">.inp (EPANET/SWMM), .dem (DEM elevation grid), GeoJSON, Calibration files (.dat), Validation report</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">Compatible With</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">EPANET 2.2+, EPA SWMM 5.2+, WNTR, PySWMM, InfoWorks ICM, WaterGEMS, PCSWMM, QGIS</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">Browser Requirements</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">WebAssembly + Canvas API (Chrome 57+, Firefox 52+, Safari 11+, Edge 16+)</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">INP Keyword Coverage</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">EPANET: JUNCTIONS, RESERVOIRS, TANKS, PIPES, PUMPS, VALVES, PATTERNS, CURVES, ENERGY, EMITTERS, OPTIONS, TIMES, REPORT, COORDINATES, TAGS. SWMM: +SUBCATCHMENTS, SUBAREAS, INFILTRATION, CONDUITS, XSECTIONS, OUTFALLS, RAINGAGES, TIMESERIES, POLLUTANTS, LANDUSES, COVERAGES, BUILDUP, WASHOFF, DWF, RDII, HYDROGRAPHS, INFLOWS, LID_CONTROLS, LID_USAGE, AQUIFERS, GROUNDWATER, SNOWPACKS, CONTROLS</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+            <td style="padding:5px 8px;color:var(--text-dim);">PRNG / Reproducibility</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">Mulberry32 seeded PRNG — same seed + same settings = identical model every time</td>
+          </tr>
+          <tr>
+            <td style="padding:5px 8px;color:var(--text-dim);">Offline Capability</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">Yes — single HTML file, no server required, runs entirely client-side</td>
+          </tr>
+        </table>
+      </div>
+
+      <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Feature Comparison</h3>
+      <p style="color:var(--text-dim);font-size:12px;margin-bottom:8px;">How this generator compares to other EPANET/SWMM tools on key capabilities.</p>
+      <div style="overflow-x:auto;margin:8px 0 16px;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px;">
+          <thead>
+            <tr style="border-bottom:2px solid rgba(255,255,255,0.15);">
+              <th style="padding:6px 8px;text-align:left;color:var(--text-primary);">Capability</th>
+              <th style="padding:6px 8px;text-align:center;color:#22c55e;">This Tool</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--text-dim);">Classic EPANET</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--text-dim);">epanet-js</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--text-dim);">WaterGEMS</th>
+            </tr>
+          </thead>
+          <tbody style="color:var(--text-secondary);">
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">EPANET + SWMM in one tool</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Yes</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">Automated model generation</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">50–100K nodes</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">GeoJSON export</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Yes</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">Paid add-on</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">Calibration file export</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Yes (.dat)</td>
+              <td style="padding:5px 8px;text-align:center;">Manual</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">Yes</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">Water quality (pollutants)</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">8 pollutants</td>
+              <td style="padding:5px 8px;text-align:center;">Chlorine only</td>
+              <td style="padding:5px 8px;text-align:center;">Hidden</td>
+              <td style="padding:5px 8px;text-align:center;">Yes</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">RDII with statistical distributions</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Weibull + LogN</td>
+              <td style="padding:5px 8px;text-align:center;">N/A</td>
+              <td style="padding:5px 8px;text-align:center;">N/A</td>
+              <td style="padding:5px 8px;text-align:center;">N/A</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">LID controls (7 types)</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Yes</td>
+              <td style="padding:5px 8px;text-align:center;">N/A</td>
+              <td style="padding:5px 8px;text-align:center;">N/A</td>
+              <td style="padding:5px 8px;text-align:center;">N/A</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">DEM elevation grid export</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Yes</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">No</td>
+              <td style="padding:5px 8px;text-align:center;">Separate tool</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">City map backdrop</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Procedural</td>
+              <td style="padding:5px 8px;text-align:center;">Blank canvas</td>
+              <td style="padding:5px 8px;text-align:center;">Satellite tiles</td>
+              <td style="padding:5px 8px;text-align:center;">GIS layers</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">In-browser WASM solver</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Yes</td>
+              <td style="padding:5px 8px;text-align:center;">Desktop exe</td>
+              <td style="padding:5px 8px;text-align:center;">Yes</td>
+              <td style="padding:5px 8px;text-align:center;">Desktop exe</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">Cost</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Free</td>
+              <td style="padding:5px 8px;text-align:center;">Free</td>
+              <td style="padding:5px 8px;text-align:center;">$0–$950/yr</td>
+              <td style="padding:5px 8px;text-align:center;">$5,000+/yr</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+              <td style="padding:5px 8px;">Cross-platform (Mac/Linux)</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Yes</td>
+              <td style="padding:5px 8px;text-align:center;">Windows only</td>
+              <td style="padding:5px 8px;text-align:center;">Yes</td>
+              <td style="padding:5px 8px;text-align:center;">Windows only</td>
+            </tr>
+            <tr>
+              <td style="padding:5px 8px;">Offline / no install</td>
+              <td style="padding:5px 8px;text-align:center;color:#22c55e;">Yes (1 file)</td>
+              <td style="padding:5px 8px;text-align:center;">Install req'd</td>
+              <td style="padding:5px 8px;text-align:center;">CDN required</td>
+              <td style="padding:5px 8px;text-align:center;">Install req'd</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Architecture</h3>
       <p>Single self-contained HTML file with no external dependencies. All generation logic, rendering, city map procedural generation, BFS algorithms, Hazen-Williams friction calculator, design storm hyetographs, and .inp file builders run entirely in the browser. Seeded PRNG (Mulberry32) ensures reproducible results for the same grid dimensions. Mobile-optimized with bottom drawer controls, 44px touch targets, and iOS zoom prevention.</p>
 
