@@ -7091,78 +7091,88 @@ async function runEpanetSolver() {
   const timesteps = [];
   for (let t = 0; t < numTS; t++) timesteps.push(t * reportStep / 60);
 
-  const nodeCount = model2.getCount(0);
-  const linkCount = model2.getCount(2);
-
   const nodeResults = {};
   const linkResults = {};
 
   junctions.forEach(n => { nodeResults[n.id] = []; });
   (nd.tanks || []).forEach(tk => { nodeResults[tk.id] = []; });
   nd.pipes.forEach(p => { linkResults[p.id] = []; });
+  (nd.pumps || []).forEach(p => { linkResults[p.id] = []; });
+  (nd.valves || []).forEach(v => { linkResults[v.id] = []; });
+
+  const allLinks = [
+    ...nd.pipes,
+    ...(nd.pumps || []),
+    ...(nd.valves || [])
+  ];
 
   model2.openH();
-  model2.initH(0);
+  model2.initH(1);
 
   let tstep = Infinity;
   let stepCount = 0;
-  const maxSteps = numTS + 10;
+  const maxSteps = numTS + 50;
+  const actualTimesteps = [];
+  const reportStepSec = reportStep * 60;
 
   do {
-    tstep = model2.runH();
-    const currentTime = tstep;
+    const tElapsed = model2.runH();
 
-    junctions.forEach((n, idx) => {
-      try {
-        const nodeIdx = model2.getNodeIndex(n.id);
-        const pressure = model2.getNodeValue(nodeIdx, 11);
-        const head = model2.getNodeValue(nodeIdx, 10);
-        const demand = model2.getNodeValue(nodeIdx, 9);
-        nodeResults[n.id].push({ pressure, head, demand });
-      } catch(e) {
-        nodeResults[n.id].push({ pressure: 0, head: 0, demand: 0 });
-      }
-    });
+    if (tElapsed % reportStepSec === 0) {
+      actualTimesteps.push(tElapsed / 3600);
 
-    (nd.tanks || []).forEach(tk => {
-      try {
-        const nodeIdx = model2.getNodeIndex(tk.id);
-        const head = model2.getNodeValue(nodeIdx, 10);
-        const pressure = model2.getNodeValue(nodeIdx, 11);
-        nodeResults[tk.id].push({ pressure, head, demand: 0 });
-      } catch(e) {
-        nodeResults[tk.id].push({ pressure: 0, head: 0, demand: 0 });
-      }
-    });
+      junctions.forEach(n => {
+        try {
+          const nodeIdx = model2.getNodeIndex(n.id);
+          const pressure = model2.getNodeValue(nodeIdx, 11);
+          const head = model2.getNodeValue(nodeIdx, 10);
+          const demand = model2.getNodeValue(nodeIdx, 9);
+          const quality = model2.getNodeValue(nodeIdx, 25);
+          nodeResults[n.id].push({ pressure, head, demand, quality });
+        } catch(e) {
+          nodeResults[n.id].push({ pressure: 0, head: 0, demand: 0, quality: 0 });
+        }
+      });
 
-    nd.pipes.forEach((p, idx) => {
-      try {
-        const linkIdx = model2.getLinkIndex(p.id);
-        const flow = model2.getLinkValue(linkIdx, 8);
-        const velocity = model2.getLinkValue(linkIdx, 9);
-        linkResults[p.id].push({ flow: Math.abs(flow), velocity: Math.abs(velocity) });
-      } catch(e) {
-        linkResults[p.id].push({ flow: 0, velocity: 0 });
-      }
-    });
+      (nd.tanks || []).forEach(tk => {
+        try {
+          const nodeIdx = model2.getNodeIndex(tk.id);
+          const head = model2.getNodeValue(nodeIdx, 10);
+          const pressure = model2.getNodeValue(nodeIdx, 11);
+          nodeResults[tk.id].push({ pressure, head, demand: 0, quality: 0 });
+        } catch(e) {
+          nodeResults[tk.id].push({ pressure: 0, head: 0, demand: 0, quality: 0 });
+        }
+      });
+
+      allLinks.forEach(p => {
+        try {
+          const linkIdx = model2.getLinkIndex(p.id);
+          const flow = model2.getLinkValue(linkIdx, 8);
+          const velocity = model2.getLinkValue(linkIdx, 9);
+          const headloss = model2.getLinkValue(linkIdx, 10);
+          linkResults[p.id].push({ flow: Math.abs(flow), velocity: Math.abs(velocity), headloss: Math.abs(headloss) });
+        } catch(e) {
+          linkResults[p.id].push({ flow: 0, velocity: 0, headloss: 0 });
+        }
+      });
+
+      stepCount++;
+    }
 
     tstep = model2.nextH();
-    stepCount++;
     if (stepCount >= maxSteps) break;
   } while (tstep > 0);
 
   model2.closeH();
   model2.close();
 
-  const actualTimesteps = [];
-  for (let i = 0; i < stepCount; i++) actualTimesteps.push(i * hydStep / 60);
-
   solverResults = {
     timesteps: actualTimesteps,
     nodeResults,
     linkResults,
     type: 'epanet',
-    _source: 'epanet_wasm',
+    _source: 'epanet_binary',
     nodes: junctions
   };
 
