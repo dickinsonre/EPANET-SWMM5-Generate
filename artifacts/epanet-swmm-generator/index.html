@@ -5819,22 +5819,37 @@ async function generateSWMMNetwork(silent) {
     });
   }
 
+  const outfallInletCount = {};
+  outfalls.forEach(o => { outfallInletCount[o.id] = 0; });
+
+  function canConnectOutfall(n1, n2) {
+    const o1 = n1.type === 'outfall', o2 = n2.type === 'outfall';
+    if (!o1 && !o2) return true;
+    if (o1 && o2) return false;
+    const outId = o1 ? n1.id : n2.id;
+    const fromN = n1.elev >= n2.elev ? n1 : n2;
+    const toN = n1.elev >= n2.elev ? n2 : n1;
+    if (toN.type !== 'outfall') return false;
+    if (outfallInletCount[outId] >= 1) return false;
+    outfallInletCount[outId]++;
+    return true;
+  }
+
   // Horizontal conduits
   for(let r=0;r<rows;r++) for(let c=0;c<cols-1;c++){
     const n1=nG[r][c],n2=nG[r][c+1];
-    if(n1&&n2&&n1.type!=='outfall'&&n2.type!=='outfall') makeConduit(n1,n2);
-    else if(n1&&n2) makeConduit(n1,n2); // allow connections TO outfalls
+    if(n1&&n2&&canConnectOutfall(n1,n2)) makeConduit(n1,n2);
   }
   // Vertical conduits
   for(let r=0;r<rows-1;r++) for(let c=0;c<cols;c++){
     const n1=nG[r][c],n2=nG[r+1][c];
-    if(n1&&n2) makeConduit(n1,n2);
+    if(n1&&n2&&canConnectOutfall(n1,n2)) makeConduit(n1,n2);
   }
   // Some diagonals
   const dgC=Math.round(rows*cols*cfg.diagonalPct/100*0.3);
   for(let d=0;d<dgC;d++){
     const r=Math.floor(rng()*(rows-1)),c=Math.floor(rng()*(cols-1)),dir=rng()>0.5?1:-1,c2=c+dir;
-    if(c2>=0&&c2<cols){const n1=nG[r][c],n2=nG[r+1][c2];if(n1&&n2&&n1.id!==n2.id)makeConduit(n1,n2);}
+    if(c2>=0&&c2<cols){const n1=nG[r][c],n2=nG[r+1][c2];if(n1&&n2&&n1.id!==n2.id&&canConnectOutfall(n1,n2))makeConduit(n1,n2);}
   }
 
   setProgress(pf,pl,60,'Adding pump stations...');await sleep(5);
