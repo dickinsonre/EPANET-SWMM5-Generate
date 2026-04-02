@@ -7110,6 +7110,7 @@ async function loadSwmmEngine() {
       },
       onRuntimeInitialized: () => {
         console.log('[SWMM loader] onRuntimeInitialized fired!');
+        console.log('[SWMM loader] Has FS_createDataFile:', !!window.Module.FS_createDataFile, 'Has cwrap:', !!window.Module.cwrap, 'Has _swmm_run:', !!window.Module._swmm_run);
         clearTimeout(timeout);
         resolve(window.Module);
       },
