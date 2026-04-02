@@ -7092,9 +7092,15 @@ async function runSolver() {
       await runEpanetSolver();
     } else if (solverType === 'swmm' && solverModule.FS) {
       await runSwmmSolver();
+    } else if (solverType === 'swmm' && !solverModule.FS) {
+      setSolverStatus('⚠ SWMM engine not loaded — click "Load WASM Engine" first while in SWMM mode, then try again.');
+      return;
+    } else if (solverType === 'epanet' && solverModule.type !== 'epanet-js') {
+      setSolverStatus('⚠ EPANET engine not loaded — click "Load WASM Engine" first while in EPANET mode, then try again.');
+      return;
     } else {
-      setSolverStatus('Generating demo results for visualization testing...');
-      solverResults = generateDemoResults();
+      setSolverStatus('⚠ No matching engine loaded. Click "Load WASM Engine" to load the solver for the current mode.');
+      return;
     }
 
     if (solverResults) {
@@ -7627,13 +7633,14 @@ async function runSwmmSolver() {
   if (err > 0) {
     let rptText = '';
     try { rptText = new TextDecoder().decode(solverModule.FS.readFile('model.rpt')); } catch(e) {}
-    setSolverStatus(`⚠ SWMM error code ${err}. Check .rpt for details.`);
+    const errLines = rptText ? rptText.split('\n').filter(l => /ERROR/i.test(l)).slice(0,5).join('; ') : '';
+    setSolverStatus(`⚠ SWMM error code ${err}. ${errLines || 'Check RPT tab for details.'}`);
     if (rptText) {
       generatedRPT = rptText;
+      wasmRPT = rptText;
       const inpTab = document.getElementById('rptTabBtn');
       if (inpTab) inpTab.style.display = '';
     }
-    solverResults = generateDemoResults();
     return;
   }
 
@@ -7646,10 +7653,12 @@ async function runSwmmSolver() {
     if (outData && outData.length > 100) {
       solverResults = parseSWMMBinary(outData.buffer);
     } else {
-      solverResults = generateDemoResults();
+      setSolverStatus('⚠ SWMM ran but produced no output. Check RPT tab for warnings.');
+      return;
     }
   } catch(e) {
-    solverResults = generateDemoResults();
+    setSolverStatus(`⚠ Error reading SWMM output: ${e.message}`);
+    return;
   }
 
   const nd = networkData;
