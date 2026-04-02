@@ -8508,7 +8508,7 @@ function updateCalParamOptions() {
   if (!sel) return;
   const isSwmm = currentMode === 'swmm';
   if (isSwmm) {
-    sel.innerHTML = '<optgroup label="Subcatchment Parameters"><option value="runoff">Subcatchment Runoff</option><option value="washoff">Subcatchment Washoff</option></optgroup><optgroup label="Node Parameters"><option value="depth" selected>Node Water Depth</option><option value="waterQuality">Node Water Quality</option><option value="inflow">Node Lateral Inflow</option><option value="flooding">Node Flooding</option></optgroup><optgroup label="Groundwater / Snow"><option value="gwFlow">Groundwater Flow</option><option value="gwElev">Groundwater Elevation</option><option value="snowDepth">Snow Pack Depth</option></optgroup><optgroup label="Link Parameters"><option value="flow">Link Flow Rate</option><option value="linkDepth">Link Flow Depth</option><option value="velocity">Link Flow Velocity</option></optgroup>';
+    sel.innerHTML = '<optgroup label="Subcatchment"><option value="runoff">Subcatchment Runoff</option><option value="washoff">Subcatchment Washoff</option></optgroup><optgroup label="Node"><option value="depth" selected>Node Depth</option><option value="waterQuality">Node Quality</option><option value="inflow">Node Lateral Inflow</option><option value="flooding">Node Flooding</option></optgroup><optgroup label="Groundwater / Snow"><option value="gwFlow">Groundwater Flow</option><option value="gwElev">Groundwater Elevation</option><option value="snowDepth">Snow Pack Depth</option></optgroup><optgroup label="Link"><option value="flow">Link Flow</option><option value="linkDepth">Link Depth</option><option value="velocity">Link Velocity</option></optgroup>';
   } else {
     sel.innerHTML = '<optgroup label="Node Parameters"><option value="head">Head</option><option value="pressure" selected>Pressure</option><option value="demand">Demand</option><option value="chlorine">Chlorine</option></optgroup><optgroup label="Link Parameters"><option value="flow">Flow</option><option value="velocity">Velocity</option><option value="headloss">Headloss</option></optgroup>';
   }
@@ -8555,16 +8555,16 @@ function _buildCalFile(param, sr, isSwmm, isSI) {
   const L = [];
 
   if (isSwmm) {
-    const paramLabels = { runoff:'Subcatchment Runoff', washoff:'Subcatchment Washoff', depth:'Node Water Depth', head:'Node Head', inflow:'Node Lateral Inflow', flooding:'Node Flooding', waterQuality:'Node Water Quality', gwFlow:'Groundwater Flow', gwElev:'Groundwater Elevation', snowDepth:'Snow Pack Depth', flow:'Link Flow Rate', velocity:'Link Flow Velocity', linkDepth:'Link Flow Depth' };
+    const paramHeaders = { runoff:'Subcatchment Runoff', washoff:'Subcatchment Washoff', depth:'Node Depth', waterQuality:'Node Quality', inflow:'Node Lateral Inflow', flooding:'Node Flooding', gwFlow:'Groundwater Flow', gwElev:'Groundwater Elevation', snowDepth:'Snow Pack Depth', flow:'Link Flow', linkDepth:'Link Depth', velocity:'Link Velocity' };
     const paramUnits = isSI
-      ? { runoff:'CMS', washoff:'kg/s', depth:'m', head:'m', inflow:'CMS', flooding:'CMS', waterQuality:'mg/L', gwFlow:'CMS', gwElev:'m', snowDepth:'mm', flow:'CMS', velocity:'m/s', linkDepth:'m' }
-      : { runoff:'CFS', washoff:'lb/s', depth:'ft', head:'ft', inflow:'CFS', flooding:'CFS', waterQuality:'mg/L', gwFlow:'CFS', gwElev:'ft', snowDepth:'in', flow:'CFS', velocity:'ft/s', linkDepth:'ft' };
+      ? { runoff:'CMS', washoff:'kg/s', depth:'m', inflow:'CMS', flooding:'CMS', waterQuality:'mg/L', gwFlow:'CMS', gwElev:'m', snowDepth:'mm', flow:'CMS', velocity:'m/s', linkDepth:'m' }
+      : { runoff:'CFS', washoff:'lb/s', depth:'ft', inflow:'CFS', flooding:'CFS', waterQuality:'mg/L', gwFlow:'CFS', gwElev:'ft', snowDepth:'in', flow:'CFS', velocity:'ft/s', linkDepth:'ft' };
     const elemType = isSubcatchParam ? 'Subcatch' : (isGwParam ? 'Subcatch' : (isNodeParam ? 'Node' : 'Link'));
     L.push(`;;SWMM 5.2.4 Calibration File`);
-    L.push(`;;Parameter: ${paramLabels[param] || param}`);
+    L.push(`;;Parameter: ${paramHeaders[param] || param}`);
     L.push(`;;Units: ${paramUnits[param] || ''}`);
     L.push(``);
-    L.push(`${paramLabels[param] || param.toUpperCase()}`);
+    L.push(`${paramHeaders[param] || param.toUpperCase()}`);
     L.push(`;${elemType}             Date             Time             Value`);
 
     const ids = Object.keys(results);
