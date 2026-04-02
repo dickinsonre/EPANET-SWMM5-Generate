@@ -8565,26 +8565,15 @@ function _buildCalFile(param, sr, isSwmm, isSI) {
 }
 
 function downloadCalibrationFile() {
-  try {
-    if (!solverResults) { alert('Run solver first to generate calibration data.'); return; }
-    const param = document.getElementById('calParamSelect')?.value || 'pressure';
-    const isSwmm = currentMode === 'swmm';
-    const isSI = currentUnits === 'SI';
-    const content = _buildCalFile(param, solverResults, isSwmm, isSI);
-    if (!content) { alert('No solver results available for this parameter.'); return; }
-    const prefix = isSwmm ? 'SWMM524' : 'EPANET23';
-    const fname = `${prefix}_calibration_${param}.dat`;
-    const blob = new Blob([content], {type:'application/octet-stream'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = fname;
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { try { document.body.removeChild(a); } catch(x){} URL.revokeObjectURL(url); }, 5000);
-    showToast(`Downloading ${fname}`, 'success');
-  } catch(e) {
-    console.error('Cal file error:', e);
-    showToast('Error: ' + e.message, 'error');
-  }
+  if (!solverResults) { alert('Run solver first to generate calibration data.'); return; }
+  const param = document.getElementById('calParamSelect')?.value || 'pressure';
+  const isSwmm = currentMode === 'swmm';
+  const isSI = currentUnits === 'SI';
+  const content = _buildCalFile(param, solverResults, isSwmm, isSI);
+  if (!content) { alert('No solver results available for this parameter.'); return; }
+  const prefix = isSwmm ? 'SWMM524' : 'EPANET23';
+  const fname = `${prefix}_calibration_${param}.dat`;
+  _triggerDownload(content, fname, 'text/plain');
 }
 
 function _miniZipCreate(filesObj) {
@@ -8645,6 +8634,27 @@ function _crc32(buf) {
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
+function _triggerDownload(content, filename, mimeType) {
+  try {
+    const isBlob = content instanceof Blob;
+    const blob = isBlob ? content : new Blob([content], { type: mimeType || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      try { document.body.removeChild(a); } catch(x){}
+      URL.revokeObjectURL(url);
+    }, 5000);
+  } catch(e) {
+    const dataUrl = 'data:' + (mimeType || 'application/octet-stream') + ';charset=utf-8,' + encodeURIComponent(typeof content === 'string' ? content : '');
+    fallbackOpen(dataUrl);
+  }
+}
+
 function downloadAllCalibrationFiles() {
   try {
     if (!solverResults) { alert('Run solver first to generate calibration data.'); return; }
@@ -8666,13 +8676,7 @@ function downloadAllCalibrationFiles() {
 
     const blob = _miniZipCreate(files);
     const fname = `${prefix}_calibration_files.zip`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fname;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { try { document.body.removeChild(a); } catch(x){} URL.revokeObjectURL(url); }, 5000);
+    _triggerDownload(blob, fname, 'application/zip');
     showToast(`Downloading ${fname} (${fkeys.length} files)`, 'success');
   } catch(e) {
     console.error('Cal zip error:', e);
