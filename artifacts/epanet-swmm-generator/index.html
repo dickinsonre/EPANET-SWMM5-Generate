@@ -8018,14 +8018,15 @@ function parseSWMMBinary(buffer) {
       for (let sc = 0; sc < numSubcatch; sc++) {
         const rainfall = f32();
         const snowDepth = f32();
-        const losses = f32();
+        const evapLoss = f32();
+        const infilLoss = f32();
         const runoff = f32();
         const gwFlow = f32();
         const gwElev = f32();
         const soilMoist = f32();
-        const washoff = f32();
-        for (let p = 0; p < numPollutants; p++) f32();
-        subcatchResults[subcatchIds[sc]].push({ rainfall, snowDepth, losses, runoff, gwFlow, gwElev, soilMoist, washoff });
+        const pollutWashoff = [];
+        for (let p = 0; p < numPollutants; p++) pollutWashoff.push(f32());
+        subcatchResults[subcatchIds[sc]].push({ rainfall, snowDepth, evapLoss, infilLoss, runoff, gwFlow, gwElev, soilMoist, washoff: pollutWashoff.length > 0 ? pollutWashoff[0] : 0 });
       }
 
       for (let nd = 0; nd < numNodes; nd++) {
