@@ -8570,7 +8570,7 @@ function downloadCalibrationFile() {
     const blob = new Blob([L.join('\n')], {type:'text/plain'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href=url; a.download=`EPANET23_calibration_${param}.cal`; a.style.display='none';
+    a.href=url; a.download=`EPANET23_calibration_${param}.dat`; a.style.display='none';
     document.body.appendChild(a); a.click();
     setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
   }
