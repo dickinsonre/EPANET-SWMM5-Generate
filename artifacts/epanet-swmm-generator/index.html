@@ -157,6 +157,8 @@ input[type="number"], input[type="text"], select {
   width: 100%;
   min-height: 44px;
 }
+select option { background: #1e293b; color: #f1f5f9; padding: 6px 8px; font-size: 14px; }
+select optgroup { background: #0f172a; color: #fbbf24; font-weight: 700; font-size: 13px; padding: 4px 0; }
 
 input:focus, select:focus { border-color: var(--accent-blue); }
 
@@ -2808,7 +2810,7 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
   <div id="tab-results" style="display:none;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch;">
     <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
       <button class="download-btn" onclick="downloadResultsHTML()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download HTML Report</button>
-      <select id="calParamSelect" onchange="updateCalParamLabel()" style="flex:none;padding:6px 10px;font-size:11px;min-height:36px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;">
+      <select id="calParamSelect" onchange="updateCalParamLabel()" style="flex:none;padding:6px 10px;font-size:13px;min-height:36px;background:#1e293b;color:#f1f5f9;border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;">
         <optgroup label="Node Parameters">
           <option value="head">Head</option>
           <option value="pressure" selected>Pressure</option>
