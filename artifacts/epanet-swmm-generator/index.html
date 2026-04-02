@@ -7612,12 +7612,13 @@ function generateDemoResults() {
         const demand = (n.demand || 5) * diurnal;
         nodeResults[n.id].push({ pressure, head, demand });
       } else {
-        // SWMM: depth at node, typically 0-80% of max depth during storm
-        const stormPeak = Math.exp(-((hrs - 12) ** 2) / 18); // storm centered at 12hrs
-        const depth = Math.max(0, (n.maxDepth || 6) * stormPeak * (0.3 + rng() * 0.5));
+        const stormPeak = Math.exp(-((hrs - 12) ** 2) / 18);
+        const maxD = n.maxDepth || 6;
+        const depth = Math.max(0, maxD * stormPeak * (0.3 + rng() * 0.5));
         const head = n.elev + depth;
         const inflow = depth > 0.1 ? (0.1 + rng() * 2) * stormPeak : 0;
-        nodeResults[n.id].push({ depth, head, inflow });
+        const flooding = depth > maxD * 0.95 ? (depth - maxD * 0.95) * (0.5 + rng() * 1.5) : 0;
+        nodeResults[n.id].push({ depth, head, inflow, flooding });
       }
     }
   });
@@ -7635,12 +7636,30 @@ function generateDemoResults() {
         const stormPeak = Math.exp(-((hrs - 12)**2) / 18);
         const flow = (0.1 + rng() * 5) * stormPeak;
         const velocity = flow > 0.01 ? (1 + rng() * 4) * stormPeak : 0;
-        linkResults[p.id].push({ flow, velocity: Math.min(10, velocity) });
+        const condMaxD = p.maxDepth || p.geom1 || 2;
+        const linkDepth = Math.max(0, condMaxD * stormPeak * (0.2 + rng() * 0.6));
+        linkResults[p.id].push({ flow, velocity: Math.min(10, velocity), linkDepth });
       }
     }
   });
 
-  return { timesteps, nodeResults, linkResults, type: isEpanet ? 'epanet' : 'swmm' };
+  const subcatchResults = {};
+  if (!isEpanet) {
+    const numSC = nd.subcatchments || 0;
+    for (let sc = 1; sc <= numSC; sc++) {
+      const scId = `S${sc}`;
+      subcatchResults[scId] = [];
+      const baseArea = 2 + rng() * 8;
+      for (let t = 0; t < numTS; t++) {
+        const hrs = t * dtHrs;
+        const stormPeak = Math.exp(-((hrs - 12)**2) / 18);
+        const runoff = Math.max(0, baseArea * 0.02 * stormPeak * (0.4 + rng() * 0.6));
+        subcatchResults[scId].push({ runoff });
+      }
+    }
+  }
+
+  return { timesteps, nodeResults, linkResults, subcatchResults, type: isEpanet ? 'epanet' : 'swmm' };
 }
 
 // ═══════ EPANET BINARY .OUT PARSER ═══════
@@ -8454,9 +8473,10 @@ function updateCalParamLabel() {
   const lbl = document.getElementById('calParamType');
   if (!sel || !lbl) return;
   const p = sel.value;
-  const isNode = ['head','pressure','demand','chlorine','depth','inflow'].includes(p);
-  lbl.textContent = isNode ? 'Node' : 'Link';
-  lbl.style.color = isNode ? '#60a5fa' : '#4ade80';
+  const isSubcatch = ['runoff'].includes(p);
+  const isNode = ['head','pressure','demand','chlorine','depth','inflow','flooding'].includes(p);
+  lbl.textContent = isSubcatch ? 'Subcatch' : (isNode ? 'Node' : 'Link');
+  lbl.style.color = isSubcatch ? '#06b6d4' : (isNode ? '#60a5fa' : '#4ade80');
 }
 
 function updateCalParamOptions() {
@@ -8464,7 +8484,7 @@ function updateCalParamOptions() {
   if (!sel) return;
   const isSwmm = currentMode === 'swmm';
   if (isSwmm) {
-    sel.innerHTML = '<optgroup label="Node Parameters"><option value="depth">Depth</option><option value="head">Head</option><option value="inflow">Inflow</option></optgroup><optgroup label="Link Parameters"><option value="flow">Flow</option><option value="velocity">Velocity</option></optgroup>';
+    sel.innerHTML = '<optgroup label="Subcatchment Parameters"><option value="runoff">Runoff</option></optgroup><optgroup label="Node Parameters"><option value="depth" selected>Depth</option><option value="head">Head</option><option value="inflow">Lateral Inflow</option><option value="flooding">Flooding</option></optgroup><optgroup label="Link Parameters"><option value="flow">Flow</option><option value="velocity">Velocity</option><option value="linkDepth">Depth (Link)</option></optgroup>';
   } else {
     sel.innerHTML = '<optgroup label="Node Parameters"><option value="head">Head</option><option value="pressure" selected>Pressure</option><option value="demand">Demand</option><option value="chlorine">Chlorine</option></optgroup><optgroup label="Link Parameters"><option value="flow">Flow</option><option value="velocity">Velocity</option><option value="headloss">Headloss</option></optgroup>';
   }
@@ -8479,16 +8499,20 @@ function _extractCalVal(r, p) {
     case 'chlorine': return r.quality || 0;
     case 'depth': return r.depth || 0;
     case 'inflow': return r.inflow || r.demand || 0;
+    case 'flooding': return r.flooding || 0;
     case 'flow': return r.flow || 0;
     case 'velocity': return r.velocity || 0;
     case 'headloss': return r.headloss || 0;
+    case 'linkDepth': return r.linkDepth || r.depth || 0;
+    case 'runoff': return r.runoff || 0;
     default: return 0;
   }
 }
 
 function _buildCalFile(param, sr, isSwmm, isSI) {
-  const isNodeParam = ['head','pressure','demand','chlorine','depth','inflow'].includes(param);
-  const results = isNodeParam ? sr.nodeResults : sr.linkResults;
+  const isSubcatchParam = ['runoff'].includes(param);
+  const isNodeParam = ['head','pressure','demand','chlorine','depth','inflow','flooding'].includes(param);
+  const results = isSubcatchParam ? sr.subcatchResults : (isNodeParam ? sr.nodeResults : sr.linkResults);
   const timesteps = sr.timesteps;
   if (!results || Object.keys(results).length === 0) return null;
 
@@ -8501,16 +8525,17 @@ function _buildCalFile(param, sr, isSwmm, isSI) {
   const L = [];
 
   if (isSwmm) {
-    const paramLabels = { depth:'Node Depth', head:'Node Head', inflow:'Node Lateral Inflow', flow:'Link Flow', velocity:'Link Flow Velocity' };
+    const paramLabels = { runoff:'Subcatchment Runoff', depth:'Node Depth', head:'Node Head', inflow:'Node Lateral Inflow', flooding:'Node Flooding', flow:'Link Flow', velocity:'Link Flow Velocity', linkDepth:'Link Flow Depth' };
     const paramUnits = isSI
-      ? { depth:'m', head:'m', inflow:'CMS', flow:'CMS', velocity:'m/s' }
-      : { depth:'ft', head:'ft', inflow:'CFS', flow:'CFS', velocity:'ft/s' };
+      ? { runoff:'CMS', depth:'m', head:'m', inflow:'CMS', flooding:'CMS', flow:'CMS', velocity:'m/s', linkDepth:'m' }
+      : { runoff:'CFS', depth:'ft', head:'ft', inflow:'CFS', flooding:'CFS', flow:'CFS', velocity:'ft/s', linkDepth:'ft' };
+    const elemType = isSubcatchParam ? 'Subcatch' : (isNodeParam ? 'Node' : 'Link');
     L.push(`;;SWMM 5.2.4 Calibration File`);
     L.push(`;;Parameter: ${paramLabels[param] || param}`);
     L.push(`;;Units: ${paramUnits[param] || ''}`);
     L.push(``);
     L.push(`${paramLabels[param] || param.toUpperCase()}`);
-    L.push(`;${isNodeParam ? 'Node' : 'Link'}             Date             Time             Value`);
+    L.push(`;${elemType}             Date             Time             Value`);
 
     const ids = Object.keys(results);
     const maxItems = Math.min(ids.length, 200);
@@ -8662,9 +8687,10 @@ function downloadAllCalibrationFiles() {
     const isSI = currentUnits === 'SI';
     const prefix = isSwmm ? 'SWMM524' : 'EPANET23';
 
-    const nodeParams = isSwmm ? ['depth','head','inflow'] : ['head','pressure','demand','chlorine'];
-    const linkParams = isSwmm ? ['flow','velocity'] : ['flow','velocity','headloss'];
-    const allParams = [...nodeParams, ...linkParams];
+    const subcatchParams = isSwmm ? ['runoff'] : [];
+    const nodeParams = isSwmm ? ['depth','head','inflow','flooding'] : ['head','pressure','demand','chlorine'];
+    const linkParams = isSwmm ? ['flow','velocity','linkDepth'] : ['flow','velocity','headloss'];
+    const allParams = [...subcatchParams, ...nodeParams, ...linkParams];
 
     const files = {};
     for (const p of allParams) {
