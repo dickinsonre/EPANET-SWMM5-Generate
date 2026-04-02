@@ -7150,7 +7150,7 @@ async function runEpanetSolver() {
           const flow = model2.getLinkValue(linkIdx, 8);
           const velocity = model2.getLinkValue(linkIdx, 9);
           const headloss = model2.getLinkValue(linkIdx, 10);
-          linkResults[p.id].push({ flow: Math.abs(flow), velocity: Math.abs(velocity), headloss: Math.abs(headloss) });
+          linkResults[p.id].push({ flow, velocity, headloss });
         } catch(e) {
           linkResults[p.id].push({ flow: 0, velocity: 0, headloss: 0 });
         }
