@@ -2808,13 +2808,20 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
   <div id="tab-results" style="display:none;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch;">
     <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
       <button class="download-btn" onclick="downloadResultsHTML()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download HTML Report</button>
-      <select id="calParamSelect" style="flex:none;padding:6px 10px;font-size:11px;min-height:36px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;">
-        <option value="pressure">Pressure</option>
-        <option value="head">Head</option>
-        <option value="demand">Demand</option>
-        <option value="flow">Flow</option>
-        <option value="velocity">Velocity</option>
+      <select id="calParamSelect" onchange="updateCalParamLabel()" style="flex:none;padding:6px 10px;font-size:11px;min-height:36px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;">
+        <optgroup label="Node Parameters">
+          <option value="head">Head</option>
+          <option value="pressure" selected>Pressure</option>
+          <option value="demand">Demand</option>
+          <option value="chlorine">Chlorine</option>
+        </optgroup>
+        <optgroup label="Link Parameters">
+          <option value="flow">Flow</option>
+          <option value="velocity">Velocity</option>
+          <option value="headloss">Headloss</option>
+        </optgroup>
       </select>
+      <span id="calParamType" style="font-size:10px;color:var(--text-dim);min-width:50px;">Node</span>
       <button class="download-btn" onclick="downloadCalibrationFile()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#f59e0b;color:#f59e0b;">↓ Calibration File</button>
     </div>
     <div id="resultsContent" style="font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-secondary);line-height:1.6;">
@@ -8432,23 +8439,33 @@ function downloadResultsHTML() {
 }
 
 // ═══════ CALIBRATION FILE EXPORT ═══════
+function updateCalParamLabel() {
+  const sel = document.getElementById('calParamSelect');
+  const lbl = document.getElementById('calParamType');
+  if (!sel || !lbl) return;
+  const p = sel.value;
+  const isNode = ['head','pressure','demand','chlorine','depth','inflow'].includes(p);
+  lbl.textContent = isNode ? 'Node' : 'Link';
+  lbl.style.color = isNode ? '#60a5fa' : '#4ade80';
+}
+
 function updateCalParamOptions() {
   const sel = document.getElementById('calParamSelect');
   if (!sel) return;
   const isSwmm = currentMode === 'swmm';
-  sel.innerHTML = '';
   if (isSwmm) {
-    sel.innerHTML = '<option value="depth">Node Depth</option><option value="head">Node Head</option><option value="inflow">Node Inflow</option><option value="flow">Link Flow</option><option value="velocity">Link Velocity</option>';
+    sel.innerHTML = '<optgroup label="Node Parameters"><option value="depth">Depth</option><option value="head">Head</option><option value="inflow">Inflow</option></optgroup><optgroup label="Link Parameters"><option value="flow">Flow</option><option value="velocity">Velocity</option></optgroup>';
   } else {
-    sel.innerHTML = '<option value="pressure">Pressure</option><option value="head">Head</option><option value="demand">Demand</option><option value="flow">Flow</option><option value="velocity">Velocity</option>';
+    sel.innerHTML = '<optgroup label="Node Parameters"><option value="head">Head</option><option value="pressure" selected>Pressure</option><option value="demand">Demand</option><option value="chlorine">Chlorine</option></optgroup><optgroup label="Link Parameters"><option value="flow">Flow</option><option value="velocity">Velocity</option><option value="headloss">Headloss</option></optgroup>';
   }
+  updateCalParamLabel();
 }
 
 function downloadCalibrationFile() {
   if (!solverResults) { alert('Run solver first to generate calibration data.'); return; }
   const param = document.getElementById('calParamSelect')?.value || 'pressure';
   const isSwmm = currentMode === 'swmm';
-  const isNodeParam = ['pressure','head','demand','depth','inflow'].includes(param);
+  const isNodeParam = ['head','pressure','demand','chlorine','depth','inflow'].includes(param);
   const results = isNodeParam ? solverResults.nodeResults : solverResults.linkResults;
   const timesteps = solverResults.timesteps;
   if (!results || Object.keys(results).length === 0) { alert('No solver results available.'); return; }
@@ -8460,30 +8477,39 @@ function downloadCalibrationFile() {
     sampledIndices.push(timesteps.length-1);
 
   const L = [];
-  const units = currentUnits === 'SI' ? 'SI' : 'US';
+  const isSI = currentUnits === 'SI';
+
+  const extractVal = (r, p) => {
+    switch(p) {
+      case 'head': return r.head || 0;
+      case 'pressure': return r.pressure || 0;
+      case 'demand': return r.demand || 0;
+      case 'chlorine': return r.quality || 0;
+      case 'depth': return r.depth || 0;
+      case 'inflow': return r.inflow || r.demand || 0;
+      case 'flow': return r.flow || 0;
+      case 'velocity': return r.velocity || 0;
+      case 'headloss': return r.headloss || 0;
+      default: return 0;
+    }
+  };
 
   if (isSwmm) {
     const paramLabels = { depth:'Node Depth', head:'Node Head', inflow:'Node Lateral Inflow', flow:'Link Flow', velocity:'Link Flow Velocity' };
-    const paramUnits = units === 'SI'
+    const paramUnits = isSI
       ? { depth:'m', head:'m', inflow:'CMS', flow:'CMS', velocity:'m/s' }
       : { depth:'ft', head:'ft', inflow:'CFS', flow:'CFS', velocity:'ft/s' };
     L.push(`;;SWMM 5.2.4 Calibration File`);
     L.push(`;;Generated by EPANET SWMM5 Generator`);
     L.push(`;;Parameter: ${paramLabels[param] || param}`);
     L.push(`;;Units: ${paramUnits[param] || ''}`);
-    L.push(`;;${isNodeParam ? 'Node' : 'Link'} ID    Date/Time            Value`);
     L.push(``);
-
-    if (isNodeParam) {
-      L.push(`${paramLabels[param] || param.toUpperCase()}`);
-    } else {
-      L.push(`${paramLabels[param] || param.toUpperCase()}`);
-    }
+    L.push(`${paramLabels[param] || param.toUpperCase()}`);
     L.push(`;${isNodeParam ? 'Node' : 'Link'}             Date             Time             Value`);
 
     const ids = Object.keys(results);
-    const maxNodes = Math.min(ids.length, 200);
-    const step = Math.max(1, Math.floor(ids.length / maxNodes));
+    const maxItems = Math.min(ids.length, 200);
+    const step = Math.max(1, Math.floor(ids.length / maxItems));
     for (let ni = 0; ni < ids.length; ni += step) {
       const id = ids[ni];
       const data = results[id];
@@ -8496,12 +8522,7 @@ function downloadCalibrationFile() {
         const h = Math.floor(totalMins / 60);
         const m = totalMins % 60;
         const timeStr = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
-        let val = 0;
-        if (param === 'depth') val = r.depth || 0;
-        else if (param === 'head') val = r.head || 0;
-        else if (param === 'inflow') val = r.inflow || r.demand || 0;
-        else if (param === 'flow') val = r.flow || 0;
-        else if (param === 'velocity') val = r.velocity || 0;
+        const val = extractVal(r, param);
         L.push(`${id.padEnd(17)}01/01/2025       ${timeStr.padEnd(17)}${val.toFixed(3)}`);
       }
     }
@@ -8512,16 +8533,21 @@ function downloadCalibrationFile() {
     document.body.appendChild(a); a.click();
     setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
   } else {
-    const paramLabels = { pressure:'Pressure', head:'Head', demand:'Demand', flow:'Flow', velocity:'Velocity' };
-    const paramUnits = units === 'SI'
-      ? { pressure:'m', head:'m', demand:'LPS', flow:'LPS', velocity:'m/s' }
-      : { pressure:'psi', head:'ft', demand:'GPM', flow:'GPM', velocity:'fps' };
+    const paramLabels = { head:'Head', pressure:'Pressure', demand:'Demand', chlorine:'Chlorine', flow:'Flow', velocity:'Velocity', headloss:'Headloss' };
+    const paramUnits = isSI
+      ? { head:'m', pressure:'m', demand:'LPS', chlorine:'mg/L', flow:'LPS', velocity:'m/s', headloss:'m/km' }
+      : { head:'ft', pressure:'psi', demand:'GPM', chlorine:'mg/L', flow:'GPM', velocity:'fps', headloss:'ft/Kft' };
+    const elemType = isNodeParam ? 'Node' : 'Link';
+
     L.push(`;EPANET 2.3 Calibration File`);
     L.push(`;Generated by EPANET SWMM5 Generator`);
     L.push(`;Parameter: ${paramLabels[param]} (${paramUnits[param]})`);
+    L.push(`;Element type: ${elemType}`);
     L.push(`;`);
-    L.push(`;Format: Node/Link ID followed by time-value pairs`);
-    L.push(`;Compatible with EPANET 2.2+ calibration data import`);
+    L.push(`;Format: ${elemType} ID followed by time-value pairs`);
+    L.push(`;        Time (hrs)    ${paramLabels[param]} (${paramUnits[param]})`);
+    L.push(`;`);
+    L.push(`;Compatible with EPANET 2.2+ File > Calibration Data > ${elemType}`);
     L.push(``);
 
     const ids = Object.keys(results);
@@ -8536,12 +8562,7 @@ function downloadCalibrationFile() {
         if (ti >= data.length) continue;
         const r = data[ti];
         const hrs = timesteps[ti];
-        let val = 0;
-        if (param === 'pressure') val = r.pressure || 0;
-        else if (param === 'head') val = r.head || 0;
-        else if (param === 'demand') val = r.demand || 0;
-        else if (param === 'flow') val = r.flow || 0;
-        else if (param === 'velocity') val = r.velocity || 0;
+        const val = extractVal(r, param);
         L.push(`  ${hrs.toFixed(2).padStart(8)}    ${val.toFixed(3)}`);
       }
       L.push(``);
