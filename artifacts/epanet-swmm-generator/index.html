@@ -7061,34 +7061,56 @@ async function loadSwmmEngine() {
 
   const jsUrl = baseUrl + 'swmm_engine.js';
   const wasmUrl = baseUrl + 'js.wasm';
+  const dataUrl = baseUrl + 'js.data';
 
-  setSolverStatus('Checking SWMM engine files...');
-  const [jsCheck, wasmCheck] = await Promise.all([
-    fetch(jsUrl, {method:'HEAD'}).catch(()=>null),
-    fetch(wasmUrl, {method:'HEAD'}).catch(()=>null)
-  ]);
-  if (!jsCheck || !jsCheck.ok) throw new Error('swmm_engine.js not found at ' + jsUrl + ' (status: ' + (jsCheck?.status||'network error') + ')');
-  if (!wasmCheck || !wasmCheck.ok) throw new Error('js.wasm not found at ' + wasmUrl + ' (status: ' + (wasmCheck?.status||'network error') + ')');
+  setSolverStatus('Downloading SWMM engine files...');
+  console.log('[SWMM loader] Fetching:', jsUrl, wasmUrl, dataUrl);
 
-  setSolverStatus('Loading SWMM WASM module...');
+  let wasmBinary, dataBuffer;
+  try {
+    const [wasmResp, dataResp] = await Promise.all([
+      fetch(wasmUrl),
+      fetch(dataUrl)
+    ]);
+    if (!wasmResp.ok) throw new Error('js.wasm fetch failed: HTTP ' + wasmResp.status);
+    if (!dataResp.ok) throw new Error('js.data fetch failed: HTTP ' + dataResp.status);
+    [wasmBinary, dataBuffer] = await Promise.all([
+      wasmResp.arrayBuffer(),
+      dataResp.arrayBuffer()
+    ]);
+    console.log('[SWMM loader] Downloaded wasm:', wasmBinary.byteLength, 'bytes, data:', dataBuffer.byteLength, 'bytes');
+  } catch(fetchErr) {
+    throw new Error('Failed to download SWMM engine files: ' + (fetchErr.message || fetchErr));
+  }
+
+  setSolverStatus('Initializing SWMM WASM module...');
 
   const swmmMod = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('SWMM engine load timeout (30s). The WASM may be too large for your connection.')), 30000);
+    const timeout = setTimeout(() => reject(new Error('SWMM engine init timeout (45s). Module may have failed silently.')), 45000);
 
     window.Module = {
       noInitialRun: true,
+      wasmBinary: wasmBinary,
       print: (text) => console.log('[swmm]', text),
-      printErr: (text) => console.warn('[swmm]', text),
+      printErr: (text) => console.warn('[swmm-err]', text),
       locateFile: (path) => {
+        console.log('[SWMM loader] locateFile:', path);
         if (path.endsWith('.wasm')) return wasmUrl;
-        if (path.endsWith('.data')) return baseUrl + 'js.data';
+        if (path.endsWith('.data')) return dataUrl;
         return baseUrl + path;
       },
+      getPreloadedPackage: (name, size) => {
+        console.log('[SWMM loader] getPreloadedPackage:', name, size);
+        if (name.endsWith('.data') || name === 'js.data') return dataBuffer;
+        return null;
+      },
       onRuntimeInitialized: () => {
+        console.log('[SWMM loader] onRuntimeInitialized fired!');
         clearTimeout(timeout);
         resolve(window.Module);
       },
       onAbort: (what) => {
+        console.error('[SWMM loader] onAbort:', what);
         clearTimeout(timeout);
         reject(new Error('SWMM WASM aborted: ' + what));
       }
@@ -7096,7 +7118,7 @@ async function loadSwmmEngine() {
 
     const script = document.createElement('script');
     script.src = jsUrl;
-    script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to execute swmm_engine.js')); };
+    script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to load swmm_engine.js from ' + jsUrl)); };
     document.head.appendChild(script);
   });
 
