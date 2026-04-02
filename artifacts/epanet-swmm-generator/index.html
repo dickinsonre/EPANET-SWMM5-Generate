@@ -7618,7 +7618,8 @@ function generateDemoResults() {
         const head = n.elev + depth;
         const inflow = depth > 0.1 ? (0.1 + rng() * 2) * stormPeak : 0;
         const flooding = depth > maxD * 0.95 ? (depth - maxD * 0.95) * (0.5 + rng() * 1.5) : 0;
-        nodeResults[n.id].push({ depth, head, inflow, flooding });
+        const waterQuality = Math.max(0, (5 + rng() * 20) * stormPeak);
+        nodeResults[n.id].push({ depth, head, inflow, flooding, waterQuality });
       }
     }
   });
@@ -7650,11 +7651,16 @@ function generateDemoResults() {
       const scId = `S${sc}`;
       subcatchResults[scId] = [];
       const baseArea = 2 + rng() * 8;
+      const baseGwElev = 80 + rng() * 40;
       for (let t = 0; t < numTS; t++) {
         const hrs = t * dtHrs;
         const stormPeak = Math.exp(-((hrs - 12)**2) / 18);
         const runoff = Math.max(0, baseArea * 0.02 * stormPeak * (0.4 + rng() * 0.6));
-        subcatchResults[scId].push({ runoff });
+        const washoff = Math.max(0, runoff * (0.5 + rng() * 2) * 0.1);
+        const gwFlow = Math.max(0, 0.001 + rng() * 0.01 * (0.3 + stormPeak * 0.7));
+        const gwElev = baseGwElev + stormPeak * (0.5 + rng() * 1.5);
+        const snowDepth = 0;
+        subcatchResults[scId].push({ runoff, washoff, gwFlow, gwElev, snowDepth });
       }
     }
   }
@@ -8473,10 +8479,11 @@ function updateCalParamLabel() {
   const lbl = document.getElementById('calParamType');
   if (!sel || !lbl) return;
   const p = sel.value;
-  const isSubcatch = ['runoff'].includes(p);
-  const isNode = ['head','pressure','demand','chlorine','depth','inflow','flooding'].includes(p);
-  lbl.textContent = isSubcatch ? 'Subcatch' : (isNode ? 'Node' : 'Link');
-  lbl.style.color = isSubcatch ? '#06b6d4' : (isNode ? '#60a5fa' : '#4ade80');
+  const isSubcatch = ['runoff','washoff'].includes(p);
+  const isNode = ['head','pressure','demand','chlorine','depth','inflow','flooding','waterQuality'].includes(p);
+  const isGw = ['gwFlow','gwElev','snowDepth'].includes(p);
+  lbl.textContent = isSubcatch ? 'Subcatch' : (isNode ? 'Node' : (isGw ? 'GW/Snow' : 'Link'));
+  lbl.style.color = isSubcatch ? '#06b6d4' : (isNode ? '#60a5fa' : (isGw ? '#a78bfa' : '#4ade80'));
 }
 
 function updateCalParamOptions() {
@@ -8484,7 +8491,7 @@ function updateCalParamOptions() {
   if (!sel) return;
   const isSwmm = currentMode === 'swmm';
   if (isSwmm) {
-    sel.innerHTML = '<optgroup label="Subcatchment Parameters"><option value="runoff">Runoff</option></optgroup><optgroup label="Node Parameters"><option value="depth" selected>Depth</option><option value="head">Head</option><option value="inflow">Lateral Inflow</option><option value="flooding">Flooding</option></optgroup><optgroup label="Link Parameters"><option value="flow">Flow</option><option value="velocity">Velocity</option><option value="linkDepth">Depth (Link)</option></optgroup>';
+    sel.innerHTML = '<optgroup label="Subcatchment Parameters"><option value="runoff">Subcatchment Runoff</option><option value="washoff">Subcatchment Washoff</option></optgroup><optgroup label="Node Parameters"><option value="depth" selected>Node Water Depth</option><option value="waterQuality">Node Water Quality</option><option value="inflow">Node Lateral Inflow</option><option value="flooding">Node Flooding</option></optgroup><optgroup label="Groundwater / Snow"><option value="gwFlow">Groundwater Flow</option><option value="gwElev">Groundwater Elevation</option><option value="snowDepth">Snow Pack Depth</option></optgroup><optgroup label="Link Parameters"><option value="flow">Link Flow Rate</option><option value="linkDepth">Link Flow Depth</option><option value="velocity">Link Flow Velocity</option></optgroup>';
   } else {
     sel.innerHTML = '<optgroup label="Node Parameters"><option value="head">Head</option><option value="pressure" selected>Pressure</option><option value="demand">Demand</option><option value="chlorine">Chlorine</option></optgroup><optgroup label="Link Parameters"><option value="flow">Flow</option><option value="velocity">Velocity</option><option value="headloss">Headloss</option></optgroup>';
   }
@@ -8500,19 +8507,25 @@ function _extractCalVal(r, p) {
     case 'depth': return r.depth || 0;
     case 'inflow': return r.inflow || r.demand || 0;
     case 'flooding': return r.flooding || 0;
+    case 'waterQuality': return r.waterQuality || r.quality || 0;
     case 'flow': return r.flow || 0;
     case 'velocity': return r.velocity || 0;
     case 'headloss': return r.headloss || 0;
     case 'linkDepth': return r.linkDepth || r.depth || 0;
     case 'runoff': return r.runoff || 0;
+    case 'washoff': return r.washoff || 0;
+    case 'gwFlow': return r.gwFlow || 0;
+    case 'gwElev': return r.gwElev || 0;
+    case 'snowDepth': return r.snowDepth || 0;
     default: return 0;
   }
 }
 
 function _buildCalFile(param, sr, isSwmm, isSI) {
-  const isSubcatchParam = ['runoff'].includes(param);
-  const isNodeParam = ['head','pressure','demand','chlorine','depth','inflow','flooding'].includes(param);
-  const results = isSubcatchParam ? sr.subcatchResults : (isNodeParam ? sr.nodeResults : sr.linkResults);
+  const isSubcatchParam = ['runoff','washoff'].includes(param);
+  const isNodeParam = ['head','pressure','demand','chlorine','depth','inflow','flooding','waterQuality'].includes(param);
+  const isGwParam = ['gwFlow','gwElev','snowDepth'].includes(param);
+  const results = isSubcatchParam ? sr.subcatchResults : (isGwParam ? sr.subcatchResults : (isNodeParam ? sr.nodeResults : sr.linkResults));
   const timesteps = sr.timesteps;
   if (!results || Object.keys(results).length === 0) return null;
 
@@ -8525,11 +8538,11 @@ function _buildCalFile(param, sr, isSwmm, isSI) {
   const L = [];
 
   if (isSwmm) {
-    const paramLabels = { runoff:'Subcatchment Runoff', depth:'Node Depth', head:'Node Head', inflow:'Node Lateral Inflow', flooding:'Node Flooding', flow:'Link Flow', velocity:'Link Flow Velocity', linkDepth:'Link Flow Depth' };
+    const paramLabels = { runoff:'Subcatchment Runoff', washoff:'Subcatchment Washoff', depth:'Node Water Depth', head:'Node Head', inflow:'Node Lateral Inflow', flooding:'Node Flooding', waterQuality:'Node Water Quality', gwFlow:'Groundwater Flow', gwElev:'Groundwater Elevation', snowDepth:'Snow Pack Depth', flow:'Link Flow Rate', velocity:'Link Flow Velocity', linkDepth:'Link Flow Depth' };
     const paramUnits = isSI
-      ? { runoff:'CMS', depth:'m', head:'m', inflow:'CMS', flooding:'CMS', flow:'CMS', velocity:'m/s', linkDepth:'m' }
-      : { runoff:'CFS', depth:'ft', head:'ft', inflow:'CFS', flooding:'CFS', flow:'CFS', velocity:'ft/s', linkDepth:'ft' };
-    const elemType = isSubcatchParam ? 'Subcatch' : (isNodeParam ? 'Node' : 'Link');
+      ? { runoff:'CMS', washoff:'kg/s', depth:'m', head:'m', inflow:'CMS', flooding:'CMS', waterQuality:'mg/L', gwFlow:'CMS', gwElev:'m', snowDepth:'mm', flow:'CMS', velocity:'m/s', linkDepth:'m' }
+      : { runoff:'CFS', washoff:'lb/s', depth:'ft', head:'ft', inflow:'CFS', flooding:'CFS', waterQuality:'mg/L', gwFlow:'CFS', gwElev:'ft', snowDepth:'in', flow:'CFS', velocity:'ft/s', linkDepth:'ft' };
+    const elemType = isSubcatchParam ? 'Subcatch' : (isGwParam ? 'Subcatch' : (isNodeParam ? 'Node' : 'Link'));
     L.push(`;;SWMM 5.2.4 Calibration File`);
     L.push(`;;Parameter: ${paramLabels[param] || param}`);
     L.push(`;;Units: ${paramUnits[param] || ''}`);
@@ -8687,10 +8700,11 @@ function downloadAllCalibrationFiles() {
     const isSI = currentUnits === 'SI';
     const prefix = isSwmm ? 'SWMM524' : 'EPANET23';
 
-    const subcatchParams = isSwmm ? ['runoff'] : [];
-    const nodeParams = isSwmm ? ['depth','head','inflow','flooding'] : ['head','pressure','demand','chlorine'];
-    const linkParams = isSwmm ? ['flow','velocity','linkDepth'] : ['flow','velocity','headloss'];
-    const allParams = [...subcatchParams, ...nodeParams, ...linkParams];
+    const subcatchParams = isSwmm ? ['runoff','washoff'] : [];
+    const nodeParams = isSwmm ? ['depth','waterQuality','inflow','flooding'] : ['head','pressure','demand','chlorine'];
+    const gwParams = isSwmm ? ['gwFlow','gwElev','snowDepth'] : [];
+    const linkParams = isSwmm ? ['flow','linkDepth','velocity'] : ['flow','velocity','headloss'];
+    const allParams = [...subcatchParams, ...nodeParams, ...gwParams, ...linkParams];
 
     const files = {};
     for (const p of allParams) {
