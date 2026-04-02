@@ -7140,14 +7140,21 @@ async function loadSwmmEngine() {
 
 // ═══════ RUN SOLVER ═══════
 async function runSolver() {
-  if (!solverModule || !generatedINP) {
-    setSolverStatus('⚠ No engine loaded or no model generated');
+  console.log('[runSolver] called. solverModule:', !!solverModule, 'generatedINP length:', generatedINP?.length, 'solverType:', solverType);
+  if (!solverModule) {
+    setSolverStatus('⚠ No engine loaded — click "Load WASM Engine" first.');
+    return;
+  }
+  if (!generatedINP || generatedINP.length < 50) {
+    setSolverStatus('⚠ No model generated — click "Generate" first to create a network.');
     return;
   }
 
   const btn = document.getElementById('runBtn');
   btn.disabled = true;
   btn.textContent = '⏳ Solving...';
+
+  await new Promise(r => setTimeout(r, 50));
 
   try {
     if (solverType === 'epanet' && solverModule.type === 'epanet-js') {
@@ -7684,18 +7691,39 @@ function getValidationSummaryText() {
 
 async function runSwmmSolver() {
   setSolverStatus('Running SWMM solver...');
+  console.log('[runSwmmSolver] writing INP to FS, length:', generatedINP.length);
 
-  solverModule.FS.writeFile('model.inp', generatedINP);
-  solverModule.FS.writeFile('model.rpt', '');
-  solverModule.FS.writeFile('model.out', '');
+  try {
+    solverModule.FS.writeFile('model.inp', generatedINP);
+  } catch(e) {
+    console.error('[runSwmmSolver] FS.writeFile failed for model.inp:', e);
+    setSolverStatus('⚠ SWMM engine file system error — try reloading the engine.');
+    return;
+  }
 
-  const swmm_run = solverModule.cwrap('swmm_run', 'number', ['string', 'string', 'string']);
-  const err = swmm_run('model.inp', 'model.rpt', 'model.out');
+  try {
+    solverModule.FS.writeFile('model.rpt', '');
+    solverModule.FS.writeFile('model.out', '');
+  } catch(e) {
+    console.warn('[runSwmmSolver] Could not pre-create rpt/out files:', e);
+  }
 
-  if (err > 0) {
+  console.log('[runSwmmSolver] calling swmm_run...');
+  let err;
+  try {
+    const swmm_run = solverModule.cwrap('swmm_run', 'number', ['string', 'string', 'string']);
+    err = swmm_run('model.inp', 'model.rpt', 'model.out');
+  } catch(e) {
+    console.error('[runSwmmSolver] swmm_run threw:', e);
+    setSolverStatus(`⚠ SWMM engine crashed: ${e.message || e}. Try reloading the engine.`);
+    return;
+  }
+  console.log('[runSwmmSolver] swmm_run returned:', err);
+
+  if (err !== 0) {
     let rptText = '';
     try { rptText = new TextDecoder().decode(solverModule.FS.readFile('model.rpt')); } catch(e) {}
-    const errLines = rptText ? rptText.split('\n').filter(l => /ERROR/i.test(l)).slice(0,5).join('; ') : '';
+    const errLines = rptText ? rptText.split('\n').filter(l => /ERROR|WARNING/i.test(l)).slice(0,5).join('; ') : '';
     setSolverStatus(`⚠ SWMM error code ${err}. ${errLines || 'Check RPT tab for details.'}`);
     if (rptText) {
       generatedRPT = rptText;
@@ -7716,10 +7744,16 @@ async function runSwmmSolver() {
       solverResults = parseSWMMBinary(outData.buffer);
     } else {
       setSolverStatus('⚠ SWMM ran but produced no output. Check RPT tab for warnings.');
+      if (rptText) {
+        generatedRPT = rptText;
+        wasmRPT = rptText;
+        document.getElementById('rptTabBtn').style.display = '';
+      }
       return;
     }
   } catch(e) {
     setSolverStatus(`⚠ Error reading SWMM output: ${e.message}`);
+    console.error('[runSwmmSolver] output parse error:', e);
     return;
   }
 
