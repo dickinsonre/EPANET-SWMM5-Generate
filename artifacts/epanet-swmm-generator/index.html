@@ -2823,7 +2823,7 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
       </select>
       <span id="calParamType" style="font-size:10px;color:var(--text-dim);min-width:50px;">Node</span>
       <button class="download-btn" onclick="downloadCalibrationFile()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#f59e0b;color:#f59e0b;">↓ Cal File</button>
-      <button class="download-btn" onclick="downloadAllCalibrationFiles()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#f59e0b;color:#f59e0b;">↓ All Cal Files (.zip)</button>
+      <button class="download-btn" onclick="downloadAllCalibrationFiles()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#f59e0b;color:#f59e0b;">↓ All Cal Files</button>
     </div>
     <div id="resultsContent" style="font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-secondary);line-height:1.6;">
       <p style="color:var(--text-dim);">Run solver to generate results report.</p>
@@ -8581,36 +8581,20 @@ async function downloadAllCalibrationFiles() {
   const linkParams = isSwmm ? ['flow','velocity'] : ['flow','velocity','headloss'];
   const allParams = [...nodeParams, ...linkParams];
 
-  const files = {};
+  let count = 0;
   for (const p of allParams) {
     const content = _buildCalFile(p, solverResults, isSwmm, isSI);
-    if (content) files[`${prefix}_calibration_${p}.dat`] = content;
-  }
-
-  if (Object.keys(files).length === 0) { alert('No calibration data available.'); return; }
-
-  if (typeof JSZip !== 'undefined') {
-    const zip = new JSZip();
-    for (const [name, content] of Object.entries(files)) {
-      zip.file(name, content);
-    }
-    const blob = await zip.generateAsync({type:'blob'});
+    if (!content) continue;
+    const blob = new Blob([content], {type:'text/plain'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href=url; a.download=`${prefix}_calibration_files.zip`; a.style.display='none';
+    a.href=url; a.download=`${prefix}_calibration_${p}.dat`; a.style.display='none';
     document.body.appendChild(a); a.click();
-    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
-  } else {
-    for (const [name, content] of Object.entries(files)) {
-      const blob = new Blob([content], {type:'text/plain'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href=url; a.download=name; a.style.display='none';
-      document.body.appendChild(a); a.click();
-      await new Promise(r => setTimeout(r, 300));
-      document.body.removeChild(a); URL.revokeObjectURL(url);
-    }
+    count++;
+    await new Promise(r => setTimeout(r, 350));
+    document.body.removeChild(a); URL.revokeObjectURL(url);
   }
+  if (count === 0) alert('No calibration data available.');
 }
 
 // ═══════ INPUT VALIDATION ═══════
