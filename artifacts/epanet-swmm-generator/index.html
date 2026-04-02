@@ -8691,7 +8691,7 @@ pre.rpt .h{color:#60a5fa;} pre.rpt .a{color:#fbbf24;} pre.rpt .g{color:#4ade80;}
 
   // ── Tab 5: Zone Summary ──
   H.push('<div class="tab-content" id="tab-zones">');
-  H.push('<h2>Summary by Pressure Zone</h2>');
+  H.push('<h2>Summary by ' + (isEpanet ? 'Pressure Zone' : 'Drainage Zone') + '</h2>');
   const zones = {};
   Object.entries(nodeStats).forEach(([id,s])=>{
     const z = s.zone || 'Unknown';
