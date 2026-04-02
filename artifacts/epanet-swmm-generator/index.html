@@ -28,6 +28,37 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+[data-theme="epa"] {
+  --bg-deep: #0a1628; --bg-panel: #0d1f3c; --bg-card: #122a4e; --bg-input: #091a33;
+  --border: #1a3d6e; --text-primary: #e8edf4; --text-secondary: #8fa8c8; --text-dim: #5a7a9e;
+  --accent-blue: #0071bc; --accent-cyan: #02bfe7; --accent-teal: #2e8540; --accent-green: #2e8540;
+  --accent-amber: #fdb81e; --accent-red: #e31c3d; --water-gradient: linear-gradient(135deg, #0071bc, #02bfe7);
+}
+[data-theme="uf"] {
+  --bg-deep: #0a0a12; --bg-panel: #12101e; --bg-card: #1c1830; --bg-input: #0e0c1a;
+  --border: #2d2654; --text-primary: #f0ecf8; --text-secondary: #a89cc8; --text-dim: #6e5e96;
+  --accent-blue: #fa4616; --accent-cyan: #0021a5; --accent-teal: #fa4616; --accent-green: #22c55e;
+  --accent-amber: #fa4616; --accent-red: #fa4616; --water-gradient: linear-gradient(135deg, #0021a5, #fa4616);
+}
+[data-theme="autodesk"] {
+  --bg-deep: #0c0c0c; --bg-panel: #1a1a1a; --bg-card: #242424; --bg-input: #141414;
+  --border: #3a3a3a; --text-primary: #e8e8e8; --text-secondary: #a0a0a0; --text-dim: #6a6a6a;
+  --accent-blue: #0696d7; --accent-cyan: #0696d7; --accent-teal: #00c0a3; --accent-green: #4caf50;
+  --accent-amber: #ff9800; --accent-red: #f44336; --water-gradient: linear-gradient(135deg, #1858a8, #0696d7);
+}
+[data-theme="osu"] {
+  --bg-deep: #0a0a0a; --bg-panel: #1a1010; --bg-card: #241818; --bg-input: #140e0e;
+  --border: #4a2020; --text-primary: #f0e8e8; --text-secondary: #b89898; --text-dim: #7e5a5a;
+  --accent-blue: #bb0000; --accent-cyan: #a7b1b7; --accent-teal: #bb0000; --accent-green: #22c55e;
+  --accent-amber: #a7b1b7; --accent-red: #bb0000; --water-gradient: linear-gradient(135deg, #bb0000, #666666);
+}
+[data-theme="auburn"] {
+  --bg-deep: #0a0808; --bg-panel: #1a1210; --bg-card: #241a16; --bg-input: #140e0c;
+  --border: #4a3020; --text-primary: #f0e8e4; --text-secondary: #b8a090; --text-dim: #7e6a5a;
+  --accent-blue: #dd550c; --accent-cyan: #03244d; --accent-teal: #dd550c; --accent-green: #22c55e;
+  --accent-amber: #dd550c; --accent-red: #dd550c; --water-gradient: linear-gradient(135deg, #03244d, #dd550c);
+}
+
 body {
   font-family: 'DM Sans', sans-serif;
   background: var(--bg-deep);
@@ -776,6 +807,16 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="tab-row" style="width:100%;margin-top:6px;">
       <button class="tab-btn active" id="unitsUS" onclick="setUnits('US')" style="flex:1;text-align:center;font-size:12px;min-height:34px;">🇺🇸 US Customary</button>
       <button class="tab-btn" id="unitsSI" onclick="setUnits('SI')" style="flex:1;text-align:center;font-size:12px;min-height:34px;">🌍 SI / Metric</button>
+    </div>
+    <div style="margin-top:6px;">
+      <select id="themeSelect" onchange="setTheme(this.value)" style="width:100%;padding:7px 10px;font-size:12px;min-height:34px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+        <option value="">🎨 Default Theme</option>
+        <option value="epa">🏛 EPA Federal</option>
+        <option value="uf">🐊 University of Florida</option>
+        <option value="autodesk">⬡ Autodesk</option>
+        <option value="osu">🌰 Ohio State University</option>
+        <option value="auburn">🦅 Auburn University</option>
+      </select>
     </div>
   </div>
 
@@ -5372,6 +5413,25 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
 // ═══════ MODE SWITCHING ═══════
 let currentMode = 'epanet';
 let currentUnits = 'US'; // 'US' or 'SI'
+
+function setTheme(theme) {
+  if (theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  localStorage.setItem('epswTheme', theme);
+  if (typeof drawCityMap === 'function' && cityMapData) drawCityMap();
+}
+
+(function restoreTheme() {
+  const saved = localStorage.getItem('epswTheme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    const sel = document.getElementById('themeSelect');
+    if (sel) sel.value = saved;
+  }
+})();
 
 function setUnits(units) {
   currentUnits = units;
