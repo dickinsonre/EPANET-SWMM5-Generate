@@ -96,7 +96,7 @@ body {
 /* ═══════ DESKTOP LAYOUT ═══════ */
 .main-layout {
   display: grid;
-  grid-template-columns: 370px 1fr;
+  grid-template-columns: 380px 1fr;
   height: calc(100vh - 52px);
   height: calc(100dvh - 52px);
 }
@@ -107,6 +107,8 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 20px;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .preview-panel {
@@ -115,6 +117,8 @@ body {
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 /* ═══════ SECTIONS ═══════ */
@@ -247,11 +251,12 @@ input[type="range"]::-webkit-slider-thumb {
 .generate-btn:active { transform: scale(0.98); }
 .generate-btn:disabled { opacity: 0.5; cursor: wait; }
 
-.dl-row { display: flex; gap: 6px; margin-top: 8px; }
+.dl-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 
 .download-btn {
-  flex: 1;
-  padding: 12px 6px;
+  flex: 1 1 auto;
+  min-width: 70px;
+  padding: 10px 6px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   font-weight: 600;
@@ -260,8 +265,9 @@ input[type="range"]::-webkit-slider-thumb {
   background: transparent;
   color: var(--accent-green);
   cursor: pointer;
-  min-height: 44px;
+  min-height: 40px;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .download-btn:active { background: rgba(34,197,94,0.15); }
@@ -371,8 +377,9 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px; line-height: 1.5;
   color: var(--text-secondary);
+  min-height: 500px;
   max-height: 600px;
-  overflow: auto; white-space: pre; tab-size: 8;
+  overflow-y: auto; overflow-x: auto; white-space: pre; tab-size: 8;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -755,14 +762,16 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 
 /* ═══════ TABLET (768-1024) ═══════ */
 @media (min-width: 768px) and (max-width: 1024px) {
-  .main-layout { grid-template-columns: 320px 1fr; }
+  .main-layout { grid-template-columns: 340px 1fr; }
   .section { padding: 12px 14px; }
   .preset-btn { font-size: 11px; padding: 7px 10px; }
+  .download-btn { min-width: 60px; font-size: 10px; padding: 8px 4px; }
 }
 
 /* ═══════ LARGE DESKTOP ═══════ */
 @media (min-width: 1400px) {
   .main-layout { grid-template-columns: 400px 1fr; }
+  .download-btn { min-width: 80px; }
 }
 </style>
 </head>
@@ -1472,23 +1481,25 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <button class="download-btn" onclick="copyINP()" id="copyBtn" style="border-color:var(--accent-cyan);color:var(--accent-cyan);">📋 Copy INP</button>
       <button class="download-btn map-dl" onclick="downloadMap(false)">↓ Map PNG</button>
       <button class="download-btn map-dl" onclick="downloadMap(true)">↓ Map+Net</button>
+    </div>
+    <div class="dl-row" id="dlRow2" style="display:none;">
       <button class="download-btn" onclick="downloadDEM()" style="border-color:#a78bfa;color:#a78bfa;">↓ DEM</button>
       <button class="download-btn" onclick="downloadGeoJSON()" style="border-color:#22c55e;color:#22c55e;">↓ GeoJSON</button>
       <button class="download-btn" onclick="saveConfig()" style="border-color:var(--text-dim);color:var(--text-dim);">💾 Config</button>
       <button class="download-btn" onclick="loadConfig()" style="border-color:var(--text-dim);color:var(--text-dim);">📂 Load</button>
     </div>
-    <div class="dl-row" id="batchRow" style="display:none;margin-top:6px;">
-      <div style="display:flex;align-items:center;gap:6px;flex:1;">
+    <div class="dl-row" id="batchRow" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:100px;">
         <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Count:</label>
         <input type="number" id="batchCount" value="5" min="2" max="50" style="width:60px;min-height:36px;padding:4px 8px;font-size:12px;">
       </div>
       <button class="download-btn" onclick="batchExport()" id="batchBtn" style="border-color:#a855f7;color:#a855f7;flex:1;">📦 Batch ZIP</button>
     </div>
-    <div class="dl-row" id="solverRow" style="display:none;margin-top:6px;">
+    <div class="dl-row" id="solverRow" style="display:none;">
       <button class="download-btn" onclick="loadWASM()" id="wasmBtn" style="border-color:#f59e0b;color:#f59e0b;flex:1;">📦 Load WASM Engine</button>
       <button class="download-btn" onclick="runSolver()" id="runBtn" style="border-color:#22c55e;color:#22c55e;flex:1;" disabled>▶ Run Solver</button>
     </div>
-    <div class="dl-row epanet-only" id="quickSimRow" style="display:none;margin-top:6px;">
+    <div class="dl-row epanet-only" id="quickSimRow" style="display:none;">
       <button class="download-btn" onclick="quickSim()" id="quickSimBtn" style="border-color:#06b6d4;color:#06b6d4;flex:1;">⚡ Quick Sim (Pressure Map)</button>
     </div>
     <div id="solverStatus" style="display:none;font-size:11px;color:var(--text-dim);padding:4px 0;font-family:'JetBrains Mono',monospace;"></div>
@@ -5262,7 +5273,7 @@ async function generateEPANETNetwork(silent){
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('EPANET generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='⚡ GENERATE NETWORK + MAP';btn.classList.remove('generating');
-  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';document.getElementById('quickSimRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
+  document.getElementById('dlRow').style.display='flex';document.getElementById('dlRow2').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';document.getElementById('quickSimRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
 }
 
 // ═══════ INP BUILDER (with system-sized pump curves) ═══════
@@ -5486,6 +5497,7 @@ function setMode(mode) {
     : '🌧 GENERATE SWMM MODEL + MAP';
   // Hide previous results
   document.getElementById('dlRow').style.display = 'none';
+  document.getElementById('dlRow2').style.display = 'none';
   document.getElementById('solverRow').style.display = 'none';
   document.getElementById('batchRow').style.display = 'none';
   document.getElementById('quickSimRow').style.display = 'none';
@@ -6033,7 +6045,7 @@ async function generateSWMMNetwork(silent) {
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('SWMM generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='🌧 GENERATE SWMM MODEL + MAP';btn.classList.remove('generating');
-  document.getElementById('dlRow').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
+  document.getElementById('dlRow').style.display='flex';document.getElementById('dlRow2').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
 }
 
 // ═══════ SWMM5 INP BUILDER ═══════
