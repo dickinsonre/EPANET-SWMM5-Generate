@@ -768,6 +768,23 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 </head>
 <body>
 
+<script>
+(function() {
+  function detectBase() {
+    var b = document.querySelector('base');
+    if (b && b.href) {
+      try { return new URL(b.href).pathname; } catch(e) {}
+      return b.getAttribute('href') || '/';
+    }
+    var p = window.location.pathname;
+    var idx = p.indexOf('/index.html');
+    if (idx > 0) return p.substring(0, idx + 1);
+    return p.endsWith('/') ? p : p + '/';
+  }
+  window.__VITE_BASE__ = detectBase();
+  if (!window.__VITE_BASE__.endsWith('/')) window.__VITE_BASE__ += '/';
+})();
+</script>
 <div class="toast" id="toastEl"></div>
 <div class="tooltip-popup" id="tooltipPopup"></div>
 
@@ -6998,10 +7015,11 @@ async function loadWASM() {
       await loadSwmmEngine();
     }
   } catch(err) {
-    setSolverStatus(`⚠ Load failed: ${err.message || err}. You can still generate .inp files.`);
-    console.error('WASM load error:', err);
+    const msg = (err && err.message) ? err.message : String(err);
+    setSolverStatus(`⚠ Load failed: ${msg}. You can still generate .inp files.`);
+    console.error('WASM load error:', msg, err);
     btn.disabled = false;
-    btn.textContent = '📦 Load WASM Engine';
+    btn.textContent = '📦 Retry Load Engine';
   }
 
   document.getElementById('solverRow').style.display = 'flex';
@@ -7038,30 +7056,47 @@ async function loadEpanetEngine() {
 
 async function loadSwmmEngine() {
   setSolverStatus('Loading SWMM 5.x WASM engine...');
-  const basePath = (document.querySelector('base') || {}).href || window.location.href;
-  const baseUrl = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+  const baseUrl = window.__VITE_BASE__ || '/';
+  console.log('[SWMM loader] baseUrl:', baseUrl);
+
+  const jsUrl = baseUrl + 'swmm_engine.js';
+  const wasmUrl = baseUrl + 'js.wasm';
+
+  setSolverStatus('Checking SWMM engine files...');
+  const [jsCheck, wasmCheck] = await Promise.all([
+    fetch(jsUrl, {method:'HEAD'}).catch(()=>null),
+    fetch(wasmUrl, {method:'HEAD'}).catch(()=>null)
+  ]);
+  if (!jsCheck || !jsCheck.ok) throw new Error('swmm_engine.js not found at ' + jsUrl + ' (status: ' + (jsCheck?.status||'network error') + ')');
+  if (!wasmCheck || !wasmCheck.ok) throw new Error('js.wasm not found at ' + wasmUrl + ' (status: ' + (wasmCheck?.status||'network error') + ')');
+
+  setSolverStatus('Loading SWMM WASM module...');
 
   const swmmMod = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('SWMM engine load timeout')), 30000);
+    const timeout = setTimeout(() => reject(new Error('SWMM engine load timeout (30s). The WASM may be too large for your connection.')), 30000);
 
     window.Module = {
       noInitialRun: true,
       print: (text) => console.log('[swmm]', text),
       printErr: (text) => console.warn('[swmm]', text),
       locateFile: (path) => {
-        if (path.endsWith('.wasm')) return baseUrl + 'js.wasm';
+        if (path.endsWith('.wasm')) return wasmUrl;
         if (path.endsWith('.data')) return baseUrl + 'js.data';
         return baseUrl + path;
       },
       onRuntimeInitialized: () => {
         clearTimeout(timeout);
         resolve(window.Module);
+      },
+      onAbort: (what) => {
+        clearTimeout(timeout);
+        reject(new Error('SWMM WASM aborted: ' + what));
       }
     };
 
     const script = document.createElement('script');
-    script.src = baseUrl + 'swmm_engine.js';
-    script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to fetch swmm_engine.js')); };
+    script.src = jsUrl;
+    script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to execute swmm_engine.js')); };
     document.head.appendChild(script);
   });
 
