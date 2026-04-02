@@ -2834,7 +2834,6 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
 
 <button class="mobile-fab" id="mobileFab" onclick="generateNetwork()">⚡</button>
 
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
 // NAMED CONSTANTS (no more magic numbers)
@@ -8581,9 +8580,66 @@ function downloadCalibrationFile() {
   setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
 }
 
-async function downloadAllCalibrationFiles() {
+function _miniZipCreate(filesObj) {
+  const te = new TextEncoder();
+  const entries = Object.entries(filesObj).map(([name, content]) => ({
+    name: te.encode(name),
+    data: te.encode(content)
+  }));
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  for (const e of entries) {
+    const crc = _crc32(e.data);
+    const localHeader = new Uint8Array(30 + e.name.length);
+    const lv = new DataView(localHeader.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, e.data.length, true);
+    lv.setUint32(22, e.data.length, true);
+    lv.setUint16(26, e.name.length, true);
+    localHeader.set(e.name, 30);
+    parts.push(localHeader, e.data);
+    const ch = new Uint8Array(46 + e.name.length);
+    const cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(12, 0, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, e.data.length, true);
+    cv.setUint32(24, e.data.length, true);
+    cv.setUint16(28, e.name.length, true);
+    cv.setUint32(42, offset, true);
+    ch.set(e.name, 46);
+    central.push(ch);
+    offset += localHeader.length + e.data.length;
+  }
+  const centralStart = offset;
+  let centralSize = 0;
+  for (const c of central) centralSize += c.length;
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, entries.length, true);
+  ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, centralStart, true);
+  return new Blob([...parts, ...central, eocd], {type:'application/zip'});
+}
+function _crc32(buf) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) {
+    crc ^= buf[i];
+    for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function downloadAllCalibrationFiles() {
   if (!solverResults) { alert('Run solver first to generate calibration data.'); return; }
-  if (typeof JSZip === 'undefined') { alert('JSZip library not loaded. Please refresh and try again.'); return; }
   const isSwmm = currentMode === 'swmm';
   const isSI = currentUnits === 'SI';
   const prefix = isSwmm ? 'SWMM524' : 'EPANET23';
@@ -8592,15 +8648,14 @@ async function downloadAllCalibrationFiles() {
   const linkParams = isSwmm ? ['flow','velocity'] : ['flow','velocity','headloss'];
   const allParams = [...nodeParams, ...linkParams];
 
-  const zip = new JSZip();
-  let count = 0;
+  const files = {};
   for (const p of allParams) {
     const content = _buildCalFile(p, solverResults, isSwmm, isSI);
-    if (content) { zip.file(`${prefix}_calibration_${p}.dat`, content); count++; }
+    if (content) files[`${prefix}_calibration_${p}.dat`] = content;
   }
-  if (count === 0) { alert('No calibration data available.'); return; }
+  if (Object.keys(files).length === 0) { alert('No calibration data available.'); return; }
 
-  const blob = await zip.generateAsync({type:'blob'});
+  const blob = _miniZipCreate(files);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = `${prefix}_calibration_files.zip`; a.style.display = 'none';
@@ -8746,8 +8801,6 @@ async function batchExport() {
   const btn = document.getElementById('batchBtn');
   btn.disabled = true; btn.textContent = '⏳ Generating...';
   try {
-    if (typeof JSZip === 'undefined') { showToast('JSZip library not loaded', 'error'); return; }
-    const zip = new JSZip();
     const count = Math.min(50, Math.max(2, +(document.getElementById('batchCount').value) || 5));
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
     const manifest = { generator: 'EPANET-SWMM Generator v3.0', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
@@ -8756,6 +8809,7 @@ async function batchExport() {
     const savedINP = generatedINP;
     const savedND = networkData;
     const savedRPT = wasmRPT;
+    const batchFiles = {};
     for (let i = 0; i < count; i++) {
       const seed = baseSeed + i;
       seedEl.value = seed;
@@ -8769,15 +8823,15 @@ async function batchExport() {
       const fname = currentMode === 'epanet'
         ? `EPANET23_${networkData.cfg.gridRows}x${networkData.cfg.gridCols}_seed${seed}.inp`
         : `SWMM524_${networkData.cfg.gridRows}x${networkData.cfg.gridCols}_seed${seed}.inp`;
-      zip.file(fname, generatedINP);
+      batchFiles[fname] = generatedINP;
       manifest.files.push({ filename: fname, seed, nodes: networkData.nodes.length, pipes: networkData.pipes.length });
     }
     seedEl.value = origSeed;
     generatedINP = savedINP;
     networkData = savedND;
     wasmRPT = savedRPT;
-    zip.file('manifest.json', JSON.stringify(manifest, null, 2));
-    const blob = await zip.generateAsync({ type: 'blob' });
+    batchFiles['manifest.json'] = JSON.stringify(manifest, null, 2);
+    const blob = _miniZipCreate(batchFiles);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `${currentMode}_batch_${count}seeds.zip`; a.style.display = 'none';
