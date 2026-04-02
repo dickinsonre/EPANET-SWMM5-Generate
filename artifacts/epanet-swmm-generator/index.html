@@ -7873,33 +7873,168 @@ function parseEPANETBinary(buffer) {
 
 // ═══════ SWMM BINARY .OUT PARSER ═══════
 function parseSWMMBinary(buffer) {
-  // SWMM 5.x binary output file format (from swmm5.h / output API):
-  // Header: magic(4), version(4), flow units(4), num subcatch(4), num nodes(4), num links(4), num pollutants(4)
-  // Then: subcatch/node/link ID names, subcatch/node/link properties, reporting periods
   const dv = new DataView(buffer);
   let pos = 0;
   const i32 = () => { const v = dv.getInt32(pos, true); pos += 4; return v; };
+  const f32 = () => { const v = dv.getFloat32(pos, true); pos += 4; return v; };
+  const f64 = () => { const v = dv.getFloat64(pos, true); pos += 8; return v; };
+  const readStr = (len) => {
+    const bytes = new Uint8Array(buffer, pos, len);
+    pos += len;
+    let s = '';
+    for (let i = 0; i < len; i++) { if (bytes[i] === 0) break; s += String.fromCharCode(bytes[i]); }
+    return s;
+  };
 
   try {
-    const magic = i32();        // should be 516114522 for SWMM
+    const magic = i32();
     const version = i32();
     const flowUnits = i32();
     const numSubcatch = i32();
     const numNodes = i32();
     const numLinks = i32();
     const numPollutants = i32();
+    console.log('[SWMM parser] magic:', magic, 'ver:', version, 'nodes:', numNodes, 'links:', numLinks, 'subcatch:', numSubcatch, 'pollutants:', numPollutants);
 
-    setSolverStatus(`Parsed SWMM header: ${numNodes} nodes, ${numLinks} links, ${numSubcatch} subcatchments`);
-    // Full binary parsing requires walking the variable-length ID section
-    // For now, generate correctly-sized demo results
-    const demo = generateDemoResults();
-    demo._source = 'swmm_binary';
-    demo._header = { magic, version, numNodes, numLinks, numSubcatch, numPollutants };
-    return demo;
+    const subcatchIds = [];
+    for (let i = 0; i < numSubcatch; i++) {
+      const nameLen = i32();
+      subcatchIds.push(readStr(nameLen));
+    }
+    const nodeIds = [];
+    for (let i = 0; i < numNodes; i++) {
+      const nameLen = i32();
+      nodeIds.push(readStr(nameLen));
+    }
+    const linkIds = [];
+    for (let i = 0; i < numLinks; i++) {
+      const nameLen = i32();
+      linkIds.push(readStr(nameLen));
+    }
+    const pollutIds = [];
+    for (let i = 0; i < numPollutants; i++) {
+      const nameLen = i32();
+      pollutIds.push(readStr(nameLen));
+      const concUnits = i32();
+    }
+
+    const subcatchPropCount = 1;
+    for (let i = 0; i < numSubcatch; i++) {
+      for (let p = 0; p < subcatchPropCount; p++) f32();
+    }
+    const nodePropCount = 3;
+    const nodeTypes = [];
+    for (let i = 0; i < numNodes; i++) {
+      nodeTypes.push(i32());
+      f32(); f32();
+    }
+    const linkPropCount = 3;
+    const linkTypes = [];
+    for (let i = 0; i < numLinks; i++) {
+      linkTypes.push(i32());
+      f32(); f32();
+    }
+
+    const subcatchVarsPerStep = 8 + numPollutants;
+    const nodeVarsPerStep = 6 + numPollutants;
+    const linkVarsPerStep = 5 + numPollutants;
+    const sysVarsPerStep = 15;
+    const bytesPerStep = 8 +
+      (numSubcatch * subcatchVarsPerStep * 4) +
+      (numNodes * nodeVarsPerStep * 4) +
+      (numLinks * linkVarsPerStep * 4) +
+      (sysVarsPerStep * 4);
+
+    const startOfResults = pos;
+
+    const footerPos = buffer.byteLength - 24;
+    const footerDv = new DataView(buffer, footerPos);
+    const idStartPos = footerDv.getInt32(0, true);
+    const propStartPos = footerDv.getInt32(4, true);
+    const resultStartPos = footerDv.getInt32(8, true);
+    const numPeriods = footerDv.getInt32(12, true);
+    const errCode = footerDv.getInt32(16, true);
+    const magic2 = footerDv.getInt32(20, true);
+    console.log('[SWMM parser] periods:', numPeriods, 'resultStart:', resultStartPos, 'errCode:', errCode);
+
+    if (numPeriods <= 0 || numPeriods > 100000) {
+      console.warn('[SWMM parser] Invalid period count, falling back to demo');
+      const demo = generateDemoResults();
+      demo._source = 'swmm_binary_fallback';
+      return demo;
+    }
+
+    pos = resultStartPos;
+
+    const timesteps = [];
+    const nodeResults = {};
+    const linkResults = {};
+    const subcatchResults = {};
+
+    nodeIds.forEach(id => nodeResults[id] = []);
+    linkIds.forEach(id => linkResults[id] = []);
+    subcatchIds.forEach(id => subcatchResults[id] = []);
+
+    const reportStep = networkData?.cfg?.rptStep || 300;
+    for (let period = 0; period < numPeriods; period++) {
+      const dateVal = f64();
+      const hrs = period * (reportStep / 3600);
+      timesteps.push(hrs);
+
+      for (let sc = 0; sc < numSubcatch; sc++) {
+        const rainfall = f32();
+        const snowDepth = f32();
+        const losses = f32();
+        const runoff = f32();
+        const gwFlow = f32();
+        const gwElev = f32();
+        const soilMoist = f32();
+        const washoff = f32();
+        for (let p = 0; p < numPollutants; p++) f32();
+        subcatchResults[subcatchIds[sc]].push({ rainfall, snowDepth, losses, runoff, gwFlow, gwElev, soilMoist, washoff });
+      }
+
+      for (let nd = 0; nd < numNodes; nd++) {
+        const depth = f32();
+        const head = f32();
+        const volume = f32();
+        const latInflow = f32();
+        const totalInflow = f32();
+        const flooding = f32();
+        for (let p = 0; p < numPollutants; p++) f32();
+        nodeResults[nodeIds[nd]].push({ depth, head, volume, inflow: totalInflow, latInflow, flooding });
+      }
+
+      for (let lk = 0; lk < numLinks; lk++) {
+        const flow = f32();
+        const linkDepth = f32();
+        const velocity = f32();
+        const volume2 = f32();
+        const capacity = f32();
+        for (let p = 0; p < numPollutants; p++) f32();
+        linkResults[linkIds[lk]].push({ flow, linkDepth, velocity, volume: volume2, capacity });
+      }
+
+      for (let s = 0; s < sysVarsPerStep; s++) f32();
+    }
+
+    console.log('[SWMM parser] Parsed', numPeriods, 'timesteps,', nodeIds.length, 'nodes,', linkIds.length, 'links');
+
+    return {
+      type: 'swmm',
+      timesteps,
+      nodeResults,
+      linkResults,
+      subcatchResults,
+      _source: 'swmm_binary',
+      _header: { magic, version, numNodes, numLinks, numSubcatch, numPollutants, numPeriods }
+    };
 
   } catch(e) {
-    console.error('SWMM binary parse error:', e);
-    return generateDemoResults();
+    console.error('SWMM binary parse error at pos ' + pos + ':', e);
+    const demo = generateDemoResults();
+    demo._source = 'swmm_binary_error';
+    return demo;
   }
 }
 
@@ -8078,7 +8213,7 @@ function generateRPT() {
 
   a(`  **********************************************************************`);
   a(`  *                          ${engine}                                *`);
-  a(`  *                    Hydraulic Analysis Report                       *`);
+  a(`  *             ${isEpanet ? '   Hydraulic Analysis Report' : '  Stormwater Management Analysis'}                       *`);
   a(`  **********************************************************************`);
   nl();
   a(`  Analysis Run at ${now}`);
@@ -8240,7 +8375,7 @@ function generateRPT() {
       showL.forEach(p => {
         const r = (sr.linkResults[p.id]||[])[t];
         if (!r) return;
-        a(`  ${padr(p.id, 16)} ${pad(r.flow.toFixed(2), 12)} ${pad(r.velocity.toFixed(2), 12)} ${pad((r.depth||0).toFixed(2), 12)} ${pad('Open', 12)}`);
+        a(`  ${padr(p.id, 16)} ${pad(r.flow.toFixed(2), 12)} ${pad(r.velocity.toFixed(2), 12)} ${pad((r.linkDepth||r.depth||0).toFixed(2), 12)} ${pad('Open', 12)}`);
       });
       if (nd.pipes.length > maxNodesPerTS) a(`  ... (${nd.pipes.length - maxNodesPerTS} more links)`);
     }
@@ -8396,7 +8531,7 @@ pre.rpt .h{color:#60a5fa;} pre.rpt .a{color:#fbbf24;} pre.rpt .g{color:#4ade80;}
   H.push('<title>' + engine + ' Results Report</title>');
   H.push('<sty' + 'le>' + css + '</sty' + 'le></head><body>');
 
-  H.push('<div class="header"><h1>' + engine + ' &mdash; Hydraulic Analysis Report</h1>');
+  H.push('<div class="header"><h1>' + engine + ' &mdash; ' + (isEpanet ? 'Hydraulic Analysis Report' : 'Stormwater Analysis Report') + '</h1>');
   H.push('<p>Generated: ' + now + ' &nbsp;|&nbsp; Grid: ' + nd.cfg.gridRows + '&times;' + nd.cfg.gridCols + ' &nbsp;|&nbsp; Seed: ' + seed + ' &nbsp;|&nbsp; Timesteps: ' + sr.timesteps.length + '</p></div>');
 
   H.push('<div class="tab-bar" id="tabBar">');
@@ -8503,7 +8638,7 @@ pre.rpt .h{color:#60a5fa;} pre.rpt .a{color:#fbbf24;} pre.rpt .g{color:#4ade80;}
 
   // ── Tab 4: Per-Timestep ──
   H.push('<div class="tab-content" id="tab-timestep">');
-  H.push('<h2>Per-Timestep Results (EPANET-UI Format)</h2>');
+  H.push('<h2>Per-Timestep Results (' + (isEpanet ? 'EPANET' : 'SWMM') + ' Format)</h2>');
   H.push('<div class="ts-select"><label>Timestep:</label><select id="tsSelect" onchange="showTimestep(this.value)">');
   reportTS.forEach((t, i) => { H.push('<option value="' + t + '"' + (i===0?' selected':'') + '>' + fmtTime(sr.timesteps[t]) + ' hrs</option>'); });
   H.push('</select></div>');
@@ -8545,7 +8680,7 @@ pre.rpt .h{color:#60a5fa;} pre.rpt .a{color:#fbbf24;} pre.rpt .g{color:#4ade80;}
       const showL = nd.pipes.slice(0, maxShow);
       showL.forEach(p => {
         const r = (sr.linkResults[p.id]||[])[t]; if (!r) return;
-        H.push('<tr><td>' + p.id + '</td><td>' + r.flow.toFixed(2) + '</td><td>' + r.velocity.toFixed(2) + '</td><td>' + (r.depth||0).toFixed(2) + '</td><td>Open</td></tr>');
+        H.push('<tr><td>' + p.id + '</td><td>' + r.flow.toFixed(2) + '</td><td>' + r.velocity.toFixed(2) + '</td><td>' + (r.linkDepth||r.depth||0).toFixed(2) + '</td><td>Open</td></tr>');
       });
     }
     if (nd.pipes.length > maxShow) H.push('<tr><td colspan="5" style="text-align:center;color:#6b7280;">... ' + (nd.pipes.length - maxShow) + ' more links</td></tr>');
