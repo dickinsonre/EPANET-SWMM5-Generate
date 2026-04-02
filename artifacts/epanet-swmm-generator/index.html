@@ -7027,13 +7027,17 @@ async function loadWASM() {
 
 async function loadEpanetEngine() {
   if (!window.__EpanetWorkspace) {
-    setSolverStatus('⏳ Waiting for EPANET engine module to load...');
-    await new Promise(r => {
-      const check = setInterval(() => {
-        if (window.__EpanetWorkspace) { clearInterval(check); r(); }
-      }, 200);
-      setTimeout(() => { clearInterval(check); r(); }, 15000);
-    });
+    setSolverStatus('⏳ Downloading EPANET engine module...');
+    if (window.__loadEpanetModules) {
+      await window.__loadEpanetModules();
+    } else {
+      await new Promise(r => {
+        const check = setInterval(() => {
+          if (window.__EpanetWorkspace) { clearInterval(check); r(); }
+        }, 200);
+        setTimeout(() => { clearInterval(check); r(); }, 15000);
+      });
+    }
   }
   if (!window.__EpanetWorkspace) {
     throw new Error('EPANET engine module failed to load');
