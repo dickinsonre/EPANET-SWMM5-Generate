@@ -5421,7 +5421,10 @@ function setTheme(theme) {
     document.documentElement.removeAttribute('data-theme');
   }
   localStorage.setItem('epswTheme', theme);
-  if (typeof drawCityMap === 'function' && cityMapData) drawCityMap();
+  try {
+    const c = document.getElementById('cityCanvas');
+    if (c && c.getContext && c.getContext('2d') && typeof drawCityMap === 'function' && cityMapData) drawCityMap();
+  } catch(e) {}
 }
 
 (function restoreTheme() {
