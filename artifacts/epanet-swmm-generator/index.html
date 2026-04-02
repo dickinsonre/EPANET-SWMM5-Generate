@@ -6265,21 +6265,21 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
       diurnalMults.push(m);
     }
     a(`DWF_DIURNAL      HOURLY     ${diurnalMults.slice(0,6).map(v=>v.toFixed(3)).join('  ')}`);
-    a(`DWF_DIURNAL      HOURLY     ${diurnalMults.slice(6,12).map(v=>v.toFixed(3)).join('  ')}`);
-    a(`DWF_DIURNAL      HOURLY     ${diurnalMults.slice(12,18).map(v=>v.toFixed(3)).join('  ')}`);
-    a(`DWF_DIURNAL      HOURLY     ${diurnalMults.slice(18,24).map(v=>v.toFixed(3)).join('  ')}`);
+    a(`DWF_DIURNAL                 ${diurnalMults.slice(6,12).map(v=>v.toFixed(3)).join('  ')}`);
+    a(`DWF_DIURNAL                 ${diurnalMults.slice(12,18).map(v=>v.toFixed(3)).join('  ')}`);
+    a(`DWF_DIURNAL                 ${diurnalMults.slice(18,24).map(v=>v.toFixed(3)).join('  ')}`);
     nl();
 
     // Weekend pattern (lower, shifted later)
     if(swmm.dwfPattern === 'WEEKDAY') {
       const weekendMults = diurnalMults.map((m,h) => {
-        const shift = h < 2 ? diurnalMults[(h+22)%24] : diurnalMults[h-2]; // shift 2hrs later
-        return (shift * 0.85).toFixed(3); // 85% of weekday
+        const shift = h < 2 ? diurnalMults[(h+22)%24] : diurnalMults[h-2];
+        return (shift * 0.85).toFixed(3);
       });
       a(`DWF_WEEKEND      HOURLY     ${weekendMults.slice(0,6).join('  ')}`);
-      a(`DWF_WEEKEND      HOURLY     ${weekendMults.slice(6,12).join('  ')}`);
-      a(`DWF_WEEKEND      HOURLY     ${weekendMults.slice(12,18).join('  ')}`);
-      a(`DWF_WEEKEND      HOURLY     ${weekendMults.slice(18,24).join('  ')}`);
+      a(`DWF_WEEKEND                 ${weekendMults.slice(6,12).join('  ')}`);
+      a(`DWF_WEEKEND                 ${weekendMults.slice(12,18).join('  ')}`);
+      a(`DWF_WEEKEND                 ${weekendMults.slice(18,24).join('  ')}`);
       nl();
     }
 
@@ -6291,16 +6291,16 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
 
     // Commercial DWF pattern (peaks midday)
     a(`DWF_COMMERCIAL   HOURLY     ${Array.from({length:6},(_,h)=>(0.1+0.1*h).toFixed(3)).join('  ')}`);
-    a(`DWF_COMMERCIAL   HOURLY     ${Array.from({length:6},(_,h)=>(0.7+0.4*Math.sin((h/6)*Math.PI)).toFixed(3)).join('  ')}`);
-    a(`DWF_COMMERCIAL   HOURLY     ${Array.from({length:6},(_,h)=>(1.0-0.15*h).toFixed(3)).join('  ')}`);
-    a(`DWF_COMMERCIAL   HOURLY     ${Array.from({length:6},(_,h)=>(0.25-0.03*h).toFixed(3)).join('  ')}`);
+    a(`DWF_COMMERCIAL              ${Array.from({length:6},(_,h)=>(0.7+0.4*Math.sin((h/6)*Math.PI)).toFixed(3)).join('  ')}`);
+    a(`DWF_COMMERCIAL              ${Array.from({length:6},(_,h)=>(1.0-0.15*h).toFixed(3)).join('  ')}`);
+    a(`DWF_COMMERCIAL              ${Array.from({length:6},(_,h)=>(0.25-0.03*h).toFixed(3)).join('  ')}`);
     nl();
 
     // Industrial DWF pattern (sustained daytime)
     a(`DWF_INDUSTRIAL   HOURLY     0.100  0.100  0.100  0.100  0.200  0.500`);
-    a(`DWF_INDUSTRIAL   HOURLY     0.900  1.000  1.000  1.000  1.000  1.000`);
-    a(`DWF_INDUSTRIAL   HOURLY     1.000  1.000  0.900  0.700  0.400  0.200`);
-    a(`DWF_INDUSTRIAL   HOURLY     0.150  0.100  0.100  0.100  0.100  0.100`);
+    a(`DWF_INDUSTRIAL              0.900  1.000  1.000  1.000  1.000  1.000`);
+    a(`DWF_INDUSTRIAL              1.000  1.000  0.900  0.700  0.400  0.200`);
+    a(`DWF_INDUSTRIAL              0.150  0.100  0.100  0.100  0.100  0.100`);
     nl();
 
     // DWF assignments
