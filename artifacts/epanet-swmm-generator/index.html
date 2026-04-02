@@ -8815,11 +8815,8 @@ function _buildCalFile(param, sr, isSwmm, isSI) {
   const timesteps = sr.timesteps;
   if (!results || Object.keys(results).length === 0) return null;
 
-  const sampleInterval = Math.max(1, Math.floor(timesteps.length / 24));
   const sampledIndices = [];
-  for (let i = 0; i < timesteps.length; i += sampleInterval) sampledIndices.push(i);
-  if (sampledIndices[sampledIndices.length-1] !== timesteps.length-1 && timesteps.length > 1)
-    sampledIndices.push(timesteps.length-1);
+  for (let i = 0; i < timesteps.length; i++) sampledIndices.push(i);
 
   const L = [];
 
