@@ -242,6 +242,13 @@ bottom of the screen while they run: a percent-complete bar, the current model/m
 to a `zipping…` state while the archive is packed, then dismisses automatically when the export
 finishes or fails.
 
+**Solver progress.** The same panel also appears while you **run the engine** (Run Solver and
+Quick Sim). An EPANET run shows a determinate `timestep i / N` bar with elapsed time + ETA as it
+walks the simulation period (and an animated indeterminate bar during the single-shot solve
+phases); a SWMM run — one blocking solve — shows an animated indeterminate bar. The elapsed
+clock advances while the main thread is free and pauses during a single blocking solve. It
+dismisses automatically when the solve finishes or fails.
+
 ---
 
 ## 9. Calibration Workflow (Truth → Corrupt → Recover)
@@ -609,6 +616,15 @@ produces files compatible with both.
   member count (and ZIP part, for big sweeps), the elapsed time, and an **estimated time
   remaining** (a linear projection from the average time per completed item). The panel appears
   when an export starts and dismisses automatically when it finishes or fails.
+- **Solver progress panel:** running the engine now shows the same floating panel. An **EPANET**
+  run displays a determinate `timestep i / N` bar (with elapsed time + ETA) while it walks the
+  extended-period simulation, and an animated indeterminate bar during the single-shot
+  hydraulic/water-quality solves. A **SWMM** run (one blocking WASM call) shows an animated
+  indeterminate bar; **Quick Sim** shows the panel too. The slide animation is transform-driven
+  so it keeps moving even while a blocking solve freezes the main thread. The elapsed-time clock
+  advances whenever the main thread is free (it can't tick during a single blocking WASM call,
+  but resumes once that call returns). A global solver lock blocks a second solve from starting
+  mid-run.
 
 **v3.5 — 2026-05-29**
 - **Node-count sweep ("many model") export** (both modes): generates one model per target

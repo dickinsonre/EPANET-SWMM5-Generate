@@ -549,6 +549,10 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 #exportProgress .ep-bar { height:8px; background: var(--border); border-radius:4px; overflow:hidden; }
 #exportProgress .ep-fill { height:100%; width:0%; background: var(--water-gradient); border-radius:4px; transition: width 0.2s ease; }
 #exportProgress .ep-meta { display:flex; justify-content:space-between; gap:10px; margin-top:8px; font-family: 'JetBrains Mono', monospace; font-size:11px; color:#94a3b8; }
+/* Indeterminate state: transform-animated (compositor-driven) so it keeps sliding even while
+   a single blocking WASM solve (e.g. SWMM swmm_run) freezes the main thread. */
+#exportProgress .ep-fill.indeterminate { width:35%; animation: epIndet 1.1s ease-in-out infinite; }
+@keyframes epIndet { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
 
 /* ═══════ INSPECT PANEL ═══════ */
 .inspect-panel {
@@ -3674,7 +3678,8 @@ function setProgress(pf, pl, pct, label) {
 // floating progress panel. ETA is a linear projection from average time per completed item.
 // One shared panel + timer: an ownership token guards against two exports running at
 // once (different buttons) clobbering each other's timer or hiding the panel early.
-let _exportT0 = 0, _exportSeq = 0, _exportOwner = 0;
+let _exportT0 = 0, _exportSeq = 0, _exportOwner = 0, _exportTimer = null;
+function _stopExportTimer() { if (_exportTimer) { clearInterval(_exportTimer); _exportTimer = null; } }
 function _fmtDur(ms) {
   if (!isFinite(ms) || ms < 0) ms = 0;
   const s = Math.round(ms / 1000);
@@ -3691,8 +3696,10 @@ function startExportProgress(label) {
   const el = document.getElementById('exportProgress');
   if (!el) return token;
   document.getElementById('epLabel').textContent = label || 'Exporting…';
+  _stopExportTimer();
   document.getElementById('epPct').textContent = '0%';
-  document.getElementById('epFill').style.width = '0%';
+  const _epf = document.getElementById('epFill');
+  _epf.classList.remove('indeterminate'); _epf.style.transform = ''; _epf.style.width = '0%';
   document.getElementById('epCount').textContent = '';
   document.getElementById('epTime').textContent = 'elapsed 0s';
   el.classList.add('visible');
@@ -3705,8 +3712,11 @@ function tickExportProgress(done, total, subLabel, token) {
   const frac = total > 0 ? Math.min(1, done / total) : 0;
   const pct = Math.round(frac * 100);
   const elapsed = performance.now() - _exportT0;
+  _stopExportTimer();
   document.getElementById('epPct').textContent = pct + '%';
-  document.getElementById('epFill').style.width = pct + '%';
+  const _epf = document.getElementById('epFill');
+  _epf.classList.remove('indeterminate'); _epf.style.transform = '';
+  _epf.style.width = pct + '%';
   document.getElementById('epCount').textContent = subLabel || (done + ' / ' + total);
   let t = 'elapsed ' + _fmtDur(elapsed);
   if (done > 0 && done < total) {
@@ -3718,8 +3728,32 @@ function tickExportProgress(done, total, subLabel, token) {
 }
 function endExportProgress(token) {
   if (token !== undefined && token !== _exportOwner) return;
+  _stopExportTimer();
   const el = document.getElementById('exportProgress');
   if (el) el.classList.remove('visible');
+}
+// Indeterminate progress for work that can't report a fraction (a single blocking WASM solve,
+// or a setup phase). Shows an animated sliding bar + an elapsed-time clock that ticks whenever
+// the main thread is free (it cannot advance while a single blocking WASM call is running).
+function markExportIndeterminate(label, token) {
+  if (token !== undefined && token !== _exportOwner) return;
+  const el = document.getElementById('exportProgress');
+  if (!el) return;
+  el.classList.add('visible');
+  if (label) document.getElementById('epLabel').textContent = label;
+  document.getElementById('epPct').textContent = '';
+  const f = document.getElementById('epFill');
+  f.style.transform = ''; f.style.width = '35%';
+  f.classList.add('indeterminate');
+  document.getElementById('epCount').textContent = 'working…';
+  const tick = () => {
+    if (token !== undefined && token !== _exportOwner) { _stopExportTimer(); return; }
+    const t = document.getElementById('epTime');
+    if (t) t.textContent = 'elapsed ' + _fmtDur(performance.now() - _exportT0);
+  };
+  tick();
+  _stopExportTimer();
+  _exportTimer = setInterval(tick, 500);
 }
 
 // ═══════ TERRAIN ═══════
@@ -7350,6 +7384,10 @@ function downloadHGL() {
 let solverModule = null;     // Emscripten module
 let solverType = null;       // 'epanet' or 'swmm'
 let solverResults = null;    // parsed results
+// Global lock: the solver loops now yield (await) so the progress bar can paint, which opens
+// re-entrancy windows. This guards against a second solve (Run Solver / Quick Sim) starting
+// mid-run and interleaving shared WASM engine state.
+let _solverBusy = false;
 let currentTimestep = 0;
 let animTimer = null;
 
@@ -7540,17 +7578,23 @@ async function runSolver() {
     return;
   }
 
+  if (_solverBusy) { setSolverStatus('⚠ A solve is already running — please wait for it to finish.'); return; }
+  _solverBusy = true;
+
   const btn = document.getElementById('runBtn');
   btn.disabled = true;
   btn.textContent = '⏳ Solving...';
+
+  const solveTok = startExportProgress(solverType === 'swmm' ? 'Running SWMM solver…' : 'Running EPANET solver…');
+  markExportIndeterminate(null, solveTok);
 
   await new Promise(r => setTimeout(r, 50));
 
   try {
     if (solverType === 'epanet' && solverModule.type === 'epanet-js') {
-      await runEpanetSolver();
+      await runEpanetSolver(solveTok);
     } else if (solverType === 'swmm' && solverModule.FS) {
-      await runSwmmSolver();
+      await runSwmmSolver(solveTok);
     } else if (solverType === 'swmm' && !solverModule.FS) {
       setSolverStatus('⚠ SWMM engine not loaded — click "Load WASM Engine" first while in SWMM mode, then try again.');
       return;
@@ -7585,12 +7629,14 @@ async function runSolver() {
     setSolverStatus(`⚠ Solver error: ${e.message}`);
     console.error('Solver error:', e);
   } finally {
+    endExportProgress(solveTok);
+    _solverBusy = false;
     btn.disabled = false;
     btn.textContent = '▶ Run Solver';
   }
 }
 
-async function runEpanetSolver() {
+async function runEpanetSolver(token) {
   setSolverStatus('Running EPANET hydraulic solver...');
   const ws = solverModule._epanetWs;
   const model = new window.__EpanetProject(ws);
@@ -7600,12 +7646,16 @@ async function runEpanetSolver() {
   model.open('model.inp', 'model.rpt', 'model.out');
 
   setSolverStatus('Solving hydraulics...');
+  markExportIndeterminate('Solving hydraulics…', token);
+  await new Promise(r => setTimeout(r));
   model.solveH();
 
   setSolverStatus('Saving hydraulic results...');
   model.saveH();
 
   setSolverStatus('Solving water quality...');
+  markExportIndeterminate('Solving water quality…', token);
+  await new Promise(r => setTimeout(r));
   model.solveQ();
 
   setSolverStatus('Writing report...');
@@ -7702,6 +7752,10 @@ async function runEpanetSolver() {
       });
 
       stepCount++;
+      if (stepCount % 8 === 0 || stepCount === numTS) {
+        tickExportProgress(stepCount, numTS, `timestep ${stepCount} / ${numTS}`, token);
+        await new Promise(r => setTimeout(r));
+      }
     }
 
     tstep = model2.nextH();
@@ -8079,7 +8133,7 @@ function getValidationSummaryText() {
   return lines.join('\n');
 }
 
-async function runSwmmSolver() {
+async function runSwmmSolver(token) {
   setSolverStatus('Running SWMM solver...');
   console.log('[runSwmmSolver] writing INP to FS, length:', generatedINP.length);
 
@@ -8099,6 +8153,8 @@ async function runSwmmSolver() {
   }
 
   console.log('[runSwmmSolver] calling swmm_run...');
+  markExportIndeterminate('Running SWMM solver…', token);
+  await new Promise(r => setTimeout(r, 30));
   let err;
   try {
     const swmm_run = solverModule.cwrap('swmm_run', 'number', ['string', 'string', 'string']);
@@ -9994,14 +10050,20 @@ let quickSimPressures = null;
 async function quickSim() {
   if (!generatedINP || !networkData) { showToast('Generate a network first', 'warning'); return; }
   if (currentMode !== 'epanet') { showToast('Quick Sim is only available in EPANET mode', 'warning'); return; }
+  if (_solverBusy) { showToast('A solve is already running — please wait', 'warning'); return; }
+  _solverBusy = true;
   const btn = document.getElementById('quickSimBtn');
   btn.disabled = true; btn.textContent = '⏳ Loading engine...';
+  const qsTok = startExportProgress('Quick Sim: loading engine…');
+  markExportIndeterminate(null, qsTok);
   try {
     if (!solverModule || solverModule.type !== 'epanet-js') {
       await loadEpanetEngine();
     }
     btn.textContent = '⏳ Solving...';
     setSolverStatus('Quick Sim: running steady-state...');
+    markExportIndeterminate('Quick Sim: running steady-state…', qsTok);
+    await new Promise(r => setTimeout(r));
     const ws = solverModule._epanetWs;
     const model = new window.__EpanetProject(ws);
     ws.writeFile('quicksim.inp', generatedINP);
@@ -10028,6 +10090,8 @@ async function quickSim() {
     setSolverStatus(`⚠ Quick Sim error: ${e.message}`);
     showToast('Quick Sim failed: ' + e.message, 'error');
   } finally {
+    endExportProgress(qsTok);
+    _solverBusy = false;
     btn.disabled = false; btn.textContent = '⚡ Quick Sim (Pressure Map)';
   }
 }
