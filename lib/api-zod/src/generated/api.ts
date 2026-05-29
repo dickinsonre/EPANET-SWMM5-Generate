@@ -8,6 +8,34 @@
 import * as zod from "zod";
 
 /**
+ * Sends a structured snapshot of the most recently generated network to Claude and returns a plain-language summary. Optionally answers a free-form follow-up question about the same network.
+ * @summary Summarize the generated network
+ */
+export const summarizeNetworkBodyNetworkContextMax = 20000;
+
+export const summarizeNetworkBodyQuestionMax = 2000;
+
+export const SummarizeNetworkBody = zod.object({
+  networkContext: zod
+    .string()
+    .min(1)
+    .max(summarizeNetworkBodyNetworkContextMax)
+    .describe(
+      "Structured snapshot of the last generated network (mode, units, stats, config, seed).",
+    ),
+  question: zod
+    .string()
+    .max(summarizeNetworkBodyQuestionMax)
+    .optional()
+    .describe("Optional free-form follow-up question about the network."),
+});
+
+export const SummarizeNetworkResponse = zod.object({
+  summary: zod.string(),
+  model: zod.string(),
+});
+
+/**
  * Returns server health status
  * @summary Health check
  */

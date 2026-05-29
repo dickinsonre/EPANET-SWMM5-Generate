@@ -81,6 +81,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 | **Log** | Engineering log of generation decisions (source placement, connectivity, sizing). |
 | **RPT** | Post-solve report output (after running the WASM solver). |
 | **Results** | Solver results with a time-slider animation for extended-period simulations. |
+| **🤖 AI** | AI Assistant (powered by Claude). One click summarizes *what the program just did* — the network it just generated — in plain English, and you can ask free-form follow-up questions about it. See [§3.1](#31-ai-assistant). |
 
 **Sidebar settings** are organized into four sub-tabs: **Network**, **Hydraulics**,
 **Environment**, and **Map & Export**.
@@ -104,6 +105,29 @@ confirm compatibility with your desktop tools at a glance.
 
 Undo/redo step through committed changes to the sidebar settings (it does not undo a
 generated network — just the input values), so you can experiment freely and back out.
+
+### 3.1 AI Assistant
+
+The **🤖 AI** tab is a built-in assistant (powered by **Claude**, model `claude-opus-4-7`)
+that explains the network you just generated in plain English.
+
+- **✨ Summarize what the program just did** — one click produces a short narrative of the
+  most recent run: the mode and units, the grid/topology it built, source and demand balance,
+  connectivity, and any notable warnings. Useful for a quick sanity check or for pasting into
+  a report or lab write-up.
+- **Ask a question** — type a free-form question (e.g. *"How many pumps does this network
+  have?"*, *"Is the supply adequate and why?"*, *"What would happen if I added a second
+  reservoir?"*) and get an answer grounded in the same network snapshot.
+
+**What the assistant sees.** It is only given a compact, text summary of the current
+network — counts (junctions, pipes, pumps, reservoirs, etc.), demand/supply figures,
+connectivity, zones, the seed, and the scalar configuration values. It does **not** receive
+the full `.inp` file or any data beyond the run you just generated, so its answers describe
+*this* network, not external sources.
+
+**How it's powered.** The assistant uses **Replit AI Integrations** — there is no API key to
+configure, and usage is billed to your Replit credits. Generate a network first; the buttons
+report a gentle warning if there's nothing to summarize yet.
 
 ---
 
@@ -625,6 +649,12 @@ fitness-of-output disclaimer, not a usage restriction.
 ### Changelog
 
 **v3.6 — 2026-05-29**
+- **AI Assistant tab (powered by Claude):** a new **🤖 AI** tab summarizes *what the program
+  just did* — the network you just generated — in plain English with one click, and answers
+  free-form follow-up questions about it (pumps, supply adequacy, "what if…", etc.). It is sent
+  only a compact text snapshot of the current run (counts, demand/supply, connectivity, zones,
+  seed, scalar config), never the full `.inp`. Runs through **Replit AI Integrations**
+  (model `claude-opus-4-7`) — no API key to configure; usage is billed to Replit credits.
 - **Version single source of truth + drift guard:** the build version now lives in one
   constant (`GEN_BUILD`) that drives the header badge and every exported `[TITLE]` block, and
   the `[TITLE]` block additionally stamps the engine target (`loads in EPANET 2.2+` /

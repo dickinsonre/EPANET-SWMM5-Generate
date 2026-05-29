@@ -312,6 +312,16 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .tab-btn.active { background: var(--accent-blue); color: #fff; }
+.ai-answer { color: var(--text-primary); font-size: 13px; line-height: 1.65; }
+.ai-answer h2 { font-size: 15px; margin: 14px 0 6px; color: var(--text-primary); }
+.ai-answer h3 { font-size: 13.5px; margin: 12px 0 5px; color: var(--text-primary); }
+.ai-answer h4 { font-size: 13px; margin: 10px 0 4px; color: var(--text-secondary); }
+.ai-answer p { margin: 6px 0; }
+.ai-answer ul { margin: 6px 0; padding-left: 20px; }
+.ai-answer li { margin: 3px 0; }
+.ai-answer code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+.ai-answer pre { background: rgba(255,255,255,0.06); padding: 10px; border-radius: 8px; overflow-x: auto; }
+.ai-answer pre code { background: none; padding: 0; }
 
 .stats-grid {
   display: grid;
@@ -1646,6 +1656,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <button class="tab-btn" onclick="switchTab('log',this)" id="logTabBtn" style="display:none;">Log</button>
       <button class="tab-btn" onclick="switchTab('rpt',this)" id="rptTabBtn">RPT</button>
       <button class="tab-btn" onclick="switchTab('results',this)" id="resultsTabBtn">Results</button>
+      <button class="tab-btn" onclick="switchTab('ai',this)" id="aiTabBtn">🤖 AI</button>
     </div>
   </div>
 
@@ -1682,6 +1693,23 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   </div>
 
   <div id="tab-stats" style="display:none;flex:1;overflow-y:auto;padding:8px 0;"><div id="healthSummary" style="display:none;margin:0 0 12px;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;border:1px solid var(--border);"></div><div class="stats-grid" id="statsGrid"></div></div>
+  <div id="tab-ai" style="display:none;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch;padding:10px 6px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <span style="font-size:18px;">🤖</span>
+      <strong style="font-size:15px;color:var(--text-primary);">AI Assistant</strong>
+      <span style="font-size:11px;color:var(--text-dim);border:1px solid var(--border);border-radius:10px;padding:1px 8px;">Claude · claude-opus-4-7</span>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin:0 0 12px;line-height:1.5;">
+      Powered by Replit AI Integrations — no API key required. Usage is billed to your Replit credits.
+      The assistant only sees a summary of the network you just generated.
+    </p>
+    <button id="aiSummarizeBtn" onclick="aiSummarize()" style="width:100%;padding:11px;border:none;border-radius:8px;background:var(--accent-blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer;">✨ Summarize what the program just did</button>
+    <div style="display:flex;gap:6px;margin-top:10px;">
+      <input id="aiQuestion" type="text" placeholder="Ask a question about this network…" onkeydown="if(event.key==='Enter')aiAsk()" style="flex:1;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-input,rgba(255,255,255,0.04));color:var(--text-primary);font-size:13px;">
+      <button id="aiAskBtn" onclick="aiAsk()" style="padding:9px 16px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-primary);font-weight:600;font-size:13px;cursor:pointer;">Ask</button>
+    </div>
+    <div id="aiOutput" style="margin-top:14px;"><div style="color:var(--text-dim);font-size:13px;padding:8px 2px;">Generate a network, then ask the assistant to explain what it built.</div></div>
+  </div>
   <div id="tab-inp" style="display:none;">
     <div style="display:flex;gap:6px;margin-bottom:8px;">
       <button class="download-btn" onclick="downloadINP()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download .inp</button>
@@ -3191,7 +3219,7 @@ function switchTab(tab, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const flexTabs = ['map','stats'];
-  ['map','stats','inp','docs','hgl','log','rpt','results'].forEach(t => {
+  ['map','stats','inp','docs','hgl','log','rpt','results','ai'].forEach(t => {
     const el = document.getElementById('tab-'+t);
     if (t === tab) {
       el.style.display = flexTabs.includes(t) ? 'flex' : 'block';
@@ -4614,6 +4642,123 @@ function renderHealthSummary(nd, jc) {
   el.style.borderColor = color;
   el.style.background = severity === 'ok' ? 'rgba(34,197,94,0.08)' : severity === 'warn' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
   el.innerHTML = html;
+}
+
+// ---- AI Assistant ----
+// Builds a compact, plain-text snapshot of the most recent generation run.
+function buildAIContext(){
+  const nd = networkData;
+  if(!nd) return null;
+  const seed = +(document.getElementById('randomSeed').value) || 42;
+  const L = [];
+  L.push(`Generator build: ${GEN_BUILD.version} (${GEN_BUILD.date})`);
+  L.push(`Mode: ${currentMode==='swmm' ? 'EPA SWMM 5.2.4 stormwater/drainage' : 'EPANET 2.3 water distribution'}`);
+  L.push(`Units: ${currentUnits==='SI' ? 'SI / Metric (LPS, m, kPa)' : 'US Customary (GPM, ft, psi)'}`);
+  L.push(`Random seed: ${seed}`);
+  const jc = nd.nodes.filter(n=>n.type==='junction').length;
+  if(currentMode==='swmm'){
+    L.push(`Junctions: ${jc}`);
+    L.push(`Outfalls: ${nd.outfallCount||0}`);
+    L.push(`Subcatchments: ${nd.subcatchments||0}`);
+    L.push(`Conduits: ${nd.conduitCount||0}`);
+    L.push(`Pumps: ${nd.pumpCount||0}`);
+    L.push(`Force mains: ${nd.forceMainCount||0}`);
+    L.push(`Storm type: ${nd.stormType||'n/a'}`);
+  } else {
+    L.push(`Junctions: ${jc}`);
+    L.push(`Reservoirs: ${nd.reservoirs.length}`);
+    L.push(`Tanks: ${nd.tanks.length}`);
+    L.push(`Pipes: ${nd.pipes.length}`);
+    L.push(`Pumps: ${nd.pumps.length}`);
+    L.push(`Valves: ${nd.valves.length}`);
+    L.push(`Emitter nodes: ${nd.emitterNodes.length}`);
+    L.push(`Closed pipes: ${nd.pipes.filter(p=>p.status==='Closed').length}`);
+    L.push(`Avg demand: ${(nd.totalAvgDemand||0).toFixed(0)} GPM`);
+    L.push(`Peak demand: ${(nd.peakDemand||0).toFixed(0)} GPM`);
+    L.push(`Supply status: ${nd.supplyAdequate ? 'adequate' : 'deficit'}`);
+    L.push(`Supply/Demand ratio: ${(nd.supplyDemandRatio||0).toFixed(2)}`);
+    L.push(`Pressure zones: ${nd.numPressureZones||1}`);
+    L.push(`Elevation range: ${(nd.elevRange||0).toFixed(0)} ft`);
+    L.push(`Connectivity: ${nd.connectivityPct||0}%`);
+    L.push(`Isolated nodes: ${nd.isolatedCount||0}`);
+    if(nd.cfg && nd.cfg.designMode){
+      L.push(`Design mode: ON (population ${nd.cfg.designPop}, ${nd.cfg.designGPCD} gpcd, peaking x${nd.cfg.designPeaking}, fire flow ${nd.cfg.designFireFlow} GPM)`);
+    }
+  }
+  const z = {}; nd.nodes.forEach(n=>{ if(n.type==='junction') z[n.zone]=(z[n.zone]||0)+1; });
+  if(Object.keys(z).length) L.push(`Zones: ${Object.entries(z).map(([k,v])=>`${k}=${v}`).join(', ')}`);
+  if(typeof generatedINP==='string' && generatedINP) L.push(`INP size: ${(generatedINP.length/1024).toFixed(0)} KB`);
+  const cfg = nd.cfg || {};
+  const cc = {};
+  Object.keys(cfg).forEach(k=>{ const v=cfg[k]; if(!k.startsWith('_') && (typeof v==='number'||typeof v==='string'||typeof v==='boolean')) cc[k]=v; });
+  if(Object.keys(cc).length) L.push(`Config: ${JSON.stringify(cc)}`);
+  return L.join('\n');
+}
+
+// Minimal Markdown -> HTML for the assistant's reply (escapes all text first).
+function aiMarkdown(md){
+  const lines = String(md||'').split('\n');
+  let html = '', inList = false, inCode = false;
+  const inline = t => esc(t)
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/(^|[^*])\*([^*]+)\*/g,'$1<em>$2</em>');
+  for(const raw of lines){
+    const line = raw.replace(/\r$/,'');
+    if(/^```/.test(line)){ if(inList){html+='</ul>';inList=false;} inCode=!inCode; html += inCode?'<pre><code>':'</code></pre>'; continue; }
+    if(inCode){ html += esc(line)+'\n'; continue; }
+    if(/^\s*[-*]\s+/.test(line)){ if(!inList){html+='<ul>';inList=true;} html += '<li>'+inline(line.replace(/^\s*[-*]\s+/,''))+'</li>'; continue; }
+    if(inList){ html+='</ul>'; inList=false; }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if(h){ const lvl=Math.min(h[1].length+1,4); html += `<h${lvl}>`+inline(h[2])+`</h${lvl}>`; continue; }
+    if(line.trim()==='') continue;
+    html += '<p>'+inline(line)+'</p>';
+  }
+  if(inList) html += '</ul>';
+  if(inCode) html += '</code></pre>';
+  return html;
+}
+
+async function aiRequest(question){
+  if(!networkData){ showToast('Generate a network first', 'warning'); return; }
+  const ctx = buildAIContext();
+  if(!ctx){ showToast('Generate a network first', 'warning'); return; }
+  const out = document.getElementById('aiOutput');
+  const sBtn = document.getElementById('aiSummarizeBtn');
+  const aBtn = document.getElementById('aiAskBtn');
+  out.innerHTML = '<div style="color:var(--text-secondary);font-size:13px;padding:10px 2px;">🤖 Claude is analyzing your network…</div>';
+  if(sBtn) sBtn.disabled = true;
+  if(aBtn) aBtn.disabled = true;
+  try{
+    const body = { networkContext: ctx.slice(0, 20000) };
+    if(question) body.question = question;
+    const res = await fetch('/api/anthropic/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){
+      let msg = `Request failed (${res.status})`;
+      try { const e = await res.json(); if(e && e.error) msg = e.error; } catch(_){}
+      out.innerHTML = `<div style="color:var(--accent-red);font-size:13px;padding:10px 2px;">⚠ ${esc(msg)}</div>`;
+      return;
+    }
+    const data = await res.json();
+    out.innerHTML = `<div class="ai-answer">${aiMarkdown(data.summary)}</div>`
+      + `<div style="margin-top:12px;font-size:11px;color:var(--text-dim);">Model: ${esc(data.model||'')}</div>`;
+  }catch(err){
+    out.innerHTML = `<div style="color:var(--accent-red);font-size:13px;padding:10px 2px;">⚠ Could not reach the AI service. ${esc(String((err&&err.message)||err))}</div>`;
+  }finally{
+    if(sBtn) sBtn.disabled = false;
+    if(aBtn) aBtn.disabled = false;
+  }
+}
+function aiSummarize(){ aiRequest(''); }
+function aiAsk(){
+  const el = document.getElementById('aiQuestion');
+  const q = (el.value||'').trim();
+  if(!q){ showToast('Type a question first', 'warning'); return; }
+  aiRequest(q);
 }
 
 function renderINPPreview(inp){

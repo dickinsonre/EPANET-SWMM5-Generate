@@ -10,7 +10,49 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: anthropic
+    description: AI assistant operations
 paths:
+  /anthropic/summarize:
+    post:
+      operationId: summarizeNetwork
+      tags: [anthropic]
+      summary: Summarize the generated network
+      description: >-
+        Sends a structured snapshot of the most recently generated network to
+        Claude and returns a plain-language summary. Optionally answers a
+        free-form follow-up question about the same network.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetworkSummaryRequest"
+      responses:
+        "200":
+          description: Generated summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NetworkSummaryResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests (rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream AI provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /healthz:
     get:
       operationId: healthCheck
@@ -33,4 +75,35 @@ components:
           type: string
       required:
         - status
+    NetworkSummaryRequest:
+      type: object
+      properties:
+        networkContext:
+          type: string
+          description: Structured snapshot of the last generated network (mode, units, stats, config, seed).
+          minLength: 1
+          maxLength: 20000
+        question:
+          type: string
+          description: Optional free-form follow-up question about the network.
+          maxLength: 2000
+      required:
+        - networkContext
+    NetworkSummaryResult:
+      type: object
+      properties:
+        summary:
+          type: string
+        model:
+          type: string
+      required:
+        - summary
+        - model
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
 

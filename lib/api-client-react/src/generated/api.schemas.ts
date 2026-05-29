@@ -8,3 +8,26 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface NetworkSummaryRequest {
+  /**
+   * Structured snapshot of the last generated network (mode, units, stats, config, seed).
+   * @minLength 1
+   * @maxLength 20000
+   */
+  networkContext: string;
+  /**
+   * Optional free-form follow-up question about the network.
+   * @maxLength 2000
+   */
+  question?: string;
+}
+
+export interface NetworkSummaryResult {
+  summary: string;
+  model: string;
+}
+
+export interface ErrorResponse {
+  error: string;
+}

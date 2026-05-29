@@ -5,24 +5,119 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ErrorResponse,
+  HealthStatus,
+  NetworkSummaryRequest,
+  NetworkSummaryResult,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Sends a structured snapshot of the most recently generated network to Claude and returns a plain-language summary. Optionally answers a free-form follow-up question about the same network.
+ * @summary Summarize the generated network
+ */
+export const getSummarizeNetworkUrl = () => {
+  return `/api/anthropic/summarize`;
+};
+
+export const summarizeNetwork = async (
+  networkSummaryRequest: NetworkSummaryRequest,
+  options?: RequestInit,
+): Promise<NetworkSummaryResult> => {
+  return customFetch<NetworkSummaryResult>(getSummarizeNetworkUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(networkSummaryRequest),
+  });
+};
+
+export const getSummarizeNetworkMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof summarizeNetwork>>,
+    TError,
+    { data: BodyType<NetworkSummaryRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof summarizeNetwork>>,
+  TError,
+  { data: BodyType<NetworkSummaryRequest> },
+  TContext
+> => {
+  const mutationKey = ["summarizeNetwork"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof summarizeNetwork>>,
+    { data: BodyType<NetworkSummaryRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return summarizeNetwork(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SummarizeNetworkMutationResult = NonNullable<
+  Awaited<ReturnType<typeof summarizeNetwork>>
+>;
+export type SummarizeNetworkMutationBody = BodyType<NetworkSummaryRequest>;
+export type SummarizeNetworkMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Summarize the generated network
+ */
+export const useSummarizeNetwork = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof summarizeNetwork>>,
+    TError,
+    { data: BodyType<NetworkSummaryRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof summarizeNetwork>>,
+  TError,
+  { data: BodyType<NetworkSummaryRequest> },
+  TContext
+> => {
+  return useMutation(getSummarizeNetworkMutationOptions(options));
+};
 
 /**
  * Returns server health status

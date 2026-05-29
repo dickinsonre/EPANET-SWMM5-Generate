@@ -105,7 +105,7 @@ Key features:
 - Config save/load (JSON) + Copy Config to clipboard
 - Seed management: prominent seed display, Copy Seed button, Dice (randomize) button, Lock Seed checkbox, seed stored in INP [TITLE]
 - WASM solver engine integration (EPANET 2.3 via epanet-js + @model-create/epanet-engine@0.9.0-alpha.1, SWMM via ikegdivs/swmm-js)
-- Multiple tabs: Map, Stats, INP, Docs, HGL, RPT, Results
+- Multiple tabs: Map, Stats, INP, Docs, HGL, RPT, Results, AI
 - Results visualization with time slider animation
 - Calibration file export: EPANET `.cal` (Pressure/Head/Demand/Flow/Velocity) and SWMM `.dat` (Depth/Head/Inflow/Flow/Velocity)
 - Batch ZIP export: generates N INP models (2-50) with sequential seeds, packages as ZIP with manifest.json (JSZip CDN)
@@ -121,6 +121,7 @@ Key features:
 - SWMM subcatchments use D8 flow direction algorithm for drainage boundary routing
 - **Phase 4**: WASM Validation Report — post-solve validation analysis (convergence, mass balance, negative/low pressure, velocity violations, stagnation, empty tanks), green/yellow/red severity badge on map, auto-fix (pipe upsize heuristic + re-solve), recommendations engine (booster pumps, flushing, tank supply), RPT integration
 - **Phase 5**: Demand-Driven Pipe Sizing — BFS flow estimation from sources, flow-based diameter selection (2-5 ft/s target velocity, min 6" distribution / 12" arterial), Design Mode UI (population, per-capita gpcd, peaking factor, fire flow) auto-sizing reservoirs/pumps, Stats tab design basis display
+- **AI Assistant** (🤖 AI tab): summarizes "what the program just did" (the last generated run) and answers free-form questions in plain English. Frontend in `index.html` (`buildAIContext()`/`aiMarkdown()`/`aiRequest()`/`aiSummarize()`/`aiAsk()`) POSTs a compact text snapshot of the current network to the api-server route `POST /api/anthropic/summarize`, which calls Claude (`claude-opus-4-7`) via Replit AI Integrations and returns `{summary, model}`. Stateless — no conversation/message DB tables. No API key (billed to Replit credits).
 
 ### `scripts` (`@workspace/scripts`)
 
