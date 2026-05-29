@@ -9193,11 +9193,16 @@ let truthBaseline = null;
 async function runSolverFromResults() {
   if (!generatedINP || generatedINP.length < 50) { showToast('Generate a network first', 'warning'); return; }
   const btn = document.getElementById('resultsRunBtn');
+  if (btn && btn.disabled) return; // guard against concurrent solves
   const orig = btn ? btn.textContent : '';
   try {
-    if (!solverModule || (solverType === 'epanet' && solverModule.type !== 'epanet-js') || (solverType === 'swmm' && !solverModule.FS)) {
+    // Ensure the engine matching the CURRENT mode is loaded (loadX sets solverType).
+    const needSwmm = currentMode === 'swmm';
+    const haveEpanet = solverModule && solverModule.type === 'epanet-js';
+    const haveSwmm = solverModule && !!solverModule.FS;
+    if ((needSwmm && !haveSwmm) || (!needSwmm && !haveEpanet)) {
       if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading engine...'; }
-      if (currentMode === 'swmm') { await loadSwmmEngine(); } else { await loadEpanetEngine(); }
+      if (needSwmm) { await loadSwmmEngine(); } else { await loadEpanetEngine(); }
       document.getElementById('solverRow').style.display = 'flex';
     }
     if (btn) btn.textContent = '⏳ Solving...';
@@ -9271,7 +9276,8 @@ function scoreCalibration() {
     showToast('Run the solver on the corrupted model to compare', 'warning'); return;
   }
   if (truthBaseline.mode !== currentMode) {
-    showToast(`Truth baseline is ${truthBaseline.mode.toUpperCase()} but current mode is ${currentMode.toUpperCase()} — scores not comparable`, 'warning');
+    showToast(`Truth baseline is ${truthBaseline.mode.toUpperCase()} but current mode is ${currentMode.toUpperCase()} — switch back or save a new baseline`, 'error');
+    return;
   }
   const isSI = currentUnits === 'SI';
   const unitMismatch = truthBaseline.units !== currentUnits;
