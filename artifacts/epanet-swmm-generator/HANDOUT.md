@@ -84,6 +84,21 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 **Sidebar settings** are organized into four sub-tabs: **Network**, **Hydraulics**,
 **Environment**, and **Map & Export**.
 
+**Inline tooltips:** hover over almost any setting label to see a one-line description and a
+reasonable range — no need to leave the page or consult this handout.
+
+**Engine & version badges:** the header shows the bundled solver versions
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.2 · 2026-05-29**) so you can
+confirm compatibility with your desktop tools at a glance.
+
+**Keyboard shortcuts:**
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl/⌘ + G` or `Ctrl/⌘ + Enter` | Generate network |
+| `Ctrl/⌘ + S` | Download INP |
+| `Ctrl/⌘ + Shift + C` | Copy INP to clipboard |
+
 ---
 
 ## 4. UI Complexity Modes: Simple / Advanced / Expert
@@ -150,6 +165,11 @@ After generation, the **Stats** tab shows a one-line **health summary** banner:
 - ⚠️ **Amber** — minor cautions (e.g., S/D ratio tight at ~1.0).
 - ⛔ **Red** — real problems (isolated nodes, supply deficit).
 
+When the banner is amber or red, a **"Why?"** button appears. Click it to expand a
+plain-language explanation of the *specific* cause (isolated nodes, supply deficit, tight
+supply, or low pressure) along with concrete fixes (e.g., raise reservoir head, add a pump,
+lower dead ends, enable Design Mode).
+
 Key metrics to watch:
 
 | Metric | What "good" looks like |
@@ -184,8 +204,9 @@ The generator applies real engineering logic, not pure randomness:
   edges; demand zones cluster (industrial, commercial, residential).
 - **Flow-based pipe sizing:** Diameters are chosen from estimated flows toward a 2–5 ft/s
   target velocity (min 6" distribution / 12" arterial).
-- **Street-routing factor:** Pipe lengths are multiplied by ~1.3× to approximate routing
-  along streets rather than straight lines.
+- **Street-routing factor:** Pipe lengths are multiplied by a **density-scaled** factor to
+  approximate routing along streets rather than straight lines — **~1.55×** in the dense,
+  older urban core (irregular older grid) tapering to **~1.15×** at the newer suburban edges.
 
 For SWMM, subcatchments use a **D8 flow-direction** algorithm for drainage routing, and
 RDII uses statistically rigorous **RTK** distributions.
@@ -235,12 +256,14 @@ parameters across N members, each from its own seed:
 - **C-factor** (roughness) — ± your chosen %
 - **Base demand** — ± your chosen %
 - **Elevation** — ± your chosen absolute amount (ft)
+- **Demand pattern (temporal)** — ± your chosen %; jitters each hourly pattern multiplier
+  to capture *temporal* demand uncertainty (set via the **Pat ±%** field, default 10%)
 
 You get a ZIP containing:
 
 - `EPANET23_ensemble_001_seed####.inp` … one `.inp` per member
-- `ensemble_manifest.csv` — maps each member to its perturbation multipliers and summary
-  stats (mean C-factor, total demand)
+- `ensemble_manifest.csv` — maps each member to its perturbation multipliers (C-factor,
+  demand, elevation, pattern jitter) and summary stats (mean C-factor, total demand)
 - `README.txt` — describes the perturbation ranges and seed scheme
 
 **Use it for:** GLUE, Bayesian calibration, and global sensitivity analysis
@@ -344,3 +367,20 @@ without warranty. **Not a substitute for licensed professional engineering judgm
 EPANET is public-domain software from the US EPA (engine: MIT-licensed,
 OpenWaterAnalytics). EPA SWMM is public domain. This generator is an independent tool that
 produces files compatible with both.
+
+---
+
+### Changelog
+
+**v3.2 — 2026-05-29**
+- Engine + build version badges in the header (EPANET 2.3 / SWMM 5.2.4 / v3.2).
+- Density-scaled street-routing factor (1.55× core → 1.15× suburban edges).
+- Context-sensitive **"Why?"** explanations on the health summary banner.
+- Demand-pattern (temporal) perturbation added to Monte Carlo ensembles (**Pat ±%**).
+- Keyboard shortcuts: `Ctrl/⌘+Enter` (generate) and `Ctrl/⌘+Shift+C` (copy INP).
+- Tooltip coverage and label fixes across the settings panels.
+
+**v3.1 and earlier**
+- Supply/demand fix (S/D ≈ 1.15), connectivity reconciliation, Simple/Advanced/Expert UI
+  modes, Monte Carlo ensembles, health summary banner, INP validation, GeoJSON CRS,
+  flow-based pipe sizing, WASM validation report.

@@ -1529,6 +1529,10 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
           <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Z ±ft</label>
           <input type="number" id="ensZAbs" value="2" min="0" max="20" step="0.5" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
         </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Demand pattern (temporal shape) perturbation as +/- percent. Jitters each hourly multiplier to capture temporal demand uncertainty.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Pat ±%</label>
+          <input type="number" id="ensPatPct" value="10" min="0" max="50" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
       </div>
       <button class="download-btn" onclick="ensembleExport()" id="ensembleBtn" style="border-color:#ec4899;color:#ec4899;">🎲 Generate Ensemble ZIP</button>
     </div>
@@ -1622,7 +1626,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <p><strong>Reservoirs:</strong> Placed at perimeter nodes and fully integrated into the grid — the reservoir replaces the junction node, inheriting all pipe connections. No floating nodes. Source pumps are only created when the reservoir head is insufficient for gravity feed.</p>
       <p><strong>Pump Curves:</strong> Sized via BFS critical-path analysis. The engine traces from each reservoir through the pipe network using Hazen-Williams friction loss to find the farthest node, then computes the required pump head as elevation deficit + computed friction + safety margin. Three-point curves bracket the operating point (shutoff = 150% design head, max flow = 400% design flow or design+500 GPM whichever is larger) to prevent "exceeds maximum flow" warnings. Booster pumps are sized based on actual pipe diameter and downstream elevation needs.</p>
       <p><strong>Tanks:</strong> Placed in the distribution field. Base elevation computed to serve the local pressure zone at ~85% of source HGL. Tank nodes replace junction nodes, same as reservoirs.</p>
-      <p><strong>Pipes:</strong> Length = Euclidean distance × 1.3 street-routing factor. Diameters: transmission (24–36") along corridors and near sources, secondary (12–20") on arterials every 5th row/column, distribution (6–12") elsewhere. C-factors spatially correlated: downtown (center) = old pipes (C=80–100), suburban (edges) = new pipes (C=110–130).</p>
+      <p><strong>Pipes:</strong> Length = Euclidean distance × a density-scaled street-routing factor (1.55× in the dense/older core → 1.15× at suburban edges). Diameters: transmission (24–36") along corridors and near sources, secondary (12–20") on arterials every 5th row/column, distribution (6–12") elsewhere. C-factors spatially correlated: downtown (center) = old pipes (C=80–100), suburban (edges) = new pipes (C=110–130).</p>
       <p><strong>Pipe Age:</strong> Each pipe assigned an installation year correlated with distance from center (1950s downtown → 2020s suburban). Written as decade-tagged link attributes (YR1960s, YR1990s, etc.).</p>
       <p><strong>Pumps &amp; Valves:</strong> No parallel links. Every pump and valve is inserted by splitting an existing pipe and creating an intermediate junction. Booster pumps include a closed bypass pipe for isolation. PRVs are placed at elevation zone boundaries (pressure zones auto-detected when terrain range exceeds 80 ft).</p>
       <p><strong>Pressure Zones:</strong> When the elevation range exceeds 80 ft, the system is divided into zones of ~70 ft each. PRVs are placed at pipes that cross zone boundaries, with settings computed from downstream elevation + 50 psi target.</p>
@@ -4337,7 +4341,7 @@ function renderStats(){
     st.push({l:'Isolated',v:nd.isolatedCount||0,c:nd.isolatedCount>0?'var(--accent-red)':'var(--accent-green)'});
     Object.entries(z).forEach(([k,v])=>st.push({l:k,v:v.toLocaleString(),c:'var(--text-secondary)'}));
     st.push({l:'INP Size',v:(generatedINP.length/1024).toFixed(0)+' KB',c:'var(--text-dim)'});
-    st.push({l:'Pipe Len ×',v:'1.3 (street)',c:'var(--text-dim)'});
+    st.push({l:'Pipe Len ×',v:'1.15–1.55 (density)',c:'var(--text-dim)'});
     st.push({l:'Pipe Sizing',v:'Flow-Based',c:'#a855f7'});
     if (nd.cfg && nd.cfg.designMode) {
       st.push({l:'Design Mode',v:'ON',c:'#a855f7'});
@@ -4385,10 +4389,22 @@ function renderHealthSummary(nd, jc) {
   parts.push(`<strong style="color:${color}">${icon} ${jc.toLocaleString()} junctions</strong>`);
   ok.forEach(o => parts.push(`<span style="color:var(--accent-green)">${o}</span>`));
   warn.forEach(w => parts.push(`<span style="color:${color}">${w}</span>`));
+  let html = parts.join(' &nbsp;·&nbsp; ');
+  if (severity !== 'ok') {
+    const why = [];
+    if (warn.some(w => /isolated/.test(w))) why.push('<strong>Isolated nodes:</strong> some junctions can\'t be reached from any source — usually too many dead ends or closed pipes breaking the looped grid. <em>Fix:</em> lower Dead Ends / Closed Pipes, or raise Diagonal % to add redundant paths.');
+    if (warn.some(w => /deficit/.test(w))) why.push('<strong>Supply deficit:</strong> total source capacity is below peak demand — reservoir head too low, too few pumps, or demand too high. <em>Fix:</em> raise Reservoir Head, add a Pump, or enable Design Mode to auto-size sources to the population.');
+    else if (warn.some(w => /tight/.test(w))) why.push('<strong>Tight supply:</strong> S/D is just above 1.0 with little reserve. <em>Fix:</em> raise Reservoir Head or add storage/pumps for a comfortable 1.1–1.2 margin.');
+    if (warn.some(w => /psi/.test(w))) why.push('<strong>Low pressure:</strong> some junctions fall below 20 psi during the run — undersized pipes, insufficient head, or high localized demand. <em>Fix:</em> increase reservoir head / pump capacity, or pipe diameters along the deficient path.');
+    if (why.length) {
+      html += ` &nbsp; <button type="button" onclick="(function(b){var d=document.getElementById('healthWhy');var open=d.style.display!=='none';d.style.display=open?'none':'block';b.textContent=open?'Why? ▾':'Why? ▴';})(this)" style="background:none;border:1px solid ${color};color:${color};border-radius:4px;font-size:11px;padding:1px 8px;cursor:pointer;vertical-align:middle;">Why? ▾</button>`;
+      html += `<div id="healthWhy" style="display:none;margin-top:8px;font-size:12px;color:var(--text-secondary);line-height:1.6;"><ul style="margin:0;padding-left:18px;">${why.map(w=>`<li>${w}</li>`).join('')}</ul></div>`;
+    }
+  }
   el.style.display = 'block';
   el.style.borderColor = color;
   el.style.background = severity === 'ok' ? 'rgba(34,197,94,0.08)' : severity === 'warn' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
-  el.innerHTML = parts.join(' &nbsp;·&nbsp; ');
+  el.innerHTML = html;
 }
 
 function renderINPPreview(inp){
@@ -4728,10 +4744,21 @@ function assignDiameter(n1, n2, cfg, rng, tD, sD, dD, rows, cols, resPositions) 
   return dD[Math.floor(rng()*dD.length)];
 }
 
+// Spatially variable street-routing factor: dense/older urban core routes longer
+// (~1.55x, irregular older grid), newer suburban edges route straighter (~1.15x).
+// Based on the node's distance from the grid center.
+function streetFactor(n1, rows, cols) {
+  if (!n1 || n1.row == null || n1.col == null) return STREET_LENGTH_FACTOR;
+  const nx = n1.col/((cols-1)||1) - 0.5, ny = n1.row/((rows-1)||1) - 0.5;
+  const d = Math.sqrt(nx*nx + ny*ny);            // 0 at center → ~0.707 at corners
+  const dn = Math.min(1, d / 0.5);               // normalize: 1 by mid-edge
+  return Math.round((1.55 - 0.40 * dn) * 100) / 100; // 1.55 core → 1.15 suburban
+}
+
 function makePipe(id, n1, n2, cfg, rng, tD, sD, dD, rows, cols, resPositions) {
   const dx=n2.x-n1.x, dy=n2.y-n1.y;
   const eucLen = Math.sqrt(dx*dx+dy*dy);
-  const len = Math.max(10, Math.round(eucLen * STREET_LENGTH_FACTOR)); // FIX 4
+  const len = Math.max(10, Math.round(eucLen * streetFactor(n1, rows, cols))); // FIX 4 (density-scaled)
   const diameter = 8;
   const roughness = 100;
   return {id:'P'+id, node1:n1.id, node2:n2.id, length:len, diameter:diameter, roughness:roughness, status:'Open'};
@@ -5440,7 +5467,7 @@ async function generateEPANETNetwork(silent){
 }
 
 // ═══════ INP BUILDER (with system-sized pump curves) ═══════
-function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng,totalAvgDemand,peakDemand,numPressureZones,connectivityPct,isolatedCount,supplyDemandRatio){
+function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng,totalAvgDemand,peakDemand,numPressureZones,connectivityPct,isolatedCount,supplyDemandRatio,patternJitterPct=0){
   const L=[],a=s=>L.push(s),nl=()=>L.push(''),pM={Residential:'PAT_RES',Commercial:'PAT_COM',Industrial:'PAT_IND',Mixed:'PAT_MIX'};
   const jCount=nodes.filter(n=>n.type==='junction').length;
   const si = currentUnits === 'SI';
@@ -5463,7 +5490,7 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   a(`;Supply/Demand ratio: ${supplyDemandRatio.toFixed(2)} ${supplyDemandRatio>=1.0?'(ADEQUATE)':'(DEFICIT)'}`);
   a(`;Pressure zones: ${numPressureZones}, PRVs at elevation breaks`);
   a(`;Connectivity: ${connectivityPct}% reachable, ${isolatedCount} isolated nodes`);
-  a(`;Pipe lengths: ${STREET_LENGTH_FACTOR}x street-routing factor`);
+  a(`;Pipe lengths: 1.15-1.55x street-routing factor (density-scaled: dense core longer, suburban edges straighter)`);
   a(`;C-factors: correlated with pipe age and downtown/suburban position`);
   a(`;Pump curves: sized via BFS critical-path Hazen-Williams friction analysis`);
   a(`;Demand zones: spatially clustered (Industrial=NW, Commercial=center)`);
@@ -5517,14 +5544,22 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   pipes.forEach(p=>{if(p.status==='Closed')a(`${p.id}\tClosed`);});nl();
 
   a('[PATTERNS]');a(';ID\tMultipliers');
-  a('PAT_RES\t0.5\t0.4\t0.3\t0.3\t0.4\t0.7');a('PAT_RES\t1.1\t1.4\t1.3\t1.0\t0.9\t0.9');
-  a('PAT_RES\t0.9\t0.8\t0.8\t0.9\t1.1\t1.4');a('PAT_RES\t1.5\t1.3\t1.1\t0.9\t0.7\t0.6');nl();
-  a('PAT_COM\t0.2\t0.2\t0.2\t0.2\t0.3\t0.5');a('PAT_COM\t0.8\t1.2\t1.5\t1.6\t1.6\t1.5');
-  a('PAT_COM\t1.4\t1.3\t1.2\t1.0\t0.8\t0.5');a('PAT_COM\t0.3\t0.3\t0.2\t0.2\t0.2\t0.2');nl();
-  a('PAT_IND\t0.3\t0.3\t0.3\t0.3\t0.5\t0.8');a('PAT_IND\t1.2\t1.4\t1.4\t1.4\t1.4\t1.4');
-  a('PAT_IND\t1.4\t1.4\t1.4\t1.2\t0.9\t0.6');a('PAT_IND\t0.4\t0.3\t0.3\t0.3\t0.3\t0.3');nl();
-  a('PAT_MIX\t0.4\t0.3\t0.3\t0.3\t0.4\t0.7');a('PAT_MIX\t1.0\t1.3\t1.3\t1.2\t1.1\t1.1');
-  a('PAT_MIX\t1.1\t1.0\t1.0\t1.0\t1.0\t1.1');a('PAT_MIX\t1.2\t1.0\t0.8\t0.6\t0.5\t0.4');nl();
+  // Optional per-member temporal jitter (ensembles): perturbs each hourly multiplier
+  // to capture temporal demand uncertainty. patternJitterPct=0 → deterministic (main gen).
+  const _pj = (typeof patternJitterPct === 'number' ? patternJitterPct : 0);
+  const patRow = (id, ...vals) => a(id + '\t' + vals.map(v => {
+    if (_pj <= 0) return String(v); // deterministic main-gen: preserve original literals
+    const m = 1 + (rng()*2 - 1) * _pj;
+    return Math.max(0.05, v * m).toFixed(2);
+  }).join('\t'));
+  patRow('PAT_RES',0.5,0.4,0.3,0.3,0.4,0.7); patRow('PAT_RES',1.1,1.4,1.3,1.0,0.9,0.9);
+  patRow('PAT_RES',0.9,0.8,0.8,0.9,1.1,1.4); patRow('PAT_RES',1.5,1.3,1.1,0.9,0.7,0.6); nl();
+  patRow('PAT_COM',0.2,0.2,0.2,0.2,0.3,0.5); patRow('PAT_COM',0.8,1.2,1.5,1.6,1.6,1.5);
+  patRow('PAT_COM',1.4,1.3,1.2,1.0,0.8,0.5); patRow('PAT_COM',0.3,0.3,0.2,0.2,0.2,0.2); nl();
+  patRow('PAT_IND',0.3,0.3,0.3,0.3,0.5,0.8); patRow('PAT_IND',1.2,1.4,1.4,1.4,1.4,1.4);
+  patRow('PAT_IND',1.4,1.4,1.4,1.2,0.9,0.6); patRow('PAT_IND',0.4,0.3,0.3,0.3,0.3,0.3); nl();
+  patRow('PAT_MIX',0.4,0.3,0.3,0.3,0.4,0.7); patRow('PAT_MIX',1.0,1.3,1.3,1.2,1.1,1.1);
+  patRow('PAT_MIX',1.1,1.0,1.0,1.0,1.0,1.1); patRow('PAT_MIX',1.2,1.0,0.8,0.6,0.5,0.4); nl();
   if(cfg.secondaryDemands){
     a('PAT_UAW\t1.0\t1.0\t1.0\t1.0\t1.0\t1.0');a('PAT_UAW\t1.0\t1.0\t1.0\t1.0\t1.0\t1.0');
     a('PAT_UAW\t1.0\t1.0\t1.0\t1.0\t1.0\t1.0');a('PAT_UAW\t1.0\t1.0\t1.0\t1.0\t1.0\t1.0');nl();
@@ -9449,11 +9484,13 @@ async function ensembleExport() {
     const cPct = Math.max(0, +(document.getElementById('ensCPct').value) || 0) / 100;
     const dPct = Math.max(0, +(document.getElementById('ensDPct').value) || 0) / 100;
     const zAbs = Math.max(0, +(document.getElementById('ensZAbs').value) || 0);
+    const patEl = document.getElementById('ensPatPct');
+    const patPct = Math.max(0, +(patEl ? patEl.value : 0) || 0) / 100;
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
     const nd = networkData;
     const files = {};
     // Manifest CSV header
-    const csv = ['member,seed,c_factor_mult,demand_mult,elev_delta_ft_range,mean_c_factor,total_demand_gpm'];
+    const csv = ['member,seed,c_factor_mult,demand_mult,elev_delta_ft_range,pattern_jitter,mean_c_factor,total_demand_gpm'];
     // Uniform perturbation in [-range, +range] using a seeded PRNG per member
     for (let i = 0; i < count; i++) {
       const memberSeed = baseSeed + 1000 + i;
@@ -9480,17 +9517,17 @@ async function ensembleExport() {
       const peaking = nd.cfg.designMode ? (nd.cfg.designPeaking || 2.0) : PEAKING_FACTOR;
       const inp = buildINP(nd.cfg, pNodes, nd.reservoirs, nd.tanks, pPipes, nd.pumps, nd.valves,
         nd.emitterNodes, prng, demandSum, demandSum * peaking,
-        nd.numPressureZones || 1, nd.connectivityPct || 100, nd.isolatedCount || 0, nd.supplyDemandRatio || 1);
+        nd.numPressureZones || 1, nd.connectivityPct || 100, nd.isolatedCount || 0, nd.supplyDemandRatio || 1, patPct);
       const fname = `EPANET23_ensemble_${String(i+1).padStart(3,'0')}_seed${memberSeed}.inp`;
       files[fname] = inp;
-      csv.push(`${i+1},${memberSeed},${cPct.toFixed(3)},${dPct.toFixed(3)},±${zAbs},${cN?Math.round(cSum/cN):0},${Math.round(demandSum)}`);
+      csv.push(`${i+1},${memberSeed},${cPct.toFixed(3)},${dPct.toFixed(3)},±${zAbs},±${(patPct*100).toFixed(0)}%,${cN?Math.round(cSum/cN):0},${Math.round(demandSum)}`);
     }
     files['ensemble_manifest.csv'] = csv.join('\n');
     files['README.txt'] = [
       'Monte Carlo Ensemble — EPANET 2.3',
       `Members: ${count}`,
       `Topology: held constant (same nodes, pipes, pumps, valves)`,
-      `Perturbations (uniform, per-element): C-factor ±${(cPct*100).toFixed(0)}%, base demand ±${(dPct*100).toFixed(0)}%, elevation ±${zAbs} ft`,
+      `Perturbations (uniform, per-element): C-factor ±${(cPct*100).toFixed(0)}%, base demand ±${(dPct*100).toFixed(0)}%, elevation ±${zAbs} ft, demand pattern (temporal) ±${(patPct*100).toFixed(0)}%`,
       `Base seed: ${baseSeed} (member seeds: ${baseSeed+1000} … ${baseSeed+1000+count-1})`,
       '',
       'Use ensemble_manifest.csv to map each .inp to its perturbation multipliers.',
@@ -9565,8 +9602,11 @@ window.addEventListener('load',()=>{
   const fab = document.getElementById('mobileFab');
   if (fab) fab.setAttribute('aria-label', 'Generate network');
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'g') { e.preventDefault(); generateNetwork(); }
-    if ((e.ctrlKey || e.metaKey) && e.key === 's' && generatedINP) { e.preventDefault(); downloadINP(); }
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod) return;
+    if (e.key === 'g' || e.key === 'Enter') { e.preventDefault(); generateNetwork(); }
+    else if (e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); if (generatedINP && typeof copyINP === 'function') copyINP(); }
+    else if (e.key === 's' && generatedINP) { e.preventDefault(); downloadINP(); }
   });
   // Seed display: update on input change and show initial value
   const seedInput = document.getElementById('randomSeed');
