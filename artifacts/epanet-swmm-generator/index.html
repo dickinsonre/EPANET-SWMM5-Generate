@@ -864,7 +864,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
       <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
       <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
-      <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.8 · 2026-05-29</span>
+      <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.9 · 2026-05-29</span>
     </div>
   </div>
 </div>
@@ -884,8 +884,8 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   <!-- Mode Selector -->
   <div class="section" style="padding:10px 16px;">
     <div class="tab-row" style="width:100%;">
-      <button class="tab-btn active" id="modeEpanet" onclick="setMode('epanet')" style="flex:1;text-align:center;font-weight:700;font-size:13px;min-height:40px;">💧 EPANET 2.3</button>
-      <button class="tab-btn" id="modeSwmm" onclick="setMode('swmm')" style="flex:1;text-align:center;font-weight:700;font-size:13px;min-height:40px;">🌧 SWMM 5.2.4</button>
+      <button class="tab-btn active" id="modeEpanet" onclick="setMode('epanet', true)" style="flex:1;text-align:center;font-weight:700;font-size:13px;min-height:40px;">💧 EPANET 2.3</button>
+      <button class="tab-btn" id="modeSwmm" onclick="setMode('swmm', true)" style="flex:1;text-align:center;font-weight:700;font-size:13px;min-height:40px;">🌧 SWMM 5.2.4</button>
     </div>
     <div class="tab-row" style="width:100%;margin-top:6px;">
       <button class="tab-btn active" id="unitsUS" onclick="setUnits('US')" style="flex:1;text-align:center;font-size:12px;min-height:34px;">🇺🇸 US Customary</button>
@@ -3123,8 +3123,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v3.8', date: '2026-05-29' };
-const CHANGELOG_TOP = { version: 'v3.8', date: '2026-05-29' };
+const GEN_BUILD = { version: 'v3.9', date: '2026-05-29' };
+const CHANGELOG_TOP = { version: 'v3.9', date: '2026-05-29' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -3636,6 +3636,11 @@ function applyPreset(key, btnEl) {
   s('numParks',p.parks); s('numLakes',p.lakes);
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
   if (btnEl) btnEl.classList.add('active');
+  // A preset is a one-click "give me a network of this size" — regenerate immediately in the
+  // CURRENT engine so the preview updates (previously presets only filled the inputs, leaving the
+  // last-generated network on screen, which read as "presets don't work" especially after an
+  // engine switch).
+  generateNetwork();
 }
 
 // ═══════ RNG ═══════
@@ -6176,7 +6181,8 @@ function setUnits(units) {
   });
 }
 
-function setMode(mode) {
+function setMode(mode, regen) {
+  const changed = currentMode !== mode;
   currentMode = mode;
   document.getElementById('modeEpanet').classList.toggle('active', mode==='epanet');
   document.getElementById('modeSwmm').classList.toggle('active', mode==='swmm');
@@ -6201,7 +6207,31 @@ function setMode(mode) {
   wasmRPT = '';
   quickSimPressures = null;
   validationReport = null;
+  // Stale output from the other engine must not linger in the preview — clear it so the
+  // map/INP/stats panels reflect the newly selected engine (or the "generate" placeholder).
+  clearOutputPreview();
   updateCalParamOptions();
+  // When the user flips the engine toggle, immediately regenerate so the preview reflects the
+  // selected engine instead of showing the previous engine's cached network. The `regen` flag is
+  // only passed by the toggle buttons — config restore on load calls setMode() without it so we
+  // don't double-generate (the load path runs generateNetwork() once on its own).
+  if (regen && changed) generateNetwork();
+}
+
+// Reset the visible preview panels (map canvas + INP/RPT/results text) to a clean placeholder so
+// no stale network from a previous engine/run is shown after the cached state has been wiped.
+function clearOutputPreview() {
+  networkData = null;
+  const inpEl = document.getElementById('inpPreview');
+  if (inpEl) inpEl.innerHTML = '<span class="comment">; Tap "Generate" to create network</span>';
+  const rptEl = document.getElementById('rptPreview');
+  if (rptEl) rptEl.innerHTML = '<span class="comment">; Generate and run the solver to see the report</span>';
+  const cvs = document.getElementById('networkCanvas');
+  if (cvs) { const ctx = cvs.getContext('2d'); if (ctx) ctx.clearRect(0, 0, cvs.width, cvs.height); }
+  // Hide the health banner until a fresh network exists (it is re-rendered with real data on the
+  // next generateNetwork()). Calling renderPreviewBanner() here would throw — it requires args.
+  const pb = document.getElementById('previewBanner');
+  if (pb) pb.style.display = 'none';
 }
 
 // ═══════ DESIGN STORMS ═══════
@@ -10078,7 +10108,7 @@ async function batchExport() {
   try {
     const count = Math.min(50, Math.max(2, +(document.getElementById('batchCount').value) || 5));
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
-    const manifest = { generator: 'EPANET-SWMM Generator v3.8', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
+    const manifest = { generator: 'EPANET-SWMM Generator v3.9', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
     const seedEl = document.getElementById('randomSeed');
     const origSeed = seedEl.value;
     const savedINP = generatedINP;
@@ -10163,7 +10193,7 @@ async function nodeSweepExport() {
       partIdx++;
       const partEntries = allEntries.slice(downloaded, downloaded + count);
       partFiles['manifest.json'] = JSON.stringify({
-        generator: 'EPANET-SWMM Generator v3.8', mode: currentMode, units: currentUnits,
+        generator: 'EPANET-SWMM Generator v3.9', mode: currentMode, units: currentUnits,
         sweep: sweepMeta, part: partIdx, partModels: count, files: partEntries
       }, null, 2);
       const blob = _miniZipCreate(partFiles);

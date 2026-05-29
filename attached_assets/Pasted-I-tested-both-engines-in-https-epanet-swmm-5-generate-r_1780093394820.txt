@@ -1,0 +1,22 @@
+I tested both engines in https://epanet-swmm-5-generate.replit.app/ — here's what I found:
+
+**EPANET 2.3 — ✅ Works correctly**
+- Generated network: 1,045 junctions, 4 reservoirs, 8 tanks, 2,112 pipes, 10 pumps, 5 valves (Standard 1K preset, US Customary, EPA Federal template)
+- Map preview renders with full legend (junctions / reservoirs / tanks / pumps / valves / emitters), terrain backdrop, and link diameter shading
+- INP output is well-formed, with proper `[TITLE]`, `[JUNCTIONS]`, etc. sections
+- Validate → **"INP structurally valid"** with 1,057 nodes · 2,127 links · 26 sections
+- 100% connectivity, S/D ratio 1.15 (ADEQUATE) [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/)
+
+**SWMM 5.2.4 — ⚠️ Generation does not trigger**
+- The "SWMM 5.2.4" toggle activates and the header switches to "SWMM 5.2.4 Generator — Stormwater collection models with WQ, GW, RDII, LID & city backdrop"
+- However, clicking presets (Tiny, Standard) while in SWMM mode does **not** regenerate a new network — the Map and INP panels remain populated with the cached EPANET 2.3 output (TITLE still reads `;EPANET 2.3 Network — Generator v3.8`, JUNCTIONS use EPANET demand/pattern columns, legend still lists Reservoir/Valve/Emitter)
+- Validating in this state shows the EPANET INP as valid, but it is not a SWMM `.inp`
+- A toast briefly appeared saying **"Generate a network first"**, suggesting the SWMM pipeline expects an explicit generation step that isn't being fired by the preset buttons after the engine switch
+- The engine toggle also occasionally reverts to EPANET 2.3 when clicking presets, which looks like a state-sync bug between the engine selector and the preset handler [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/)
+
+**Suggested fixes for the app**
+1. On engine toggle, clear the cached INP/map and auto-trigger a regeneration (or expose a dedicated "Generate" button rather than relying on preset clicks)
+2. Prevent the engine selection from being reset by preset clicks
+3. Ensure the SWMM code path produces a `[OPTIONS]/[SUBCATCHMENTS]/[CONDUITS]` SWMM 5.2 INP rather than reusing the EPANET output
+
+EPANET passes end-to-end; SWMM generation needs attention.
