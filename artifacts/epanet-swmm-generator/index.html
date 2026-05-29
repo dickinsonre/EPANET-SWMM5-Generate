@@ -1700,7 +1700,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <p style="color:var(--text-dim);font-size:12px;margin-bottom:16px;">Single-file HTML application &bull; ~160 KB &bull; No dependencies &bull; Mobile-optimized</p>
 
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Overview</h3>
-      <p>This application generates hydraulically valid, calibration-ready water distribution (EPANET) and stormwater collection (SWMM) models of any size — from 50-node teaching examples to 100,000-node city-scale networks. Each model includes a procedurally generated city map backdrop with streets, buildings, parks, lakes, rivers, railroads, and highways. Models are exportable as .inp files that load directly into EPANET 2.2+, EPA SWMM 5.2+, WNTR, PySWMM, InfoWorks ICM, or any compatible hydraulic modeling platform.</p>
+      <p>This application generates hydraulically valid, calibration-ready water distribution (EPANET) and stormwater collection (SWMM) models of any size — from 50-node teaching examples to 100,000-node city-scale networks. Each model includes a procedurally generated city map backdrop with streets, buildings, parks, lakes, rivers, railroads, and highways. Models are exportable as .inp files compatible with EPANET 2.2+, EPA SWMM 5.2+, WNTR, PySWMM, InfoWorks ICM, or any compatible hydraulic modeling platform.</p>
 
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">EPANET 2.3 Mode — Water Distribution</h3>
       <p><strong>Network Topology:</strong> Grid-based layout with configurable jitter (position perturbation), diagonal cross-connections for looping, and dead-end branches. Grid size from 3×3 to 316×316. Eight presets from Tiny (50 nodes) through City (100K nodes).</p>
@@ -1750,7 +1750,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <p>Procedurally generated backdrop with three visual styles (Light paper map, Satellite dark, Blueprint). Features include: arterial and local street grids with organic wobble, building footprints with rotation, irregularly-shaped parks with tree dots, organic lake/pond shapes, sinuous river with bank shading, dashed railroad tracks, highway with center line markings, named districts, scale bar, and north arrow.</p>
 
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Export Formats</h3>
-      <p><strong>.inp file:</strong> EPANET 2.2+ or SWMM 5.2+ format, directly loadable. Title block documents all generation assumptions.</p>
+      <p><strong>.inp file:</strong> standard EPANET / SWMM .inp format — compatible with EPANET 2.2+ and SWMM 5.2+, directly loadable. Title block documents all generation assumptions.</p>
       <p><strong>Map PNG:</strong> City map only, or city map + network overlay. 2400×1600 px at 2× DPI.</p>
       <p><strong>DEM (ASCII Grid):</strong> ESRI ASCII raster (.asc) with IDW-interpolated elevation grid from junction elevations. Compatible with ArcGIS, QGIS, and any raster GIS tool.</p>
       <p><strong>Copy to Clipboard:</strong> Full .inp text copied for pasting into any text editor.</p>
@@ -1804,7 +1804,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
           </tr>
           <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
             <td style="padding:5px 8px;color:var(--text-dim);">Compatible With</td>
-            <td style="padding:5px 8px;color:var(--text-primary);">EPANET 2.2+, EPA SWMM 5.2+, WNTR, PySWMM, InfoWorks ICM, WaterGEMS, PCSWMM, QGIS</td>
+            <td style="padding:5px 8px;color:var(--text-primary);">EPANET 2.2+, EPA SWMM 5.2+, WNTR, PySWMM, InfoWorks ICM, WaterGEMS, PCSWMM, QGIS<br><span style="font-size:11px;color:var(--text-dim);font-style:italic;">"2.3" is the bundled solver engine version; "2.2+" is the range of software that can open the generated .inp files (the output stays backward-compatible with EPANET 2.2 and later).</span></td>
           </tr>
           <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
             <td style="padding:5px 8px;color:var(--text-dim);">Browser Requirements</td>
@@ -2501,7 +2501,7 @@ Wraps:      EPANET C library via ctypes</pre>
 Platform:      Browser (single HTML file, ~160 KB)
 Dependencies:  None (fully self-contained)
 Engine:        JavaScript with seeded PRNG (Mulberry32)
-Output:        .inp files (EPANET 2.2+ or SWMM 5.2+)
+Output:        .inp files (compatible with EPANET 2.2+ / SWMM 5.2+)
 Model Range:   50 to 100,000 nodes
 Author:        Robert Dickinson
 License:       MIT License — free to use, modify, and distribute,
@@ -2952,7 +2952,7 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
       </div>
 
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Credits &amp; Context</h3>
-      <p>Built as a "vibe coding" educational tool for hydraulic modeling. EPANET engine logic informed by Rossman's EPANET 2.2 Users Manual. SWMM engine logic informed by EPA SWMM 5.2 Reference Manual. Design storm distributions from SCS TR-55. RTK unit hydrograph methodology from SWMM RDII documentation. Diurnal demand/DWF patterns from standard utility practice. C-factor ranges from AWWA Manual M36. This tool generates models for teaching, calibration testing, and algorithm development — not for design or compliance submissions.</p>
+      <p>Built as a "vibe coding" educational tool for hydraulic modeling. EPANET engine logic informed by Rossman's EPANET 2.2 Users Manual. SWMM engine logic informed by EPA SWMM 5.2 Reference Manual. Design storm distributions from SCS TR-55. RTK unit hydrograph methodology from SWMM RDII documentation. Diurnal demand/DWF patterns from standard utility practice. C-factor ranges from AWWA Manual M36. The tool is released under the MIT License (free to use, modify, and distribute with attribution). The synthetic models it generates are illustrative — well suited to teaching, calibration testing, and algorithm development, but not validated for engineering design or regulatory compliance submissions.</p>
     </div>
   </div>
 

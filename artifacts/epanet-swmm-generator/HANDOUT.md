@@ -223,7 +223,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block (seed + assumptions). |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block (seed + assumptions). |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -605,11 +605,26 @@ EPANET is public-domain software from the US EPA (engine: MIT-licensed,
 OpenWaterAnalytics). EPA SWMM is public domain. This generator is an independent tool that
 produces files compatible with both.
 
+**Versions.** The bundled in-browser EPANET solver is the OWA-EPANET **2.3** engine — that's the
+version shown in the title and header badge. The `.inp` files the generator writes use the
+standard format and stay **backward-compatible with EPANET 2.2 and later** (and SWMM 5.2+), which
+is why compatibility notes say "2.2+". So "EPANET 2.3" = the solver engine; "EPANET 2.2+" = the
+range of software that can open the output. The **MIT License** above is the single license that
+governs this tool; the "teaching / testing / not for compliance" wording elsewhere is a
+fitness-of-output disclaimer, not a usage restriction.
+
 ---
 
 ### Changelog
 
 **v3.6 — 2026-05-29**
+- **Versioning & license wording clarified:** disambiguated "EPANET 2.3" (the bundled solver
+  engine) from "EPANET 2.2+" (the range of software that can open the generated `.inp` files) —
+  compatibility notes now read "compatible with EPANET 2.2+" rather than implying a version
+  conflict, and a new "Versions" note in Credits & License spells out the distinction. Also made
+  the license consistent: the **MIT License** is the single license governing the tool, and the
+  "teaching / testing / not for compliance" text is now clearly framed as a fitness-of-output
+  disclaimer rather than a competing usage term.
 - **SWMM dynamic-wave step tuning:** generated `[OPTIONS]` now set `LENGTHENING_STEP 5`
   (artificial conduit lengthening for short-conduit numerical stability, was `0`) and add an
   explicit `MINIMUM_STEP 0` (minimum variable time step, previously left to SWMM's 0.5 s default).
