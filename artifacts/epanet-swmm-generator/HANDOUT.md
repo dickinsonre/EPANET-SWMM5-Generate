@@ -260,11 +260,12 @@ leaving the browser:
    solver.
 4. Click **🎯 Score vs Truth**. The tool computes **RMSE** for pressure (or node depth in
    SWMM), flow, and demand across every shared element and timestep, then assigns a letter
-   grade against **AWWA M32** pressure targets:
+   grade against **AWWA M32** pressure targets (note: in AWWA M32 a *higher* calibration
+   level means a *stricter* tolerance, so Level 3 is tighter than Level 1):
 
    | Grade | Pressure RMSE | Meaning |
    |-------|---------------|---------|
-   | **A** (green) | < 1 psi | Level 3 calibration (excellent) |
+   | **A** (green) | < 1 psi | Level 3 calibration (strictest — excellent) |
    | **B** (green) | < 3 psi | Level 1 calibration (good) |
    | **C** (amber) | 3–5 psi | Marginal |
    | **D** (red) | 5–8 psi | Poor |
@@ -317,7 +318,12 @@ ZIP contents:
 - `README.txt` — describes the perturbation ranges and seed scheme
 
 Member seeds start at `baseSeed + 2000` (EPANET uses `baseSeed + 1000`), so the two
-ensembles never collide.
+ensembles never collide. The other exporters stay clear of both bands: the **node sweep**
+reuses the single `baseSeed` unchanged for every model (size is the only variable), and
+**Batch ZIP** uses a small sequential block starting at `baseSeed` (`baseSeed`, `baseSeed+1`,
+…). Keep a Batch run well under 1000 members if you intend to mix its files with an EPANET
+ensemble from the same base seed, so its sequential block can't reach the `baseSeed + 1000`
+offset.
 
 **Use it for:** GLUE, Bayesian calibration, and global sensitivity analysis
 (Sobol, Morris). Feed the `.inp` set into WNTR/PySWMM, solve each, and analyze the
@@ -372,10 +378,13 @@ finishes, so your on-screen model is untouched.
 
 Because the grid must be square-ish and integer-dimensioned, the **realized** node count is
 *quantized*. Targets that round to the same `dim` produce the same grid (and thus the same
-actual size). For example, with Step = 1 the targets 1000–1056 all round to a 32×32 grid. This
-is expected: the sweep guarantees a model for every requested step, but the *actual* sizes
-advance in discrete jumps. Use a Step of roughly `2·dim+1` (the spacing between consecutive
-perfect squares near your range) if you want every model to be a distinct size.
+actual size). The band that maps to a given `dim` is `(dim−0.5)² ≤ T < (dim+0.5)²`; for
+`dim = 32` that is **993 … 1056 inclusive** (since `√1056 ≈ 32.496` still rounds to 32, while
+`√1057 ≈ 32.512` rounds to 33). So with Step = 1, the 57 targets 1000–1056 all collapse onto
+the same 32×32 grid. This is expected: the sweep guarantees a model for every requested step,
+but the *actual* sizes advance in discrete jumps. Use a Step of roughly `2·dim+1` (the spacing
+between consecutive perfect squares near your range) if you want every model to be a distinct
+size.
 
 | Target `T` | `round(√T)` | Grid    | ≈ Junctions |
 | ---------- | ----------- | ------- | ----------- |
@@ -439,7 +448,7 @@ self-contained ZIP. Either way, every ZIP contains:
       /* … one entry per model … */
     ]
   }
-```
+  ```
 
   Every model that part contains appears in `files[]`, so you can always compare
   **target vs. realized** size and pipe count at a glance, and drive downstream scripts
@@ -599,6 +608,11 @@ produces files compatible with both.
   downloaded ZIP part every ~64 MB of `.inp` text or 1000 models and frees the memory, so big
   runs arrive as numbered parts (`…_part01…`, `…_part02…`). Allow "multiple downloads" if your
   browser prompts. See §10.1 performance notes.
+- **Docs corrections:** fixed a mis-indented code fence in §10.1 (`manifest.json` block) that
+  was breaking Markdown rendering of every heading after it; spelled out the exact grid-mapping
+  band (`(dim−0.5)² ≤ T < (dim+0.5)²`, i.e. 993–1056 → 32×32) to confirm the worked example;
+  clarified that a *higher* AWWA M32 level = a *stricter* tolerance (§9); and documented that
+  the node-sweep / Batch seed schemes stay clear of the `+1000`/`+2000` ensemble offsets (§10).
 
 **v3.4 — 2026-05-29**
 - **SWMM Monte Carlo ensemble export** (parallel to the EPANET one): fixed-topology,

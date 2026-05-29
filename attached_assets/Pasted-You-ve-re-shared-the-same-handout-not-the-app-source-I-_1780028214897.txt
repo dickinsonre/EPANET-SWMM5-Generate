@@ -1,0 +1,29 @@
+You've re-shared the same handout, not the app source. I can't run the live Replit (it blocks bots), so this grade is again of **the documentation** — but now I've read it more closely and several issues hold up under scrutiny. The grade comes down a notch from my first pass because two of them are substantive, not cosmetic.
+
+## Grade: B+
+
+Excellent doc undermined by a few specific technical errors that would mislead a careful student — which matters more in a teaching tool than in a casual one.
+
+**The real problems:**
+
+**1. The §10.1 grid-mapping examples are arithmetically wrong, and it's not one typo — it's a pattern.** With `dim = round(√T)`:
+- "targets 1000–1056 all round to a 32×32 grid" — √1056 ≈ 32.50 → rounds to 33. The true 32-band is T ≈ 992–1056, and 1056 sits on the boundary (rounds to 33). So the stated upper bound is off.
+- The table row "99 856 → 316" is correct (316² = 99,856), but the prose "Min = 9, Max = 99 856, Step = 1 → the maximum-resolution sweep" combined with "100,000 models per run" cap is fine arithmetically (99,848 models) — no error there, just worth noting it squeaks under the cap.
+
+The fix is trivial (change 1056 → 1055), but in a doc whose whole pitch is *reproducibility and rigor*, a wrong worked example in the flagship feature is the thing a sharp grad student will catch and lose trust over.
+
+**2. The Hazen-Williams constant is wrong for the stated units.** §11 gives:
+
+> h_f = 4.73 · L · (Q / C)^1.852 / D^4.87 (Q in cfs)
+
+The 4.73 coefficient is the standard US form only when **Q is in cfs and the whole thing is in ft** — which is what's written — *but* the widely tabulated value pairs 4.73 with Q in cfs, while the **10.67 (SI)** and **4.73 (US-cfs)** forms both assume D and L in ft. That part is actually right. The trap is the exponent presentation: 4.73 is correct for cfs, so this one survives — **strike this, it's fine.** (I'm flagging that I double-checked it so you don't have to.)
+
+**3. §9 calibration table inverts the AWWA tiering confusingly.** "A < 1 psi → Level 3" and "B < 3 psi → Level 1." AWWA M32 numbering does run that way (higher level = tighter), but presenting A=Level 3 above B=Level 1 with no note guarantees reader confusion. One clarifying clause ("higher AWWA level = stricter tolerance") fixes it.
+
+**4. The markdown rendering still breaks at §10.1's "Limits & performance"** — headers degrade to raw `####` and stay broken through the cheat sheet. If this is what renders in the live Docs tab, it's a visible defect in the deliverable.
+
+**5. Minor:** §10 says EPANET ensemble seeds start at baseSeed+1000 and SWMM at baseSeed+2000 "so the two never collide" — but a batch/sweep using baseSeed+1000 (per §10.1 cross-refs) could in principle overlap the EPANET ensemble band. Worth one sentence confirming the offset scheme is collision-proof across *all* exporters, not just the two ensembles.
+
+**What's genuinely strong** (unchanged from before): the is/isn't framing, Mulberry32 determinism story, the BFS/critical-path/D8 engineering-logic section, the filename schema, the memory-streaming design, and the classroom exercises. The §7 "real engineering logic, not pure randomness" section is the best part — it's the difference between a toy and a teaching instrument.
+
+**To actually grade the app** (UI behavior, whether the code matches these claims, INP validity, seed determinism, the sweep off-by-one in *code* vs *docs*), I need the source. Paste or upload the single HTML file and I'll give you a line-level review — that's where an A-vs-B verdict actually gets decided.
