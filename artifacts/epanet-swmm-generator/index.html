@@ -3104,9 +3104,7 @@ function exportEngLog() {
     txt += `[${e.isoTime || e.timestamp}] [${e.category.toUpperCase()}] #${e.idx}\n${e.message}\n\n`;
   });
   const blob = new Blob([txt], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'engineering_log.txt'; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 200);
+  saveBlob(blob, 'engineering_log.txt');
 }
 let cityMapData = null;
 let isMobile = () => window.innerWidth < 768;
@@ -3946,11 +3944,7 @@ function downloadDEM() {
 
   try {
     const blob = new Blob([content], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.style.display = 'none';
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+    saveBlob(blob, filename);
   } catch (e) {
     // Fallback: copy to clipboard
     navigator.clipboard.writeText(content).then(() => alert('DEM copied to clipboard (ESRI ASCII Grid format). Save as .asc file.')).catch(() => {
@@ -4253,19 +4247,46 @@ function renderCanvas(forExport=false,exportWithNetwork=true){
   return canvas;
 }
 
+// True when the app is running inside an iframe (Replit preview pane or the Canvas board).
+function _isEmbedded() {
+  try { return window.self !== window.top; } catch(e) { return true; }
+}
+function _escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Robust download. A same-document <a download>.click() is silently blocked when the page is
+// embedded in a sandboxed iframe (the Replit preview pane and the Canvas board both embed the
+// app this way), which is why exports appeared to "do nothing". When embedded we instead run
+// the download from a brand-new top-level tab — it inherits this app's origin so it can reach
+// the blob/data URL, and it is not subject to the iframe's download sandbox. The injected page
+// preserves the real filename and self-closes; a visible link is shown as a manual fallback.
+function _downloadHref(href, filename, revoke) {
+  const direct = () => {
+    const a = document.createElement('a');
+    a.href = href; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { try { document.body.removeChild(a); } catch(x){} if (revoke) { try { URL.revokeObjectURL(href); } catch(x){} } }, 2000);
+  };
+  if (!_isEmbedded()) { direct(); return; }
+  const w = window.open('', '_blank');
+  if (w && w.document) {
+    w.document.write('<!doctype html><meta charset="utf-8"><title>Downloading…</title>'
+      + '<body style="margin:0;font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;">'
+      + '<div><p style="font-size:15px;">Downloading <b>' + _escapeHtml(filename) + '</b>…</p>'
+      + '<p style="font-size:13px;color:#94a3b8;">If it doesn\'t start automatically, <a href="' + _escapeHtml(href) + '" download="' + _escapeHtml(filename) + '" style="color:#60a5fa;">click here to save it</a>.</p></div>'
+      + '<scr'+'ipt>(function(){try{var a=document.createElement("a");a.href=' + JSON.stringify(href) + ';a.download=' + JSON.stringify(filename) + ';document.body.appendChild(a);a.click();}catch(e){}setTimeout(function(){try{window.close();}catch(e){}},1500);})();</scr'+'ipt>');
+    w.document.close();
+    if (revoke) setTimeout(() => { try { URL.revokeObjectURL(href); } catch(x){} }, 60000);
+  } else {
+    // Pop-up blocked: attempt the in-page anchor anyway, then tell the user how to recover.
+    direct();
+    if (typeof showToast === 'function') showToast('Allow pop-ups for this site to download files (or open the app in its own browser tab).', 'warning');
+  }
+}
+// Canonical blob download used by every exporter.
+function saveBlob(blob, filename) {
+  _downloadHref(URL.createObjectURL(blob), filename, true);
+}
 function triggerDownload(dataUrl, filename) {
-  // Method 1: Try standard link click with body append
-  const a = document.createElement('a');
-  a.href = dataUrl;
-  a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    // Method 2: If click didn't work (iframe sandbox), open in new tab
-    // User can then long-press/right-click to save
-  }, 100);
+  _downloadHref(dataUrl, filename, false);
 }
 
 function downloadMap(withNet) {
@@ -4277,14 +4298,7 @@ function downloadMap(withNet) {
     // Convert canvas to blob then use download
     c.toBlob(function(blob) {
       if (!blob) { fallbackOpen(c.toDataURL('image/png')); return; }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      saveBlob(blob, filename);
     }, 'image/png');
   } catch(e) {
     // Fallback: open data URL in new window
@@ -4300,14 +4314,7 @@ function downloadINP() {
     : `EPANET23_${cfg.gridRows}x${cfg.gridCols}.inp`;
   try {
     const blob = new Blob([generatedINP], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+    saveBlob(blob, filename);
   } catch(e) {
     // Fallback: data URI
     const dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(generatedINP);
@@ -7241,11 +7248,7 @@ function downloadHGL() {
   try {
     canvas.toBlob(function(blob) {
       if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${cityName}_HGL_Profile.png`; a.style.display = 'none';
-      document.body.appendChild(a); a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      saveBlob(blob, `${cityName}_HGL_Profile.png`);
     }, 'image/png');
   } catch(e) {}
 }
@@ -8770,11 +8773,7 @@ function downloadRPT() {
   if (!generatedRPT) return;
   const mode = currentMode === 'swmm' ? 'SWMM524' : 'EPANET23';
   const blob = new Blob([generatedRPT], {type:'text/plain'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href=url; a.download=`${mode}_Report.rpt`; a.style.display='none';
-  document.body.appendChild(a); a.click();
-  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+  saveBlob(blob, `${mode}_Report.rpt`);
 }
 
 function copyRPT() {
@@ -9091,11 +9090,7 @@ function downloadResultsHTML() {
   if (!generatedResultsHTML) return;
   const mode = currentMode === 'swmm' ? 'SWMM524' : 'EPANET23';
   const blob = new Blob([generatedResultsHTML], {type:'text/html'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href=url; a.download=`${mode}_Results_Report.html`; a.style.display='none';
-  document.body.appendChild(a); a.click();
-  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+  saveBlob(blob, `${mode}_Results_Report.html`);
 }
 
 // ═══════ CALIBRATION FILE EXPORT ═══════
@@ -9445,19 +9440,8 @@ function _crc32(buf) {
 
 function _triggerDownload(content, filename, mimeType) {
   try {
-    const isBlob = content instanceof Blob;
-    const blob = isBlob ? content : new Blob([content], { type: mimeType || 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      try { document.body.removeChild(a); } catch(x){}
-      URL.revokeObjectURL(url);
-    }, 5000);
+    const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType || 'application/octet-stream' });
+    saveBlob(blob, filename);
   } catch(e) {
     const dataUrl = 'data:' + (mimeType || 'application/octet-stream') + ';charset=utf-8,' + encodeURIComponent(typeof content === 'string' ? content : '');
     fallbackOpen(dataUrl);
@@ -9553,12 +9537,8 @@ function downloadGeoJSON() {
     features
   }, null, 2);
   const blob = new Blob([geojson], { type: 'application/geo+json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const mode = currentMode === 'swmm' ? 'SWMM' : 'EPANET';
-  a.href = url; a.download = `${mode}_Network.geojson`; a.style.display = 'none';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  saveBlob(blob, `${mode}_Network.geojson`);
 }
 
 // ═══════ CONFIG SAVE/LOAD ═══════
@@ -9575,11 +9555,7 @@ function saveConfig() {
   }
   const json = JSON.stringify(cfg, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'generator_config.json'; a.style.display = 'none';
-  document.body.appendChild(a); a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  saveBlob(blob, 'generator_config.json');
 }
 
 function loadConfig() {
@@ -9671,11 +9647,7 @@ async function batchExport() {
     wasmRPT = savedRPT;
     batchFiles['manifest.json'] = JSON.stringify(manifest, null, 2);
     const blob = _miniZipCreate(batchFiles);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${currentMode}_batch_${count}seeds.zip`; a.style.display = 'none';
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    saveBlob(blob, `${currentMode}_batch_${count}seeds.zip`);
     showToast(`Exported ${count} models as ZIP`, 'success');
   } catch(e) { console.error('Batch export error:', e); showToast('Batch export failed: ' + e.message, 'error'); }
   finally { btn.disabled = false; btn.textContent = '📦 Batch ZIP'; }
@@ -9721,13 +9693,7 @@ async function nodeSweepExport() {
     const sweepMeta = { minNodes: minN, maxNodes: maxN, interval: step, models: N };
     const allEntries = [];
     let partFiles = {}, partBytes = 0, partIdx = 0, downloaded = 0;
-    const triggerDownload = (blob, name) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = name; a.style.display = 'none';
-      document.body.appendChild(a); a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-    };
+    const triggerDownload = (blob, name) => saveBlob(blob, name);
     const flushPart = async (isFinal) => {
       const count = Object.keys(partFiles).length;
       if (count === 0) return;
@@ -9842,11 +9808,7 @@ async function ensembleExport() {
       'Suitable for GLUE / Bayesian calibration / global sensitivity (Sobol, Morris) workflows.'
     ].join('\n');
     const blob = _miniZipCreate(files);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `epanet_ensemble_${count}models.zip`; a.style.display = 'none';
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    saveBlob(blob, `epanet_ensemble_${count}models.zip`);
     showToast(`Exported ${count}-model ensemble as ZIP`, 'success');
   } catch(e) { console.error('Ensemble export error:', e); showToast('Ensemble export failed: ' + e.message, 'error'); }
   finally { btn.disabled = false; btn.textContent = '🎲 Generate Ensemble ZIP'; }
@@ -9924,11 +9886,7 @@ async function swmmEnsembleExport() {
       'Suitable for GLUE / Bayesian calibration / global sensitivity (Sobol, Morris) workflows.'
     ].join('\n');
     const blob = _miniZipCreate(files);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `swmm_ensemble_${count}models.zip`; a.style.display = 'none';
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    saveBlob(blob, `swmm_ensemble_${count}models.zip`);
     showToast(`Exported ${count}-model SWMM ensemble as ZIP`, 'success');
   } catch(e) { console.error('SWMM ensemble export error:', e); showToast('SWMM ensemble export failed: ' + e.message, 'error'); }
   finally { btn.disabled = false; btn.textContent = '🎲 Generate SWMM Ensemble ZIP'; }

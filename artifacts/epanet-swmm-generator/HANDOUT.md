@@ -608,6 +608,13 @@ produces files compatible with both.
   downloaded ZIP part every ~64 MB of `.inp` text or 1000 models and frees the memory, so big
   runs arrive as numbered parts (`…_part01…`, `…_part02…`). Allow "multiple downloads" if your
   browser prompts. See §10.1 performance notes.
+- **Export download fix:** every export (`.inp`, RPT, HTML report, DEM, GeoJSON, config, Batch
+  ZIP, node sweep, Monte Carlo ensembles, map/HGL PNGs) now downloads reliably when the app is
+  viewed **embedded in an iframe** (the Replit preview pane and the Canvas board). Browsers
+  block a same-document `<a download>` click inside a sandboxed iframe, so all downloads were
+  silently doing nothing there; they now run from a brief, self-closing top-level tab that
+  preserves the real filename. The published/standalone app downloads directly as before. If
+  your browser asks, **allow pop-ups** for the site so the download tab can open.
 - **Docs corrections:** fixed a mis-indented code fence in §10.1 (`manifest.json` block) that
   was breaking Markdown rendering of every heading after it; spelled out the exact grid-mapping
   band (`(dim−0.5)² ≤ T < (dim+0.5)²`, i.e. 993–1056 → 32×32) to confirm the worked example;
