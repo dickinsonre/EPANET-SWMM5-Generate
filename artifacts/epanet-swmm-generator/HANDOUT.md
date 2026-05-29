@@ -594,6 +594,14 @@ produces files compatible with both.
 
 ### Changelog
 
+**v3.6 — 2026-05-29**
+- **Export progress bar with elapsed time + ETA:** the long-running multi-model exports
+  (Batch ZIP, node-count sweep, and the EPANET/SWMM Monte Carlo ensembles) now show a floating
+  progress panel at the bottom of the screen with a percent-complete bar, the current model /
+  member count (and ZIP part, for big sweeps), the elapsed time, and an **estimated time
+  remaining** (a linear projection from the average time per completed item). The panel appears
+  when an export starts and dismisses automatically when it finishes or fails.
+
 **v3.5 — 2026-05-29**
 - **Node-count sweep ("many model") export** (both modes): generates one model per target
   node count from **Min → Max** stepping by **Interval**, each mapped to a near-square grid

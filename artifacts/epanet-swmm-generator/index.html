@@ -525,6 +525,31 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 .toast.toast-warning { border-color: var(--accent-amber); }
 .toast.visible { transform: translateX(-50%) translateY(0); }
 
+/* ═══════ EXPORT PROGRESS PANEL ═══════ */
+#exportProgress {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(160px);
+  background: #1e293b;
+  border: 1px solid var(--accent-cyan);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  padding: 13px 18px;
+  z-index: 2100;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  transition: transform 0.3s ease;
+  font-family: 'DM Sans', sans-serif;
+  pointer-events: none;
+}
+#exportProgress.visible { transform: translateX(-50%) translateY(0); }
+#exportProgress .ep-title { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:13px; font-weight:600; color: var(--text-primary); margin-bottom:8px; }
+#exportProgress .ep-pct { font-family: 'JetBrains Mono', monospace; color: var(--accent-cyan); font-size:13px; }
+#exportProgress .ep-bar { height:8px; background: var(--border); border-radius:4px; overflow:hidden; }
+#exportProgress .ep-fill { height:100%; width:0%; background: var(--water-gradient); border-radius:4px; transition: width 0.2s ease; }
+#exportProgress .ep-meta { display:flex; justify-content:space-between; gap:10px; margin-top:8px; font-family: 'JetBrains Mono', monospace; font-size:11px; color:#94a3b8; }
+
 /* ═══════ INSPECT PANEL ═══════ */
 .inspect-panel {
   position: absolute;
@@ -800,6 +825,11 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 })();
 </script>
 <div class="toast" id="toastEl"></div>
+<div id="exportProgress" role="status" aria-live="polite">
+  <div class="ep-title"><span id="epLabel">Exporting…</span><span class="ep-pct" id="epPct">0%</span></div>
+  <div class="ep-bar"><div class="ep-fill" id="epFill"></div></div>
+  <div class="ep-meta"><span id="epCount"></span><span id="epTime"></span></div>
+</div>
 <div class="tooltip-popup" id="tooltipPopup"></div>
 
 <div class="app-header">
@@ -817,7 +847,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
       <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
       <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
-      <span title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.5 · 2026-05-29</span>
+      <span title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.6 · 2026-05-29</span>
     </div>
   </div>
 </div>
@@ -3637,6 +3667,59 @@ function advanceSeedIfUnlocked() {
 function setProgress(pf, pl, pct, label) {
   if (pf) pf.style.width = pct + '%';
   if (pl) pl.textContent = label + ' ' + pct + '%';
+}
+
+// ═══════ EXPORT PROGRESS (elapsed time + estimated time remaining) ═══════
+// Long-running multi-model exports (batch, node sweep, Monte Carlo ensembles) drive a
+// floating progress panel. ETA is a linear projection from average time per completed item.
+// One shared panel + timer: an ownership token guards against two exports running at
+// once (different buttons) clobbering each other's timer or hiding the panel early.
+let _exportT0 = 0, _exportSeq = 0, _exportOwner = 0;
+function _fmtDur(ms) {
+  if (!isFinite(ms) || ms < 0) ms = 0;
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60), rs = s % 60;
+  if (m < 60) return m + 'm ' + String(rs).padStart(2, '0') + 's';
+  const h = Math.floor(m / 60), rm = m % 60;
+  return h + 'h ' + String(rm).padStart(2, '0') + 'm';
+}
+function startExportProgress(label) {
+  const token = ++_exportSeq;
+  _exportOwner = token;
+  _exportT0 = performance.now();
+  const el = document.getElementById('exportProgress');
+  if (!el) return token;
+  document.getElementById('epLabel').textContent = label || 'Exporting…';
+  document.getElementById('epPct').textContent = '0%';
+  document.getElementById('epFill').style.width = '0%';
+  document.getElementById('epCount').textContent = '';
+  document.getElementById('epTime').textContent = 'elapsed 0s';
+  el.classList.add('visible');
+  return token;
+}
+function tickExportProgress(done, total, subLabel, token) {
+  if (token !== undefined && token !== _exportOwner) return;
+  const el = document.getElementById('exportProgress');
+  if (!el) return;
+  const frac = total > 0 ? Math.min(1, done / total) : 0;
+  const pct = Math.round(frac * 100);
+  const elapsed = performance.now() - _exportT0;
+  document.getElementById('epPct').textContent = pct + '%';
+  document.getElementById('epFill').style.width = pct + '%';
+  document.getElementById('epCount').textContent = subLabel || (done + ' / ' + total);
+  let t = 'elapsed ' + _fmtDur(elapsed);
+  if (done > 0 && done < total) {
+    t += ' · ~' + _fmtDur(elapsed / done * (total - done)) + ' left';
+  } else if (total > 0 && done >= total) {
+    t += ' · finishing…';
+  }
+  document.getElementById('epTime').textContent = t;
+}
+function endExportProgress(token) {
+  if (token !== undefined && token !== _exportOwner) return;
+  const el = document.getElementById('exportProgress');
+  if (el) el.classList.remove('visible');
 }
 
 // ═══════ TERRAIN ═══════
@@ -9615,6 +9698,7 @@ async function batchExport() {
   if (!generatedINP || !networkData) { showToast('Generate a network first','warning'); return; }
   const btn = document.getElementById('batchBtn');
   btn.disabled = true; btn.textContent = '⏳ Generating...';
+  const epTok = startExportProgress('Batch ZIP export…');
   try {
     const count = Math.min(50, Math.max(2, +(document.getElementById('batchCount').value) || 5));
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
@@ -9629,6 +9713,7 @@ async function batchExport() {
       const seed = baseSeed + i;
       seedEl.value = seed;
       btn.textContent = `⏳ ${i+1}/${count}...`;
+      tickExportProgress(i, count, `model ${i+1} / ${count}`, epTok);
       await new Promise(r => setTimeout(r, 10));
       if (currentMode === 'epanet') {
         await generateEPANETNetwork(true);
@@ -9645,12 +9730,13 @@ async function batchExport() {
     generatedINP = savedINP;
     networkData = savedND;
     wasmRPT = savedRPT;
+    tickExportProgress(count, count, 'zipping…', epTok);
     batchFiles['manifest.json'] = JSON.stringify(manifest, null, 2);
     const blob = _miniZipCreate(batchFiles);
     saveBlob(blob, `${currentMode}_batch_${count}seeds.zip`);
     showToast(`Exported ${count} models as ZIP`, 'success');
   } catch(e) { console.error('Batch export error:', e); showToast('Batch export failed: ' + e.message, 'error'); }
-  finally { btn.disabled = false; btn.textContent = '📦 Batch ZIP'; }
+  finally { endExportProgress(epTok); btn.disabled = false; btn.textContent = '📦 Batch ZIP'; }
 }
 
 // ═══════ NODE-COUNT SWEEP (many models across a node range) ═══════
@@ -9676,6 +9762,7 @@ async function nodeSweepExport() {
   if (targets.length === 0) targets.push(minN);
   if (targets.length > 100000) { showToast(`Sweep would create ${targets.length} models (max 100,000). Increase the interval or narrow the range.`,'error'); return; }
   btn.disabled = true; btn.textContent = '⏳ Generating...';
+  const epTok = startExportProgress('Node sweep export…');
   const origRows = rowsEl.value, origCols = colsEl.value;
   const savedINP = generatedINP, savedND = networkData, savedRPT = wasmRPT;
   const savedRaw = (typeof swmmRawData !== 'undefined') ? swmmRawData : null;
@@ -9717,6 +9804,7 @@ async function nodeSweepExport() {
       const dim = Math.max(3, Math.min(316, Math.round(Math.sqrt(target))));
       rowsEl.value = dim; colsEl.value = dim;
       btn.textContent = `⏳ ${i+1}/${N}${partIdx ? ` · part ${partIdx+1}` : ''}`;
+      tickExportProgress(i, N, `model ${i+1} / ${N}${partIdx ? ` · part ${partIdx+1}` : ''}`, epTok);
       await new Promise(r => setTimeout(r));
       if (currentMode === 'epanet') { await generateEPANETNetwork(true); } else { await generateSWMMNetwork(true); }
       const actualNodes = networkData.nodes.length;
@@ -9731,6 +9819,7 @@ async function nodeSweepExport() {
         await flushPart(false);
       }
     }
+    tickExportProgress(N, N, 'zipping…', epTok);
     await flushPart(true);
     if (downloaded !== N) throw new Error(`Node sweep integrity check failed: wrote ${downloaded} of ${N} models`);
     showToast(partIdx > 1
@@ -9738,6 +9827,7 @@ async function nodeSweepExport() {
       : `Exported ${N}-model node sweep as ZIP`, 'success');
   } catch(e) { console.error('Node sweep export error:', e); showToast('Node sweep export failed: ' + e.message, 'error'); }
   finally {
+    endExportProgress(epTok);
     rowsEl.value = origRows; colsEl.value = origCols;
     generatedINP = savedINP; networkData = savedND; wasmRPT = savedRPT;
     if (typeof swmmRawData !== 'undefined') swmmRawData = savedRaw;
@@ -9753,6 +9843,7 @@ async function ensembleExport() {
   if (currentMode !== 'epanet') { showToast('Ensemble perturbation is EPANET-only','warning'); return; }
   const btn = document.getElementById('ensembleBtn');
   btn.disabled = true;
+  const epTok = startExportProgress('EPANET ensemble export…');
   try {
     const count = Math.min(200, Math.max(2, +(document.getElementById('ensCount').value) || 50));
     const cPct = Math.max(0, +(document.getElementById('ensCPct').value) || 0) / 100;
@@ -9770,6 +9861,7 @@ async function ensembleExport() {
       const memberSeed = baseSeed + 1000 + i;
       const prng = mulberry32(memberSeed);
       btn.textContent = `⏳ ${i+1}/${count}...`;
+      tickExportProgress(i, count, `member ${i+1} / ${count}`, epTok);
       if (i % 8 === 0) await new Promise(r => setTimeout(r, 0));
       // Clone nodes and pipes (deep enough for the fields buildINP reads)
       const pNodes = nd.nodes.map(n => ({ ...n }));
@@ -9796,6 +9888,7 @@ async function ensembleExport() {
       files[fname] = inp;
       csv.push(`${i+1},${memberSeed},${cPct.toFixed(3)},${dPct.toFixed(3)},±${zAbs},±${(patPct*100).toFixed(0)}%,${cN?Math.round(cSum/cN):0},${Math.round(demandSum)}`);
     }
+    tickExportProgress(count, count, 'zipping…', epTok);
     files['ensemble_manifest.csv'] = csv.join('\n');
     files['README.txt'] = [
       'Monte Carlo Ensemble — EPANET 2.3',
@@ -9811,7 +9904,7 @@ async function ensembleExport() {
     saveBlob(blob, `epanet_ensemble_${count}models.zip`);
     showToast(`Exported ${count}-model ensemble as ZIP`, 'success');
   } catch(e) { console.error('Ensemble export error:', e); showToast('Ensemble export failed: ' + e.message, 'error'); }
-  finally { btn.disabled = false; btn.textContent = '🎲 Generate Ensemble ZIP'; }
+  finally { endExportProgress(epTok); btn.disabled = false; btn.textContent = '🎲 Generate Ensemble ZIP'; }
 }
 
 // SWMM 5.2.4 Monte Carlo Ensemble — fixed topology, perturbs Manning's n, DWF base,
@@ -9823,6 +9916,7 @@ async function swmmEnsembleExport() {
   const btn = document.getElementById('swmmEnsembleBtn');
   if (btn.disabled) return;
   btn.disabled = true;
+  const epTok = startExportProgress('SWMM ensemble export…');
   try {
     const count = Math.min(200, Math.max(2, +(document.getElementById('swEnsCount').value) || 50));
     const nPct = Math.max(0, +(document.getElementById('swEnsNPct').value) || 0) / 100;
@@ -9838,6 +9932,7 @@ async function swmmEnsembleExport() {
       const memberSeed = baseSeed + 2000 + i;
       const prng = mulberry32(memberSeed);
       btn.textContent = `⏳ ${i+1}/${count}...`;
+      tickExportProgress(i, count, `member ${i+1} / ${count}`, epTok);
       if (i % 8 === 0) await new Promise(r => setTimeout(r, 0));
       // Shallow-clone config + arrays so we never mutate the live network
       const pSwmm = { ...raw.swmm };
@@ -9874,6 +9969,7 @@ async function swmmEnsembleExport() {
       files[fname] = inp;
       csv.push(`${i+1},${memberSeed},${nPct.toFixed(3)},${dwfPct.toFixed(3)},±${zAbs},${impPct.toFixed(3)},${rainPct.toFixed(3)},${nN?(nSum/nN).toFixed(4):0},${pSwmm.dwfBase},${pSwmm.rainDepth}`);
     }
+    tickExportProgress(count, count, 'zipping…', epTok);
     files['ensemble_manifest.csv'] = csv.join('\n');
     files['README.txt'] = [
       'Monte Carlo Ensemble — SWMM 5.2.4',
@@ -9889,7 +9985,7 @@ async function swmmEnsembleExport() {
     saveBlob(blob, `swmm_ensemble_${count}models.zip`);
     showToast(`Exported ${count}-model SWMM ensemble as ZIP`, 'success');
   } catch(e) { console.error('SWMM ensemble export error:', e); showToast('SWMM ensemble export failed: ' + e.message, 'error'); }
-  finally { btn.disabled = false; btn.textContent = '🎲 Generate SWMM Ensemble ZIP'; }
+  finally { endExportProgress(epTok); btn.disabled = false; btn.textContent = '🎲 Generate SWMM Ensemble ZIP'; }
 }
 
 // ═══════ QUICK SIM (Pressure Heatmap) ═══════
