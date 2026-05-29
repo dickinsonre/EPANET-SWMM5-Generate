@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "b13Kb0g5-52Xwn_DwjqHb"
+uri = "file://artifacts/epanet-swmm-generator/HANDOUT.md"
+type = "text"
+title = "EPANET & SWMM Generator — Course Handout"
