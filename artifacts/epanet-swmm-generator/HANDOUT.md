@@ -88,7 +88,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.3 · 2026-05-29**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.4 · 2026-05-29**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -229,7 +229,7 @@ RDII uses statistically rigorous **RTK** distributions.
 | **Calibration files** | EPANET `.cal` / SWMM `.dat` | Observed Pressure/Head/Demand/Flow/Velocity (EPANET) or Depth/Head/Inflow/Flow/Velocity (SWMM). |
 | **Config** | `.json` | Save/load all settings, or "Copy Config" to clipboard. |
 | **Batch ZIP** | `.zip` | N models (2–50) with sequential seeds + `manifest.json`. |
-| **Ensemble ZIP** | `.zip` | Monte Carlo ensemble (see §10). |
+| **Ensemble ZIP** | `.zip` | Monte Carlo ensemble — EPANET or SWMM (see §10). |
 | **Map PNG** | `.png` | 2400×1600 @ 2× DPI snapshot of the network map. |
 
 ---
@@ -279,8 +279,10 @@ The **Docs** tab includes worked calibration exercises with runnable Python/WNTR
 
 ## 10. Monte Carlo Ensembles for Uncertainty Analysis
 
-The **Ensemble** export (EPANET mode) holds the **topology constant** and perturbs
-parameters across N members, each from its own seed:
+Both modes provide an **Ensemble** export that holds the **topology constant** and
+perturbs parameters across N members, each from its own seed.
+
+### EPANET ensemble
 
 - **C-factor** (roughness) — ± your chosen %
 - **Base demand** — ± your chosen %
@@ -288,12 +290,32 @@ parameters across N members, each from its own seed:
 - **Demand pattern (temporal)** — ± your chosen %; jitters each hourly pattern multiplier
   to capture *temporal* demand uncertainty (set via the **Pat ±%** field, default 10%)
 
-You get a ZIP containing:
+ZIP contents:
 
 - `EPANET23_ensemble_001_seed####.inp` … one `.inp` per member
 - `ensemble_manifest.csv` — maps each member to its perturbation multipliers (C-factor,
   demand, elevation, pattern jitter) and summary stats (mean C-factor, total demand)
 - `README.txt` — describes the perturbation ranges and seed scheme
+
+### SWMM ensemble
+
+The **Generate SWMM Ensemble ZIP** button (SWMM mode) perturbs stormwater-specific
+parameters:
+
+- **Manning's n** (conduit + force-main roughness) — ± your chosen % (**n ±%**)
+- **Dry-weather inflow** (DWF base flow) — ± your chosen % (**DWF ±%**)
+- **Junction invert elevation** — ± your chosen absolute amount in ft (**Z ±ft**)
+- **Subcatchment % impervious** — ± your chosen % (relative; clamped to 0–100%) (**Imp ±%**)
+- **Storm rainfall depth** — ± your chosen %; rescales the design-storm hyetograph (**Rain ±%**)
+
+ZIP contents:
+
+- `SWMM524_ensemble_001_seed####.inp` … one `.inp` per member
+- `ensemble_manifest.csv` — multipliers plus mean Manning's n, DWF base, and rain depth
+- `README.txt` — describes the perturbation ranges and seed scheme
+
+Member seeds start at `baseSeed + 2000` (EPANET uses `baseSeed + 1000`), so the two
+ensembles never collide.
 
 **Use it for:** GLUE, Bayesian calibration, and global sensitivity analysis
 (Sobol, Morris). Feed the `.inp` set into WNTR/PySWMM, solve each, and analyze the
@@ -400,6 +422,12 @@ produces files compatible with both.
 ---
 
 ### Changelog
+
+**v3.4 — 2026-05-29**
+- **SWMM Monte Carlo ensemble export** (parallel to the EPANET one): fixed-topology,
+  per-member seeded perturbation of Manning's n, DWF base flow, junction inverts,
+  subcatchment % impervious, and storm rainfall depth, packaged as a ZIP with
+  `ensemble_manifest.csv` (see §10).
 
 **v3.3 — 2026-05-29**
 - **Automated Calibration Scoring** on the Results tab: **📌 Save as Truth** + **🎯 Score

@@ -817,7 +817,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
       <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
       <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
-      <span title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.3 · 2026-05-29</span>
+      <span title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.4 · 2026-05-29</span>
     </div>
   </div>
 </div>
@@ -1535,6 +1535,36 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         </div>
       </div>
       <button class="download-btn" onclick="ensembleExport()" id="ensembleBtn" style="border-color:#ec4899;color:#ec4899;">🎲 Generate Ensemble ZIP</button>
+    </div>
+    <div class="dl-row" id="swmmEnsembleRow" style="display:none;flex-direction:column;align-items:stretch;gap:6px;">
+      <div style="font-size:11px;color:var(--text-secondary);font-weight:600;">🎲 Monte Carlo Ensemble <span style="color:var(--text-dim);font-weight:400;">(fixed topology, perturbed parameters)</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Number of perturbed models to generate.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">N</label>
+          <input type="number" id="swEnsCount" value="50" min="2" max="200" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Conduit Manning's n (roughness) perturbation as +/- percent.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">n ±%</label>
+          <input type="number" id="swEnsNPct" value="15" min="0" max="50" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Dry-weather inflow (DWF base flow) perturbation as +/- percent.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">DWF ±%</label>
+          <input type="number" id="swEnsDwfPct" value="20" min="0" max="50" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Junction invert elevation perturbation as +/- feet.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Z ±ft</label>
+          <input type="number" id="swEnsZAbs" value="2" min="0" max="20" step="0.5" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Subcatchment percent-impervious perturbation as +/- percent (relative; clamped to 0-100%).">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Imp ±%</label>
+          <input type="number" id="swEnsImpPct" value="10" min="0" max="50" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Design storm total rainfall depth perturbation as +/- percent (rescales storm intensities).">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Rain ±%</label>
+          <input type="number" id="swEnsRainPct" value="15" min="0" max="50" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+      </div>
+      <button class="download-btn" onclick="swmmEnsembleExport()" id="swmmEnsembleBtn" style="border-color:#ec4899;color:#ec4899;">🎲 Generate SWMM Ensemble ZIP</button>
     </div>
     <div class="dl-row" id="solverRow" style="display:none;">
       <button class="download-btn" onclick="loadWASM()" id="wasmBtn" style="border-color:#f59e0b;color:#f59e0b;flex:1;">📦 Load WASM Engine</button>
@@ -3005,6 +3035,7 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 
 let generatedINP = '';
 let networkData = null;
+let swmmRawData = null;
 let engineeringLog = [];
 
 const ENG_LOG_ICONS = {
@@ -5740,6 +5771,7 @@ function setMode(mode) {
   document.getElementById('solverRow').style.display = 'none';
   document.getElementById('batchRow').style.display = 'none';
   document.getElementById('quickSimRow').style.display = 'none';
+  document.getElementById('swmmEnsembleRow').style.display = 'none';
   generatedINP = '';
   wasmRPT = '';
   quickSimPressures = null;
@@ -6260,6 +6292,8 @@ async function generateSWMMNetwork(silent) {
   // Build SWMM INP
   const inp = buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm, swmmPumps, forceMains);
   generatedINP = inp;
+  // Persist full SWMM arrays so the Monte Carlo ensemble export can perturb + rebuild
+  swmmRawData = {cfg, swmm, nodes, outfalls, subcatchments, conduits, swmmPumps, forceMains};
 
   setProgress(pf,pl,80,'Building INP file...');await sleep(5);
 
@@ -6284,7 +6318,7 @@ async function generateSWMMNetwork(silent) {
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('SWMM generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='🌧 GENERATE SWMM MODEL + MAP';btn.classList.remove('generating');
-  document.getElementById('dlRow').style.display='flex';document.getElementById('dlRow2').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
+  document.getElementById('dlRow').style.display='flex';document.getElementById('dlRow2').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';document.getElementById('swmmEnsembleRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
 }
 
 // ═══════ SWMM5 INP BUILDER ═══════
@@ -9699,6 +9733,88 @@ async function ensembleExport() {
     showToast(`Exported ${count}-model ensemble as ZIP`, 'success');
   } catch(e) { console.error('Ensemble export error:', e); showToast('Ensemble export failed: ' + e.message, 'error'); }
   finally { btn.disabled = false; btn.textContent = '🎲 Generate Ensemble ZIP'; }
+}
+
+// SWMM 5.2.4 Monte Carlo Ensemble — fixed topology, perturbs Manning's n, DWF base,
+// junction inverts, subcatchment imperviousness, and storm depth. Rebuilds each member
+// via buildSWMMINP. Produces N .inp files + ensemble_manifest.csv documenting multipliers.
+async function swmmEnsembleExport() {
+  if (!generatedINP || !swmmRawData) { showToast('Generate a SWMM network first','warning'); return; }
+  if (currentMode !== 'swmm') { showToast('SWMM ensemble is for SWMM mode','warning'); return; }
+  const btn = document.getElementById('swmmEnsembleBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  try {
+    const count = Math.min(200, Math.max(2, +(document.getElementById('swEnsCount').value) || 50));
+    const nPct = Math.max(0, +(document.getElementById('swEnsNPct').value) || 0) / 100;
+    const dwfPct = Math.max(0, +(document.getElementById('swEnsDwfPct').value) || 0) / 100;
+    const zAbs = Math.max(0, +(document.getElementById('swEnsZAbs').value) || 0);
+    const impPct = Math.max(0, +(document.getElementById('swEnsImpPct').value) || 0) / 100;
+    const rainPct = Math.max(0, +(document.getElementById('swEnsRainPct').value) || 0) / 100;
+    const baseSeed = +(document.getElementById('randomSeed').value) || 42;
+    const raw = swmmRawData;
+    const files = {};
+    const csv = ['member,seed,manning_n_mult,dwf_mult,invert_delta_ft_range,imperv_mult,rain_mult,mean_manning_n,dwf_base,rain_depth_in'];
+    for (let i = 0; i < count; i++) {
+      const memberSeed = baseSeed + 2000 + i;
+      const prng = mulberry32(memberSeed);
+      btn.textContent = `⏳ ${i+1}/${count}...`;
+      if (i % 8 === 0) await new Promise(r => setTimeout(r, 0));
+      // Shallow-clone config + arrays so we never mutate the live network
+      const pSwmm = { ...raw.swmm };
+      const pNodes = raw.nodes.map(n => ({ ...n }));
+      const pConduits = raw.conduits.map(c => ({ ...c }));
+      const pForceMains = raw.forceMains.map(c => ({ ...c }));
+      const pSubs = raw.subcatchments.map(s => ({ ...s }));
+      // Manning's n on conduits + force mains (uniform per-element)
+      let nSum = 0, nN = 0;
+      const perturbN = arr => arr.forEach(c => {
+        const m = 1 + (prng() * 2 - 1) * nPct;
+        c.roughness = Math.max(0.005, Math.round((c.roughness || 0.013) * m * 1e5) / 1e5);
+        nSum += c.roughness; nN++;
+      });
+      perturbN(pConduits); perturbN(pForceMains);
+      // Dry-weather inflow base (global multiplier on DWF section)
+      pSwmm.dwfBase = Math.max(0, Math.round((pSwmm.dwfBase || 0) * (1 + (prng() * 2 - 1) * dwfPct) * 1e6) / 1e6);
+      // Junction invert elevations (absolute ft)
+      pNodes.forEach(n => {
+        if (n.type === 'junction' && n.elev !== undefined) {
+          n.elev = Math.round((n.elev + (prng() * 2 - 1) * zAbs) * 100) / 100;
+        }
+      });
+      // Subcatchment percent impervious (relative, clamped 0-100)
+      pSubs.forEach(s => {
+        const m = 1 + (prng() * 2 - 1) * impPct;
+        s.imperv = Math.min(100, Math.max(0, Math.round((s.imperv || 0) * m * 100) / 100));
+      });
+      // Storm total depth -> regenerate the design storm hyetograph
+      pSwmm.rainDepth = Math.max(0.01, Math.round((pSwmm.rainDepth || 0) * (1 + (prng() * 2 - 1) * rainPct) * 1000) / 1000);
+      const pStorm = generateDesignStorm(pSwmm.stormType, pSwmm.rainDepth);
+      const inp = buildSWMMINP(raw.cfg, pSwmm, pNodes, raw.outfalls, pSubs, pConduits, pStorm, raw.swmmPumps, pForceMains);
+      const fname = `SWMM524_ensemble_${String(i+1).padStart(3,'0')}_seed${memberSeed}.inp`;
+      files[fname] = inp;
+      csv.push(`${i+1},${memberSeed},${nPct.toFixed(3)},${dwfPct.toFixed(3)},±${zAbs},${impPct.toFixed(3)},${rainPct.toFixed(3)},${nN?(nSum/nN).toFixed(4):0},${pSwmm.dwfBase},${pSwmm.rainDepth}`);
+    }
+    files['ensemble_manifest.csv'] = csv.join('\n');
+    files['README.txt'] = [
+      'Monte Carlo Ensemble — SWMM 5.2.4',
+      `Members: ${count}`,
+      `Topology: held constant (same junctions, conduits, outfalls, subcatchments, pumps)`,
+      `Perturbations (uniform, per-member): Manning's n ±${(nPct*100).toFixed(0)}%, DWF base ±${(dwfPct*100).toFixed(0)}%, junction invert ±${zAbs} ft, subcatchment %imperv ±${(impPct*100).toFixed(0)}% (relative), storm depth ±${(rainPct*100).toFixed(0)}%`,
+      `Base seed: ${baseSeed} (member seeds: ${baseSeed+2000} … ${baseSeed+2000+count-1})`,
+      '',
+      'Use ensemble_manifest.csv to map each .inp to its perturbation multipliers.',
+      'Suitable for GLUE / Bayesian calibration / global sensitivity (Sobol, Morris) workflows.'
+    ].join('\n');
+    const blob = _miniZipCreate(files);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `swmm_ensemble_${count}models.zip`; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    showToast(`Exported ${count}-model SWMM ensemble as ZIP`, 'success');
+  } catch(e) { console.error('SWMM ensemble export error:', e); showToast('SWMM ensemble export failed: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '🎲 Generate SWMM Ensemble ZIP'; }
 }
 
 // ═══════ QUICK SIM (Pressure Heatmap) ═══════
