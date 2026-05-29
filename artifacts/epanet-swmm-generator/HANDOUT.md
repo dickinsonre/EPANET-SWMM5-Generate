@@ -610,6 +610,9 @@ produces files compatible with both.
 ### Changelog
 
 **v3.6 — 2026-05-29**
+- **SWMM dynamic-wave step tuning:** generated `[OPTIONS]` now set `LENGTHENING_STEP 5`
+  (artificial conduit lengthening for short-conduit numerical stability, was `0`) and add an
+  explicit `MINIMUM_STEP 0` (minimum variable time step, previously left to SWMM's 0.5 s default).
 - **Export progress bar with elapsed time + ETA:** the long-running multi-model exports
   (Batch ZIP, node-count sweep, and the EPANET/SWMM Monte Carlo ensembles) now show a floating
   progress panel at the bottom of the screen with a percent-complete bar, the current model /

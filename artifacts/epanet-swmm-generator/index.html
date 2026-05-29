@@ -6523,9 +6523,10 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
   a(`WET_STEP             00:00:${String(swmm.wetStep).padStart(2,'0')}`);
   a(`DRY_STEP             00:${String(Math.floor(swmm.dryStep/60)).padStart(2,'0')}:${String(swmm.dryStep%60).padStart(2,'0')}`);
   a(`ROUTING_STEP         00:00:${String(swmm.routingStep).padStart(2,'0')}`);
-  a('INERTIAL_DAMPING     PARTIAL');a('VARIABLE_STEP        0.75');a('LENGTHENING_STEP     0');
+  a('INERTIAL_DAMPING     PARTIAL');a('VARIABLE_STEP        0.75');a('LENGTHENING_STEP     5');
   a('MIN_SURFAREA         12.566');a('NORMAL_FLOW_LIMITED  BOTH');
   a('MAX_TRIALS           8');a('HEAD_TOLERANCE       0.005');a('SYS_FLOW_TOL         5');a('LAT_FLOW_TOL         5');
+  a('MINIMUM_STEP         0');
   if(swmm.enableSnow) a(`SNOW_MELT_PARAMS     ${swmm.snowDiv} ${swmm.meltCoeff} ${swmm.atiWeight}`);
   nl();
 
