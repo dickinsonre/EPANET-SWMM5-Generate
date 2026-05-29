@@ -234,6 +234,14 @@ RDII uses statistically rigorous **RTK** distributions.
 | **Ensemble ZIP** | `.zip` | Monte Carlo ensemble — EPANET or SWMM (see §10). |
 | **Map PNG** | `.png` | 2400×1600 @ 2× DPI snapshot of the network map. |
 
+**Export progress (multi-model exports).** The long-running exports — **Batch ZIP**, **Node
+Sweep ZIP**, and the EPANET/SWMM **Ensemble ZIP** — show a floating progress panel at the
+bottom of the screen while they run: a percent-complete bar, the current model/member count
+(plus the ZIP part number for large multi-part sweeps), the **elapsed time**, and an
+**estimated time remaining** (projected from the average time per completed model). It switches
+to a `zipping…` state while the archive is packed, then dismisses automatically when the export
+finishes or fails.
+
 ---
 
 ## 9. Calibration Workflow (Truth → Corrupt → Recover)
