@@ -22,6 +22,7 @@ distribution (EPANET) and stormwater/sewer (SWMM) models entirely in your browse
 8. [Exports & File Formats](#8-exports--file-formats)
 9. [Calibration Workflow (Truth → Corrupt → Recover)](#9-calibration-workflow-truth--corrupt--recover)
 10. [Monte Carlo Ensembles for Uncertainty Analysis](#10-monte-carlo-ensembles-for-uncertainty-analysis)
+    - [10.1 Node-count sweep (many models across a size range)](#101-node-count-sweep-many-models-across-a-size-range)
 11. [Hydraulics Cheat Sheet](#11-hydraulics-cheat-sheet)
 12. [Glossary](#12-glossary)
 13. [Troubleshooting](#13-troubleshooting)
@@ -88,7 +89,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.4 · 2026-05-29**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.5 · 2026-05-29**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -229,6 +230,7 @@ RDII uses statistically rigorous **RTK** distributions.
 | **Calibration files** | EPANET `.cal` / SWMM `.dat` | Observed Pressure/Head/Demand/Flow/Velocity (EPANET) or Depth/Head/Inflow/Flow/Velocity (SWMM). |
 | **Config** | `.json` | Save/load all settings, or "Copy Config" to clipboard. |
 | **Batch ZIP** | `.zip` | N models (2–50) with sequential seeds + `manifest.json`. |
+| **Node Sweep ZIP** | `.zip` | Many models stepping node count from Min→Max by Interval (see §10.1). |
 | **Ensemble ZIP** | `.zip` | Monte Carlo ensemble — EPANET or SWMM (see §10). |
 | **Map PNG** | `.png` | 2400×1600 @ 2× DPI snapshot of the network map. |
 
@@ -320,6 +322,41 @@ ensembles never collide.
 **Use it for:** GLUE, Bayesian calibration, and global sensitivity analysis
 (Sobol, Morris). Feed the `.inp` set into WNTR/PySWMM, solve each, and analyze the
 distribution of outputs.
+
+### 10.1 Node-count sweep (many models across a size range)
+
+Where the ensemble varies *parameters* at a fixed size, the **node-count sweep** varies the
+*model size* itself. The **Generate Node Sweep ZIP** button (both EPANET and SWMM modes)
+takes three inputs:
+
+- **Min** — smallest target node count (≥ 9)
+- **Max** — largest target node count
+- **Step** — node-count increment between successive models
+
+It then builds one model for every target from Min to Max stepping by the interval — e.g.
+Min 50, Max 1000, Step 50 produces 20 models at ≈50, 100, 150 … 1000 nodes. Each target is
+mapped to a near-square grid (rows = cols = round(√target), clamped to the 3×3 … 316×316
+range), while every other setting stays exactly as you have it configured. All models share
+the **same seed**, so the only thing changing across the set is the network size — making
+scaling studies reproducible.
+
+ZIP contents:
+
+- `EPANET23_<NNN>_target<T>_<dim>x<dim>_<actual>nodes_seed####.inp` (or `SWMM524_…`) … one
+  `.inp` per step, prefixed with a zero-padded index so filenames never collide even when two
+  targets round to the same grid
+- `manifest.json` — records the requested range, plus each model's target node count, grid
+  dimensions, actual node/pipe counts, and seed
+
+Because the grid is near-square, the **actual** node count is quantized — successive targets
+can round to the same grid (and thus the same actual size). The manifest always lists every
+requested step so you can see target vs. realized size at a glance.
+
+The sweep is capped at **100 models** per run (raise the interval or narrow the range to stay
+under it). The grid maps target node counts up to ≈99,856 (316×316).
+
+**Use it for:** solver-scaling benchmarks, runtime-vs-size profiling, and stress-testing
+downstream tooling against a graduated set of network sizes.
 
 ---
 
@@ -422,6 +459,12 @@ produces files compatible with both.
 ---
 
 ### Changelog
+
+**v3.5 — 2026-05-29**
+- **Node-count sweep ("many model") export** (both modes): generates one model per target
+  node count from **Min → Max** stepping by **Interval**, each mapped to a near-square grid
+  (rows = cols = round(√target)), all sharing the same seed for reproducibility. Packaged as
+  a ZIP with `manifest.json` recording target vs. actual node count per model (see §10.1).
 
 **v3.4 — 2026-05-29**
 - **SWMM Monte Carlo ensemble export** (parallel to the EPANET one): fixed-topology,
