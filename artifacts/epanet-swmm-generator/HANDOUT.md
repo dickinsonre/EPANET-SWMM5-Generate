@@ -325,38 +325,147 @@ distribution of outputs.
 
 ### 10.1 Node-count sweep (many models across a size range)
 
-Where the ensemble varies *parameters* at a fixed size, the **node-count sweep** varies the
-*model size* itself. The **Generate Node Sweep ZIP** button (both EPANET and SWMM modes)
-takes three inputs:
+Where the Monte Carlo ensemble (§10) varies *parameters* while the topology stays fixed, the
+**node-count sweep** does the opposite: it varies the **model size** itself and holds every
+other setting constant. One click produces a whole *series* of models that grow from a small
+network to a large one in regular steps — ideal when you need a graduated family of `.inp`
+files rather than a single model.
 
-- **Min** — smallest target node count (≥ 9)
-- **Max** — largest target node count
-- **Step** — node-count increment between successive models
+#### Where to find it
 
-It then builds one model for every target from Min to Max stepping by the interval — e.g.
-Min 50, Max 1000, Step 50 produces 20 models at ≈50, 100, 150 … 1000 nodes. Each target is
-mapped to a near-square grid (rows = cols = round(√target), clamped to the 3×3 … 316×316
-range), while every other setting stays exactly as you have it configured. All models share
-the **same seed**, so the only thing changing across the set is the network size — making
-scaling studies reproducible.
+Generate any network first (EPANET or SWMM), then open **Map & Export**. Below the
+**Batch ZIP** controls you'll see the **📈 Node-Count Sweep** panel with three numeric
+fields and a **Generate Node Sweep ZIP** button. The panel is mode-aware: in EPANET mode it
+emits EPANET 2.3 models, in SWMM mode it emits SWMM 5.2.4 models — no other switch required.
 
-ZIP contents:
+#### The three inputs
 
-- `EPANET23_<NNN>_target<T>_<dim>x<dim>_<actual>nodes_seed####.inp` (or `SWMM524_…`) … one
-  `.inp` per step, prefixed with a zero-padded index so filenames never collide even when two
-  targets round to the same grid
-- `manifest.json` — records the requested range, plus each model's target node count, grid
-  dimensions, actual node/pipe counts, and seed
+| Field    | Meaning                                              | Rules                          |
+| -------- | --------------------------------------------------- | ------------------------------ |
+| **Min**  | Smallest target node count (the first model)        | Must be **≥ 9** (a 3×3 grid)   |
+| **Max**  | Largest target node count (the last model)          | Must be **≥ Min**              |
+| **Step** | Node-count increment between successive models       | Must be **≥ 1**                |
 
-Because the grid is near-square, the **actual** node count is quantized — successive targets
-can round to the same grid (and thus the same actual size). The manifest always lists every
-requested step so you can see target vs. realized size at a glance.
+The tool generates one model for every target value in the inclusive series
+`Min, Min+Step, Min+2·Step, …` up to (and including, when it lands exactly) **Max**. The
+number of models produced is therefore `floor((Max − Min) / Step) + 1`.
 
-The sweep is capped at **100 models** per run (raise the interval or narrow the range to stay
-under it). The grid maps target node counts up to ≈99,856 (316×316).
+> **Example:** Min = 50, Max = 1000, Step = 50 → 20 models targeting 50, 100, 150, … , 1000
+> nodes. Min = 100, Max = 10 000, Step = 100 → 100 models. Min = 9, Max = 99 856, Step = 1 →
+> the maximum-resolution sweep.
 
-**Use it for:** solver-scaling benchmarks, runtime-vs-size profiling, and stress-testing
-downstream tooling against a graduated set of network sizes.
+#### How a target becomes a model (the grid mapping)
+
+Each target node count `T` is converted to a **near-square grid**:
+
+```
+dim  = round( sqrt(T) )      # clamped to the 3 … 316 range
+rows = dim
+cols = dim
+```
+
+So a target of 1000 → `round(√1000)=32` → a 32×32 grid (≈1024 junctions before sources are
+added). Every **other** setting — spacing, reservoirs, tanks, pumps, valves, terrain, demand
+model, storm, units, theme — is taken **exactly as you have it configured in the sidebar**.
+The sweep only rewrites `gridRows`/`gridCols`; it restores your original grid values when it
+finishes, so your on-screen model is untouched.
+
+Because the grid must be square-ish and integer-dimensioned, the **realized** node count is
+*quantized*. Targets that round to the same `dim` produce the same grid (and thus the same
+actual size). For example, with Step = 1 the targets 1000–1056 all round to a 32×32 grid. This
+is expected: the sweep guarantees a model for every requested step, but the *actual* sizes
+advance in discrete jumps. Use a Step of roughly `2·dim+1` (the spacing between consecutive
+perfect squares near your range) if you want every model to be a distinct size.
+
+| Target `T` | `round(√T)` | Grid    | ≈ Junctions |
+| ---------- | ----------- | ------- | ----------- |
+| 9          | 3           | 3×3     | 9           |
+| 50         | 7           | 7×7     | 49          |
+| 100        | 10          | 10×10   | 100         |
+| 1 000      | 32          | 32×32   | 1 024       |
+| 2 500      | 50          | 50×50   | 2 500       |
+| 10 000     | 100         | 100×100 | 10 000      |
+| 99 856     | 316         | 316×316 | 99 856      |
+
+Targets above **99 856** (316×316, the generator's maximum grid) are clamped to that size.
+
+#### Reproducibility — one seed for the whole series
+
+Every model in the sweep uses the **same seed** (whatever is in the Seed box when you click
+Generate). That is deliberate: with the seed and all parameters held constant, the *only*
+variable across the set is the network size, which is exactly what you want for a clean
+scaling study. Re-running the sweep with the same seed and inputs reproduces byte-identical
+`.inp` files. (If you instead want size **and** randomness to vary, run several sweeps with
+different seeds, or use **Batch ZIP** for same-size/different-seed sets.)
+
+#### What you get — ZIP contents
+
+The download is `<mode>_node_sweep_<N>models.zip` (e.g. `epanet_node_sweep_20models.zip`)
+containing:
+
+- **One `.inp` per step**, named:
+
+  ```
+  EPANET23_<NNN>_target<T>_<dim>x<dim>_<actual>nodes_seed<seed>.inp
+  SWMM524_<NNN>_target<T>_<dim>x<dim>_<actual>nodes_seed<seed>.inp
+  ```
+
+  where `<NNN>` is a zero-padded sweep index (`001`, `002`, …), `<T>` the requested target,
+  `<dim>×<dim>` the grid, and `<actual>` the realized node count. The index prefix guarantees
+  filenames are **unique** even when several targets round to the same grid — nothing
+  overwrites anything inside the ZIP.
+
+- **`manifest.json`** — a machine-readable index of the run:
+
+  ```json
+  {
+    "generator": "EPANET-SWMM Generator v3.5",
+    "mode": "epanet",
+    "units": "US",
+    "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
+    "files": [
+      {
+        "filename": "EPANET23_001_target50_7x7_49nodes_seed42.inp",
+        "targetNodes": 50,
+        "gridRows": 7,
+        "gridCols": 7,
+        "actualNodes": 49,
+        "pipes": 84,
+        "seed": 42
+      }
+      /* … one entry per model … */
+    ]
+  }
+```
+
+  Every requested step appears in `files[]`, so you can always compare **target vs. realized**
+  size and pipe count at a glance, and drive downstream scripts directly off the manifest.
+
+#### Limits & performance
+
+- **Model count cap: 100,000 models per run.** If your Min/Max/Step would exceed this, the
+  tool refuses and asks you to widen the Step or narrow the range.
+- **Size cap: ≈99,856 nodes** per model (the 316×316 grid ceiling).
+- Models are generated **sequentially in the browser**, yielding to the UI between each so the
+  tab stays responsive and shows live `i / N` progress on the button. Practical runtime scales
+  with both the number of models **and** their sizes — a few dozen small models finish in
+  seconds, whereas thousands of large (10k+ node) models can take many minutes and a large
+  amount of memory, since every `.inp` is held in memory until the ZIP is assembled. For very
+  large sweeps, prefer smaller per-model sizes, or split the range into several runs.
+
+#### Worked workflow — solver scaling study
+
+1. Set the mode (EPANET/SWMM), units, and any topology/hydraulic options you want fixed.
+2. Generate once to confirm the model looks right.
+3. In the Node-Count Sweep panel, enter e.g. **Min 100, Max 10000, Step 100** (100 models).
+4. Click **Generate Node Sweep ZIP** and wait for the progress to reach `100/100`.
+5. Unzip and iterate over `manifest.json`; for each entry, load the `.inp` into WNTR / EPANET
+   / PySWMM, solve, and record solve time and peak memory against `actualNodes` / `pipes`.
+6. Plot runtime-vs-size to characterize your solver's scaling curve.
+
+**Use it for:** solver-scaling benchmarks, runtime-vs-size profiling, regression corpora,
+stress-testing downstream tooling, and teaching how network size affects build/solve cost —
+all from a single reproducible, seed-locked series.
 
 ---
 
@@ -465,6 +574,12 @@ produces files compatible with both.
   node count from **Min → Max** stepping by **Interval**, each mapped to a near-square grid
   (rows = cols = round(√target)), all sharing the same seed for reproducibility. Packaged as
   a ZIP with `manifest.json` recording target vs. actual node count per model (see §10.1).
+  Filenames carry a zero-padded index + target so they never collide; `swmmRawData` is
+  saved/restored so a SWMM sweep doesn't disturb the ensemble export.
+- **Node-sweep model cap raised to 100,000** models per run (was 100). Per-model size cap
+  remains ≈99,856 nodes (316×316 grid). Note that very large sweeps are generated
+  sequentially in the browser and held in memory until the ZIP is assembled — see the
+  performance notes in §10.1.
 
 **v3.4 — 2026-05-29**
 - **SWMM Monte Carlo ensemble export** (parallel to the EPANET one): fixed-topology,

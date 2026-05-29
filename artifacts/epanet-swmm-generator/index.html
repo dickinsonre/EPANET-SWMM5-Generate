@@ -9702,7 +9702,7 @@ async function nodeSweepExport() {
   const targets = [];
   for (let t = minN; t <= maxN; t += step) targets.push(Math.min(99856, t));
   if (targets.length === 0) targets.push(minN);
-  if (targets.length > 100) { showToast(`Sweep would create ${targets.length} models (max 100). Increase the interval or narrow the range.`,'error'); return; }
+  if (targets.length > 100000) { showToast(`Sweep would create ${targets.length} models (max 100,000). Increase the interval or narrow the range.`,'error'); return; }
   btn.disabled = true; btn.textContent = '⏳ Generating...';
   const origRows = rowsEl.value, origCols = colsEl.value;
   const savedINP = generatedINP, savedND = networkData, savedRPT = wasmRPT;
