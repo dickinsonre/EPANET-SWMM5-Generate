@@ -5662,7 +5662,7 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   const currentSeed = +(document.getElementById('randomSeed').value) || 42;
 
   a('[TITLE]');
-  a(`;EPANET 2.3 Network — Generator v3.0`);
+  a(`;EPANET 2.3 Network — Generator v3.6`);
   a(`;Generated: ${new Date().toISOString()}`);
   a(`;Seed: ${currentSeed}`);
   a(`;${jCount} junctions, ${reservoirs.length} reservoirs, ${tanks.length} tanks`);
@@ -6481,7 +6481,7 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
 
   const currentSeed = +(document.getElementById('randomSeed').value) || 42;
   a('[TITLE]');
-  a(`;;SWMM 5.2.4 Model — Generator v3.0`);
+  a(`;;SWMM 5.2.4 Model — Generator v3.6`);
   a(`;;Generated: ${new Date().toISOString()}`);
   a(`;;Seed: ${currentSeed}`);
   a(`;;${junctions.length} junctions, ${outfalls.length} outfalls, ${subcatchments.length} subcatchments`);
@@ -9759,7 +9759,7 @@ async function batchExport() {
   try {
     const count = Math.min(50, Math.max(2, +(document.getElementById('batchCount').value) || 5));
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
-    const manifest = { generator: 'EPANET-SWMM Generator v3.0', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
+    const manifest = { generator: 'EPANET-SWMM Generator v3.6', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
     const seedEl = document.getElementById('randomSeed');
     const origSeed = seedEl.value;
     const savedINP = generatedINP;
@@ -9844,7 +9844,7 @@ async function nodeSweepExport() {
       partIdx++;
       const partEntries = allEntries.slice(downloaded, downloaded + count);
       partFiles['manifest.json'] = JSON.stringify({
-        generator: 'EPANET-SWMM Generator v3.5', mode: currentMode, units: currentUnits,
+        generator: 'EPANET-SWMM Generator v3.6', mode: currentMode, units: currentUnits,
         sweep: sweepMeta, part: partIdx, partModels: count, files: partEntries
       }, null, 2);
       const blob = _miniZipCreate(partFiles);

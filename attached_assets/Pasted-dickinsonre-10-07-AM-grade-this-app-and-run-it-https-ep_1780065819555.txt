@@ -1,0 +1,520 @@
+dickinsonre
+
+|
+
+10:07 AM
+
+grade this app and run it https://epanet-swmm-5-generate.replit.app/
+
+Anthropic
+Claude Opus 4.8
+
+|
+
+10:07 AM
+
+|
+
+Cost: $0.4731
+
+Reasoned for 26s
+
+Grade: EPANET 2.3 & SWMM 5.2.4 Network Generator
+Overall: A− (Excellent niche tool)
+
+A note up front: I can't literally execute the app in a browser sandbox, but I can evaluate it thoroughly from its documentation and from a sample run that appears in the page data (a 32×32 grid, ~1,024 nodes, seed 42). I'll grade it on capability, design, and honesty about limitations.
+
+What it is
+A single self-contained HTML file (~160 KB, no dependencies, runs offline client-side) that procedurally generates hydraulically valid EPANET (water distribution) and SWMM (stormwater/sewer) models from 50 to 100,000 nodes, complete with a city-map backdrop. Output is standard.inp files that load into EPANET 2.2+, EPA SWMM 5.2+, WNTR, PySWMM, EPyT, InfoWorks ICM, WaterGEMS, and PCSWMM. Author: Robert Dickinson.
+
+Category grades
+Feature breadth — A+
+This is genuinely impressive. It's the only tool in its comparison table that does EPANET and SWMM in one place, plus automated generation across a huge node range. Highlights:
+
+8 presets (Tiny 50 → City 100K) plus custom grids up to 316×316
+
+5 terrain models, pressure-zone auto-detection with PRV placement
+
+Pump sizing via BFS critical-path Hazen-Williams analysis
+
+SWMM extras: 10 conduit cross-sections, LID controls (7 types), RDII with real statistical distributions (Weibull degradation, log-normal K, Beta-distributed sewer areas), groundwater, snowmelt, 8 pollutants
+
+Exports:.inp, DEM (ASCII grid), GeoJSON, map PNG, calibration.dat files, batch ZIP, Monte Carlo ensembles, node-count sweeps
+
+In-browser WASM solver (EPANET 2.3 / SWMM 5.2.4 compiled via Emscripten)
+
+Validity / engineering rigor — A
+The "hydraulically valid" claims are backed by real methods: BFS connectivity guarantee (0 isolated nodes), 3-point pump curves that bracket the operating point, supply/demand ratio reporting, and spatially correlated C-factors and pipe ages. The RDII statistical basis cites the EPA SWMM Reference Manual and Vallabhaneni et al. (2007). The bundled documentation (EPANET fundamentals, calibration exercises, error codes, AWWA standards) is unusually thorough and accurate.
+
+Reproducibility — A+
+Mulberry32 seeded PRNG means same seed + settings = identical model. Excellent for teaching and benchmarking.
+
+Usability — A−
+Mobile-optimized, bottom-drawer controls, 44px touch targets, presets for quick starts, tabbed preview (Map/Stats/INP/HGL/RPT/Results). Lots of knobs, which is powerful but can overwhelm beginners.
+
+Value — A+
+Free, offline, cross-platform, MIT-licensed. Compares favorably to WaterGEMS ($5,000+/yr) and InfoWater for test-model generation specifically.
+
+Observations from the sample run (seed 42, 32×32)
+The included run is a good real-world honesty check. It generated 1,045 junctions, 4 reservoirs, 8 tanks, 2,112 pipes, 10 booster pumps, and 5 valves with 99% connectivity and 0 isolated nodes — but flagged an S/D ratio of 0.50 (DEFICIT): supply capacity 5,807 GPM vs. peak design demand 11,614 GPM. That the tool surfaces and labels this deficit rather than hiding it is a point in its favor, but it also shows that default parameters don't guarantee a balanced model — you'd need to add supply or reduce demand for a clean run. So "hydraulically valid" means topologically/structurally sound, not necessarily pressure-adequate out of the box.
+
+Caveats and minor inconsistencies
+Versioning/naming: Titled "EPANET 2.3," but compatibility and several references say "EPANET 2.2+." Minor, but slightly confusing.
+
+License conflict: One section states "MIT License," another says "Free for education and testing." Worth the author clarifying.
+
+Scope honesty (a plus): It explicitly states it's not a substitute for licensed PE judgment and not for design or regulatory submissions. EPANET also doesn't model transients (water hammer) — correctly noted.
+
+No real-world data: Models are synthetic/procedural. Great for teaching, calibration practice, and solver stress-testing — not for modeling an actual utility.
+
+Bottom line
+For its intended purpose — generating test, teaching, and calibration-practice models for EPANET/SWMM — this is one of the best free tools available, and arguably unique in combining both engines with automated large-scale generation and rich export options. Knock off a small amount for the occasional default imbalance (the deficit example) and minor doc inconsistencies.
+
+Final grade: A−
+
+Best uses: education (Small ~150 nodes), calibration practice (Medium/Large 750–2,500: generate a "truth" model, corrupt it, calibrate back), and solver benchmarking (Giant/City 50K–100K). If you do open it, start with a preset, click Generate, then check the Stats tab for connectivity and the supply/demand ratio before exporting.
+
+
+Sources (Linkup)
+
+1 result
+
+dickinsonre
+
+|
+
+10:13 AM
+
+NICE, i just fix those two issues and this the handout report now - EPANET 2.3 & SWMM 5.2.4 Network Generator — Course Handout
+A practical guide to generating, inspecting, and calibrating hydraulically valid water distribution (EPANET) and stormwater/sewer (SWMM) models entirely in your browser.
+
+One-line summary: This tool builds realistic test networks — from a 50-node village to a 100,000-node city — with proper connectivity, supply/demand balance, and spatial realism, then exports standard .inp files that load directly into EPANET, EPA SWMM, WNTR, PySWMM, InfoWorks, and WaterGEMS.
+
+Table of Contents
+What This Tool Is (and Isn't)
+Quick Start (5 Minutes)
+The Interface, Tab by Tab
+UI Complexity Modes: Simple / Advanced / Expert
+Key Settings Explained
+Reading the Health Summary & Stats
+Understanding the Generated Model
+Exports & File Formats
+Calibration Workflow (Truth → Corrupt → Recover)
+Monte Carlo Ensembles for Uncertainty Analysis
+10.1 Node-count sweep (many models across a size range)
+Hydraulics Cheat Sheet
+Glossary
+Troubleshooting
+Classroom Exercises
+
+What This Tool Is (and Isn't)
+It is:
+
+A synthetic network generator — it invents plausible pipe layouts, elevations, demands, and roughness values from a random seed.
+A teaching and research aid — perfect for learning EPANET/SWMM, practicing calibration, stress-testing solvers, and producing reproducible test cases.
+Fully client-side — everything runs in your browser. No data leaves your machine; it works offline once loaded.
+It is not:
+
+A model of any real water system. Coordinates are synthetic planar units.
+A substitute for licensed professional engineering judgment or regulatory submittals.
+Reproducibility: Every model is built from a seed using a deterministic pseudo-random generator (Mulberry32). The same seed + same settings always produces the same network — essential for sharing examples and calibration exercises.
+
+Quick Start (5 Minutes)
+Pick a mode (top-left): EPANET 2.3 (pressurized water distribution) or SWMM 5.2.4 (stormwater / sewer).
+Pick units: US Customary (ft, gpm, psi) or SI / Metric (m, L/s, m).
+Choose a preset: Start with Standard (1K) — a 32×32 grid, ~1,000 nodes.
+Smaller (Tiny 50 / Small 150) = faster, easier to inspect.
+Larger (Mega 10K → City 100K) = slower; watch memory on mobile devices.
+Click Generate. Watch the progress bar ("Building grid nodes… 10%", etc.).
+Review the Map tab (visual network) and the Stats tab (the green/amber/red health summary tells you at a glance if the model is sound).
+Go to the INP tab → Download .inp, or open it in EPANET/SWMM directly.
+That's a complete, hydraulically valid model. Everything else is refinement.
+
+The Interface, Tab by Tab
+Tab What it shows
+Map Interactive city-map visualization: terrain, streets, zones, parks, and the network overlaid. Click any node or pipe to inspect its properties and solver results.
+Stats Health summary banner + a grid of key metrics (junctions, pipes, demand, S/D ratio, connectivity, pressure zones, etc.).
+INP The generated .inp text. Download, copy, select-all, or Validate (structural check).
+Docs Built-in reference: EPANET fundamentals, the Global Gradient Algorithm, C-factor tables, calibration exercises, and historical context.
+HGL Hydraulic Grade Line profile plot (ground / crown / invert / HGL).
+Log Engineering log of generation decisions (source placement, connectivity, sizing).
+RPT Post-solve report output (after running the WASM solver).
+Results Solver results with a time-slider animation for extended-period simulations.
+Sidebar settings are organized into four sub-tabs: Network, Hydraulics, Environment, and Map & Export.
+
+Inline tooltips: hover over almost any setting label to see a one-line description and a reasonable range — no need to leave the page or consult this handout.
+
+Engine & version badges: the header shows the bundled solver versions (EPANET 2.3, SWMM 5.2.4) and the generator build (v3.5 · 2026-05-29) so you can confirm compatibility with your desktop tools at a glance.
+
+Keyboard shortcuts:
+
+Shortcut Action
+Ctrl/⌘ + G or Ctrl/⌘ + Enter Generate network
+Ctrl/⌘ + S Download INP
+Ctrl/⌘ + Shift + C Copy INP to clipboard
+Ctrl/⌘ + Z Undo configuration change
+Ctrl/⌘ + Shift + Z or Ctrl/⌘ + Y Redo configuration change
+Undo/redo step through committed changes to the sidebar settings (it does not undo a generated network — just the input values), so you can experiment freely and back out.
+
+UI Complexity Modes: Simple / Advanced / Expert
+Below the unit toggle there's a Simple / Advanced / Expert switch. It controls how many settings are visible so beginners aren't overwhelmed:
+
+Simple — only the essentials: presets, grid/topology, terrain & elevation. Best for a first session or a quick test network.
+Advanced — adds hydraulics (roughness, valves, pumps), demand zones, and water quality options.
+Expert — exposes everything, including SWMM RDII/RTK coefficients, snowmelt, groundwater, and fine-grained calibration controls.
+Your choice is remembered between visits.
+
+Key Settings Explained
+Network (topology)
+Setting Meaning Typical
+Grid Rows × Cols Size of the underlying street grid. Node count ≈ rows × cols. 32 × 32 (≈1K)
+Node Spacing Distance between intersections. 300–500 ft
+Jitter Randomizes node positions so the grid isn't perfectly square. 10–30%
+Diagonal % Fraction of diagonal street connections (more loops, more realism). 10–20%
+Dead Ends Number of dead-end branches (cul-de-sacs). a few %
+Sources & Hydraulics (EPANET)
+Setting Meaning Typical
+Reservoirs Fixed-head supply sources (treatment plants). 1–3
+Tanks Storage for equalization; placed on local high ground. 1–4
+Pumps Boost head from a source into the network. as needed
+Reservoir Head Supply hydraulic head (ft). Higher = more pressure. 150–300 ft
+C-min / C-max Hazen-Williams roughness range. Lower C = rougher/older pipe. 80–140
+PRVs / FCVs Pressure-reducing / flow-control valves at zone boundaries. a few
+Demand
+Setting Meaning Typical
+Demand zones % residential / commercial / industrial / mixed. site-specific
+Demand min/max Per-node base demand range (gpm). 1–20 gpm
+Emitter Nodes Junctions with pressure-dependent leakage (leaks/hydrants). 5–15% of nodes
+Design Mode (auto-sizing)
+Enable Design Mode to size the network from demographics instead of raw numbers:
+
+Population, per-capita demand (gpcd), peaking factor, and fire flow drive automatic reservoir, pump, and pipe sizing toward target velocities (2–5 ft/s).
+
+Reading the Health Summary & Stats
+After generation, the Stats tab shows a one-line health summary banner:
+
+✅ Green — model looks sound: fully connected, adequate supply, no obvious issues.
+⚠️ Amber — minor cautions (e.g., S/D ratio tight at ~1.0).
+⛔ Red — real problems (isolated nodes, supply deficit).
+When the banner is amber or red, a "Why?" button appears. Click it to expand a plain-language explanation of the specific cause (isolated nodes, supply deficit, tight supply, or low pressure) along with concrete fixes (e.g., raise reservoir head, add a pump, lower dead ends, enable Design Mode).
+
+Key metrics to watch:
+
+Metric What "good" looks like
+Connectivity 100% — every node reachable from a source.
+Isolated 0 — no orphaned nodes/pipes.
+S/D Ratio ≥ 1.1 — supply capacity exceeds peak demand with margin.
+Pressure Zones Auto-created when elevation range > 80 ft.
+Note on S/D ratio: Earlier versions could generate a model at exactly 0.50 (deficit). The generator now counts gravity-fed reservoirs at full capacity and adds a 1.15 safety factor, so fresh models default to S/D ≈ 1.15 (adequate).
+
+Note on connectivity: "100% connected / 0 isolated" now reconcile correctly — the node total no longer double-counts reservoirs and tanks.
+
+Understanding the Generated Model
+The generator applies real engineering logic, not pure randomness:
+
+Connectivity validation (BFS): A breadth-first search from every source confirms each junction is reachable; isolated nodes are counted and reported.
+Pump sizing via critical path: BFS traces the hydraulically farthest node, computes Hazen-Williams friction along that path, and builds a 3-point pump curve that brackets the operating point (the AWWA-recommended approach).
+Pressure-zone detection: If the elevation range exceeds ~80 ft, the network is split into ~70 ft zones with PRVs at the boundaries.
+Spatial realism: C-factors correlate with location (downtown = older/rougher, suburbs = newer/smoother); pipe ages trend from 1950s near the center to 2020s at the edges; demand zones cluster (industrial, commercial, residential).
+Flow-based pipe sizing: Diameters are chosen from estimated flows toward a 2–5 ft/s target velocity (min 6" distribution / 12" arterial).
+Street-routing factor: Pipe lengths are multiplied by a density-scaled factor to approximate routing along streets rather than straight lines — ~1.55× in the dense, older urban core (irregular older grid) tapering to ~1.15× at the newer suburban edges.
+For SWMM, subcatchments use a D8 flow-direction algorithm for drainage routing, and RDII uses statistically rigorous RTK distributions.
+
+Exports & File Formats
+Export Format Use
+INP file .inp (EPANET 2.2+ / SWMM 5.2+) Load into any standard solver. Includes full reporting and a documented [TITLE] block (seed + assumptions).
+Validate in-app check Confirms required sections, node/link cross-references, duplicate IDs, and [END] — without running a solve.
+GeoJSON .geojson GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS.
+DEM ASCII grid IDW-interpolated elevation surface for ArcGIS/QGIS.
+Calibration files EPANET .cal / SWMM .dat Observed Pressure/Head/Demand/Flow/Velocity (EPANET) or Depth/Head/Inflow/Flow/Velocity (SWMM).
+Config .json Save/load all settings, or "Copy Config" to clipboard.
+Batch ZIP .zip N models (2–50) with sequential seeds + manifest.json.
+Node Sweep ZIP .zip Many models stepping node count from Min→Max by Interval (see §10.1).
+Ensemble ZIP .zip Monte Carlo ensemble — EPANET or SWMM (see §10).
+Map PNG .png 2400×1600 @ 2× DPI snapshot of the network map.
+Export progress (multi-model exports). The long-running exports — Batch ZIP, Node Sweep ZIP, and the EPANET/SWMM Ensemble ZIP — show a floating progress panel at the bottom of the screen while they run: a percent-complete bar, the current model/member count (plus the ZIP part number for large multi-part sweeps), the elapsed time, and an estimated time remaining (projected from the average time per completed model). It switches to a zipping… state while the archive is packed, then dismisses automatically when the export finishes or fails.
+
+Solver progress. The same panel also appears while you run the engine (Run Solver and Quick Sim). An EPANET run shows a determinate timestep i / N bar with elapsed time + ETA as it walks the simulation period (and an animated indeterminate bar during the single-shot solve phases); a SWMM run — one blocking solve — shows an animated indeterminate bar. The elapsed clock advances while the main thread is free and pauses during a single blocking solve. It dismisses automatically when the solve finishes or fails.
+
+Calibration Workflow (Truth → Corrupt → Recover)
+This tool is built for the classic calibration teaching pattern:
+
+Generate a "truth" model. Lock the seed so it's reproducible. Run the solver to get "true" pressures/flows. Export a calibration file (.cal / .dat) — these become your field observations.
+Create a "corrupted" model. Change the seed or manually degrade parameters (e.g., set all C-factors to a wrong guess like 100, or scale demands). This is the model a student starts from, not knowing the truth.
+Calibrate back. Adjust roughness, demands, and statuses until the corrupted model's results match the observed calibration file. Compare against the truth to grade the recovery.
+Automated Calibration Scoring (in-app). The Results tab now closes this loop without leaving the browser:
+
+Run the solver on your truth model (use the ▶ Run Solver button right on the Results tab — it auto-loads the WASM engine if needed).
+
+Click 📌 Save as Truth to snapshot the truth results (mode, seed, units are recorded).
+
+Corrupt or recalibrate the model (change C-factors, demands, seed, etc.) and re-run the solver.
+
+Click 🎯 Score vs Truth. The tool computes RMSE for pressure (or node depth in SWMM), flow, and demand across every shared element and timestep, then assigns a letter grade against AWWA M32 pressure targets (note: in AWWA M32 a higher calibration level means a stricter tolerance, so Level 3 is tighter than Level 1):
+
+Grade Pressure RMSE Meaning
+A (green) < 1 psi Level 3 calibration (strictest — excellent)
+B (green) < 3 psi Level 1 calibration (good)
+C (amber) 3–5 psi Marginal
+D (red) 5–8 psi Poor
+F (red) > 8 psi Failed
+Relative error (RMSE ÷ mean truth value) is color-coded green < 5%, amber 5–10%, red
+
+10% — the typical AWWA M32 flow tolerance. SI head (m) is converted to psi for grading. This enables automated grading for classroom use.
+
+The Docs tab includes worked calibration exercises with runnable Python/WNTR code (manual, automated, and demand-pattern calibration).
+
+Monte Carlo Ensembles for Uncertainty Analysis
+Both modes provide an Ensemble export that holds the topology constant and perturbs parameters across N members, each from its own seed.
+
+EPANET ensemble
+C-factor (roughness) — ± your chosen %
+Base demand — ± your chosen %
+Elevation — ± your chosen absolute amount (ft)
+Demand pattern (temporal) — ± your chosen %; jitters each hourly pattern multiplier to capture temporal demand uncertainty (set via the Pat ±% field, default 10%)
+ZIP contents:
+
+EPANET23_ensemble_001_seed####.inp … one .inp per member
+ensemble_manifest.csv — maps each member to its perturbation multipliers (C-factor, demand, elevation, pattern jitter) and summary stats (mean C-factor, total demand)
+README.txt — describes the perturbation ranges and seed scheme
+SWMM ensemble
+The Generate SWMM Ensemble ZIP button (SWMM mode) perturbs stormwater-specific parameters:
+
+Manning's n (conduit + force-main roughness) — ± your chosen % (n ±%)
+Dry-weather inflow (DWF base flow) — ± your chosen % (DWF ±%)
+Junction invert elevation — ± your chosen absolute amount in ft (Z ±ft)
+Subcatchment % impervious — ± your chosen % (relative; clamped to 0–100%) (Imp ±%)
+Storm rainfall depth — ± your chosen %; rescales the design-storm hyetograph (Rain ±%)
+ZIP contents:
+
+SWMM524_ensemble_001_seed####.inp … one .inp per member
+ensemble_manifest.csv — multipliers plus mean Manning's n, DWF base, and rain depth
+README.txt — describes the perturbation ranges and seed scheme
+Member seeds start at baseSeed + 2000 (EPANET uses baseSeed + 1000), so the two ensembles never collide. The other exporters stay clear of both bands: the node sweep reuses the single baseSeed unchanged for every model (size is the only variable), and Batch ZIP uses a small sequential block starting at baseSeed (baseSeed, baseSeed+1, …). Keep a Batch run well under 1000 members if you intend to mix its files with an EPANET ensemble from the same base seed, so its sequential block can't reach the baseSeed + 1000 offset.
+
+Use it for: GLUE, Bayesian calibration, and global sensitivity analysis (Sobol, Morris). Feed the .inp set into WNTR/PySWMM, solve each, and analyze the distribution of outputs.
+
+10.1 Node-count sweep (many models across a size range)
+Where the Monte Carlo ensemble (§10) varies parameters while the topology stays fixed, the node-count sweep does the opposite: it varies the model size itself and holds every other setting constant. One click produces a whole series of models that grow from a small network to a large one in regular steps — ideal when you need a graduated family of .inp files rather than a single model.
+
+Where to find it
+Generate any network first (EPANET or SWMM), then open Map & Export. Below the Batch ZIP controls you'll see the 📈 Node-Count Sweep panel with three numeric fields and a Generate Node Sweep ZIP button. The panel is mode-aware: in EPANET mode it emits EPANET 2.3 models, in SWMM mode it emits SWMM 5.2.4 models — no other switch required.
+
+The three inputs
+Field Meaning Rules
+Min Smallest target node count (the first model) Must be ≥ 9 (a 3×3 grid)
+Max Largest target node count (the last model) Must be ≥ Min
+Step Node-count increment between successive models Must be ≥ 1
+The tool generates one model for every target value in the inclusive series Min, Min+Step, Min+2·Step, … up to (and including, when it lands exactly) Max. The number of models produced is therefore floor((Max − Min) / Step) + 1.
+
+Example: Min = 50, Max = 1000, Step = 50 → 20 models targeting 50, 100, 150, … , 1000 nodes. Min = 100, Max = 10 000, Step = 100 → 100 models. Min = 9, Max = 99 856, Step = 1 → the maximum-resolution sweep.
+
+How a target becomes a model (the grid mapping)
+Each target node count T is converted to a near-square grid:
+
+dim = round( sqrt(T) ) # clamped to the 3 … 316 range
+rows = dim
+cols = dim
+
+So a target of 1000 → round(√1000)=32 → a 32×32 grid (≈1024 junctions before sources are added). Every other setting — spacing, reservoirs, tanks, pumps, valves, terrain, demand model, storm, units, theme — is taken exactly as you have it configured in the sidebar. The sweep only rewrites gridRows/gridCols; it restores your original grid values when it finishes, so your on-screen model is untouched.
+
+Because the grid must be square-ish and integer-dimensioned, the realized node count is quantized. Targets that round to the same dim produce the same grid (and thus the same actual size). The band that maps to a given dim is (dim−0.5)² ≤ T < (dim+0.5)²; for dim = 32 that is 993 … 1056 inclusive (since √1056 ≈ 32.496 still rounds to 32, while √1057 ≈ 32.512 rounds to 33). So with Step = 1, the 57 targets 1000–1056 all collapse onto the same 32×32 grid. This is expected: the sweep guarantees a model for every requested step, but the actual sizes advance in discrete jumps. Use a Step of roughly 2·dim+1 (the spacing between consecutive perfect squares near your range) if you want every model to be a distinct size.
+
+Target T round(√T) Grid ≈ Junctions
+9 3 3×3 9
+50 7 7×7 49
+100 10 10×10 100
+1 000 32 32×32 1 024
+2 500 50 50×50 2 500
+10 000 100 100×100 10 000
+99 856 316 316×316 99 856
+Targets above 99 856 (316×316, the generator's maximum grid) are clamped to that size.
+
+Reproducibility — one seed for the whole series
+Every model in the sweep uses the same seed (whatever is in the Seed box when you click Generate). That is deliberate: with the seed and all parameters held constant, the only variable across the set is the network size, which is exactly what you want for a clean scaling study. Re-running the sweep with the same seed and inputs reproduces byte-identical .inp files. (If you instead want size and randomness to vary, run several sweeps with different seeds, or use Batch ZIP for same-size/different-seed sets.)
+
+What you get — ZIP contents
+A small/medium sweep downloads as a single <mode>node_sweep<N>models.zip (e.g. epanet_node_sweep_20models.zip). Large sweeps are streamed as multiple ZIP parts — see Limits & performance below — named <mode>node_sweep_part01<count>models.zip, …part02…, and so on; each part is a fully self-contained ZIP. Either way, every ZIP contains:
+
+One .inp per step, named:
+
+EPANET23_<NNN>target<T><dim>x<dim><actual>nodes_seed<seed>.inp SWMM524<NNN>target<T><dim>x<dim>_<actual>nodes_seed<seed>.inp
+
+where <NNN> is a zero-padded sweep index (001, 002, …), <T> the requested target, <dim>×<dim> the grid, and <actual> the realized node count. The index prefix guarantees filenames are unique even when several targets round to the same grid — nothing overwrites anything inside the ZIP.
+
+manifest.json — a machine-readable index of the run:
+
+{
+"generator": "EPANET-SWMM Generator v3.5",
+"mode": "epanet",
+"units": "US",
+"sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
+"files": [
+{
+"filename": "EPANET23_001_target50_7x7_49nodes_seed42.inp",
+"targetNodes": 50,
+"gridRows": 7,
+"gridCols": 7,
+"actualNodes": 49,
+"pipes": 84,
+"seed": 42
+}
+/* … one entry per model … */
+]
+}
+
+Every model that part contains appears in files[], so you can always compare target vs. realized size and pipe count at a glance, and drive downstream scripts directly off the manifest. For multi-part runs each part carries its own manifest.json with part / partModels fields covering just that part's models — concatenate the files[] arrays across parts to reconstruct the full run.
+
+Limits & performance
+Model count cap: 100,000 models per run. If your Min/Max/Step would exceed this, the tool refuses and asks you to widen the Step or narrow the range.
+Size cap: ≈99,856 nodes per model (the 316×316 grid ceiling).
+Models are generated sequentially in the browser, yielding to the UI between each so the tab stays responsive and shows live i / N (and · part P) progress on the button.
+Memory-safe multi-part streaming. To keep memory bounded on big runs, the tool does not hold the whole sweep in memory. Instead it accumulates models into a part and flushes that part to a downloaded ZIP — then frees the memory — once the part reaches ~64 MB of .inp text or 1000 models, whichever comes first. So a run is delivered as one ZIP when it's small, or as several numbered parts (…_part01…, …_part02…) when it's large. This is why a very large sweep produces multiple downloads. (Earlier builds buffered everything and could exhaust tab memory on large sweeps — this streaming approach fixes that.)
+Allow multiple downloads. Because parts download automatically as they complete, your browser may prompt to "allow multiple file downloads" on the first large run — accept it, or the later parts will be blocked.
+Practical runtime scales with both the number of models and their sizes — a few dozen small models finish in seconds, whereas thousands of large (10k+ node) models can still take many minutes (memory is bounded, but CPU time is not). For the fastest big runs, prefer smaller per-model sizes.
+Worked workflow — solver scaling study
+Set the mode (EPANET/SWMM), units, and any topology/hydraulic options you want fixed.
+Generate once to confirm the model looks right.
+In the Node-Count Sweep panel, enter e.g. Min 100, Max 10000, Step 100 (100 models).
+Click Generate Node Sweep ZIP and wait for the progress to reach 100/100.
+Unzip and iterate over manifest.json; for each entry, load the .inp into WNTR / EPANET / PySWMM, solve, and record solve time and peak memory against actualNodes / pipes.
+Plot runtime-vs-size to characterize your solver's scaling curve.
+Use it for: solver-scaling benchmarks, runtime-vs-size profiling, regression corpora, stress-testing downstream tooling, and teaching how network size affects build/solve cost — all from a single reproducible, seed-locked series.
+
+Hydraulics Cheat Sheet
+Hazen-Williams head loss (US units):
+
+h_f = 4.73 · L · (Q / C)^1.852 / D^4.87 (h_f in ft, L in ft, Q in cfs, D in ft)
+
+C = roughness coefficient (higher = smoother). New PVC ≈ 150; old cast iron ≈ 80.
+Valid for water at 40–75 °F, turbulent flow (Re > 4000). Empirical, not physics-derived, but standard US practice because C-factors are well documented.
+Pressure ↔ head (US units):
+
+pressure (psi) = 0.433 · head (ft) head (ft) = 2.31 · pressure (psi)
+
+Rules of thumb:
+
+Quantity Healthy range
+Service pressure 40–80 psi (min ~20 psi under fire flow)
+Pipe velocity 2–5 ft/s (peak)
+S/D ratio ≥ 1.1–1.2
+Fire flow 500–3,500+ gpm depending on land use
+Valve types: PRV (limits downstream P), PSV (maintains upstream P), PBV (fixed P drop), FCV (limits flow), TCV (throttle), GPV (custom head-loss curve).
+
+Glossary
+BFS — Breadth-First Search; used to verify every node connects to a source.
+C-factor — Hazen-Williams roughness coefficient (higher = smoother pipe).
+Demand — Water draw at a junction (gpm or L/s).
+Emitter — A pressure-dependent outflow (models leaks or hydrants).
+HGL — Hydraulic Grade Line; elevation of the energy/pressure surface.
+Peaking factor — Ratio of peak-hour to average demand (default 1.6; design mode 2.0).
+PRV — Pressure-Reducing Valve; common at pressure-zone boundaries.
+RDII — Rainfall-Derived Infiltration and Inflow (SWMM sewers).
+RTK — Three-parameter unit-hydrograph method for RDII.
+S/D ratio — Supply capacity ÷ peak demand. < 1.0 = deficit.
+Seed — Number that makes a generated network reproducible.
+Subcatchment — A drainage area in SWMM that routes runoff to a node.
+
+Troubleshooting
+Symptom Likely cause / fix
+S/D ratio shows 0.50 / deficit You're on an older deployed version. Re-publish or refresh — current builds default to ~1.15.
+Connectivity < 100% / isolated nodes Too many dead ends or closed pipes; reduce them, or increase diagonal % for more loops.
+Pump shows "0 ft elevation change" The pump provides head for downstream friction losses, not elevation lift — this is valid.
+Large model is slow / tab freezes 50K–100K nodes need significant memory; try a smaller preset, or use a desktop browser.
+INP won't load in EPANET Run Validate first; check the reported errors (missing sections, dangling links).
+Results tab is empty Click ▶ Run Solver on the Results tab (it auto-loads the WASM engine), or use Load WASM Engine → Run Solver in the sidebar; results then populate the RPT/Results tabs.
+
+Classroom Exercises
+A. First Network (15 min) Generate a Tiny (50) EPANET model. On the Map tab, click a junction and a pipe to read their properties. Identify the reservoir and trace a path from it to a dead end.
+
+B. Diagnose a Deficit (20 min) Lower the reservoir head until the health summary turns red (S/D < 1.0). Then fix it two ways: (1) raise reservoir head, (2) add a pump. Compare the resulting S/D ratios.
+
+C. Pressure Zones (20 min) Increase the elevation range above 80 ft and regenerate. Find the auto-created pressure zones and the PRVs at their boundaries (Stats + Map).
+
+D. Calibration (45 min) Follow §9: generate a locked-seed truth model, export its calibration file, corrupt the C-factors, then recover them. Grade your recovery against the truth.
+
+E. Uncertainty (45 min) Export a 50-member Monte Carlo ensemble (§10). Solve all members in WNTR and plot the distribution of minimum pressure across the ensemble.
+
+Credits & License
+Generator by Robert Dickinson. Released under the MIT License — free to use, modify, and distribute, including in published research, with attribution. Provided "as is", without warranty. Not a substitute for licensed professional engineering judgment.
+
+EPANET is public-domain software from the US EPA (engine: MIT-licensed, OpenWaterAnalytics). EPA SWMM is public domain. This generator is an independent tool that produces files compatible with both.
+
+Changelog
+v3.6 — 2026-05-29
+
+SWMM dynamic-wave step tuning: generated [OPTIONS] now set LENGTHENING_STEP 5 (artificial conduit lengthening for short-conduit numerical stability, was 0) and add an explicit MINIMUM_STEP 0 (minimum variable time step, previously left to SWMM's 0.5 s default).
+Export progress bar with elapsed time + ETA: the long-running multi-model exports (Batch ZIP, node-count sweep, and the EPANET/SWMM Monte Carlo ensembles) now show a floating progress panel at the bottom of the screen with a percent-complete bar, the current model / member count (and ZIP part, for big sweeps), the elapsed time, and an estimated time remaining (a linear projection from the average time per completed item). The panel appears when an export starts and dismisses automatically when it finishes or fails.
+Solver progress panel: running the engine now shows the same floating panel. An EPANET run displays a determinate timestep i / N bar (with elapsed time + ETA) while it walks the extended-period simulation, and an animated indeterminate bar during the single-shot hydraulic/water-quality solves. A SWMM run (one blocking WASM call) shows an animated indeterminate bar; Quick Sim shows the panel too. The slide animation is transform-driven so it keeps moving even while a blocking solve freezes the main thread. The elapsed-time clock advances whenever the main thread is free (it can't tick during a single blocking WASM call, but resumes once that call returns). A global solver lock blocks a second solve from starting mid-run.
+v3.5 — 2026-05-29
+
+Node-count sweep ("many model") export (both modes): generates one model per target node count from Min → Max stepping by Interval, each mapped to a near-square grid (rows = cols = round(√target)), all sharing the same seed for reproducibility. Packaged as a ZIP with manifest.json recording target vs. actual node count per model (see §10.1). Filenames carry a zero-padded index + target so they never collide; swmmRawData is saved/restored so a SWMM sweep doesn't disturb the ensemble export.
+Node-sweep model cap raised to 100,000 models per run (was 100). Per-model size cap remains ≈99,856 nodes (316×316 grid).
+Node-sweep memory-safe multi-part streaming: large sweeps no longer buffer the whole run in memory (which could freeze the tab around a few hundred models). The tool now flushes a downloaded ZIP part every ~64 MB of .inp text or 1000 models and frees the memory, so big runs arrive as numbered parts (…_part01…, …_part02…). Allow "multiple downloads" if your browser prompts. See §10.1 performance notes.
+Export download fix: every export (.inp, RPT, HTML report, DEM, GeoJSON, config, Batch ZIP, node sweep, Monte Carlo ensembles, map/HGL PNGs) now downloads reliably when the app is viewed embedded in an iframe (the Replit preview pane and the Canvas board). Browsers block a same-document <a download> click inside a sandboxed iframe, so all downloads were silently doing nothing there; they now run from a brief, self-closing top-level tab that preserves the real filename. The published/standalone app downloads directly as before. If your browser asks, allow pop-ups for the site so the download tab can open.
+Docs corrections: fixed a mis-indented code fence in §10.1 (manifest.json block) that was breaking Markdown rendering of every heading after it; spelled out the exact grid-mapping band ((dim−0.5)² ≤ T < (dim+0.5)², i.e. 993–1056 → 32×32) to confirm the worked example; clarified that a higher AWWA M32 level = a stricter tolerance (§9); and documented that the node-sweep / Batch seed schemes stay clear of the +1000/+2000 ensemble offsets (§10).
+v3.4 — 2026-05-29
+
+SWMM Monte Carlo ensemble export (parallel to the EPANET one): fixed-topology, per-member seeded perturbation of Manning's n, DWF base flow, junction inverts, subcatchment % impervious, and storm rainfall depth, packaged as a ZIP with ensemble_manifest.csv (see §10).
+v3.3 — 2026-05-29
+
+Automated Calibration Scoring on the Results tab: 📌 Save as Truth + 🎯 Score vs Truth compute pressure/flow/demand RMSE and assign an A–F grade against AWWA M32 targets (green/amber/red), closing the calibration loop for automated classroom grading.
+▶ Run Solver button directly on the Results tab (auto-loads the WASM engine) — no need to go back to the sidebar.
+Undo/Redo for sidebar configuration changes (Ctrl/⌘+Z / Ctrl/⌘+Shift+Z or Ctrl/⌘+Y).
+v3.2 — 2026-05-29
+
+Engine + build version badges in the header (EPANET 2.3 / SWMM 5.2.4 / v3.2).
+Density-scaled street-routing factor (1.55× core → 1.15× suburban edges).
+Context-sensitive "Why?" explanations on the health summary banner.
+Demand-pattern (temporal) perturbation added to Monte Carlo ensembles (Pat ±%).
+Keyboard shortcuts: Ctrl/⌘+Enter (generate) and Ctrl/⌘+Shift+C (copy INP).
+Tooltip coverage and label fixes across the settings panels.
+v3.1 and earlier
+
+Supply/demand fix (S/D ≈ 1.15), connectivity reconciliation, Simple/Advanced/Expert UI modes, Monte Carlo ensembles, health summary banner, INP validation, GeoJSON CRS, flow-based pipe sizing, WASM validation report.
+
+Anthropic
+Claude Opus 4.8
+
+|
+
+10:13 AM
+
+|
+
+Cost: $0.6193
+
+Reasoned for 28s
+
+This is a substantial upgrade. You didn't just patch the two issues I flagged — you closed the loop on the whole workflow. Here's my updated assessment.
+
+Updated Grade: A (was A−)
+The two original issues — confirmed fixed
+License conflict → resolved. The handout now states a single, consistent license: MIT (generator) with correct notes that the EPANET engine is MIT/OWA and EPA SWMM is public domain. Clean and accurate.
+
+S/D deficit default → resolved. The earlier seed-42 run produced S/D = 0.50 (deficit). The generator now counts gravity-fed reservoirs at full capacity and applies a 1.15 safety factor, defaulting fresh models to S/D ≈ 1.15. You even kept a troubleshooting entry pointing stale deployments back to a refresh — good operational honesty.
+
+You also fixed the connectivity double-count (reservoirs/tanks no longer inflate the node total), which was the subtle "99% reachable / 0 isolated" mismatch in the original run log. Nice catch.
+
+What pushed the grade up
+1. Automated Calibration Scoring (v3.3) — the standout addition.
+This is the feature that elevates the tool from "model generator" to "teaching platform." Save-as-Truth → corrupt → Score-vs-Truth with RMSE and an A–F grade against AWWA M32 closes the calibration loop entirely in-browser. Crucially, you got the M32 semantics right and called it out explicitly: a higher calibration level = a stricter tolerance, so Level 3 (<1 psi) is tighter than Level 1. That's a genuinely common point of confusion, and flagging it shows real domain care.
+
+2. Node-count sweep (§10.1) — rigorously documented.
+The grid-mapping math is exactly right and, more importantly, you documented the quantization honestly: targets that round to the samedim collapse onto the same grid, with the explicit band(dim−0.5)² ≤ T < (dim+0.5)² (993–1056 → 32×32). Most tools would hide that; you turned it into a teachable detail and gave the2·dim+1 step heuristic to avoid it. The memory-safe multi-part streaming (flush every ~64 MB or 1000 models) is the correct engineering answer to the "tab freezes on big runs" failure mode.
+
+3. Monte Carlo ensembles for both engines (v3.4) with non-colliding seed bands.
+EPANET at baseSeed+1000, SWMM at baseSeed+2000, node sweep reuses baseSeed, Batch uses a sequential block from baseSeed — and you documented the one collision risk (Batch >1000 members reaching the +1000 offset). That level of seed-hygiene documentation is exactly what makes results reproducible and citable.
+
+4. Usability maturity.
+Simple/Advanced/Expert modes, inline tooltips, keyboard shortcuts, undo/redo on settings, context-sensitive "Why?" explanations on the health banner, and the iframe-download fix (the sandboxed<a download> issue is a real and easily-missed bug). These address the "too many knobs can overwhelm beginners" concern from my original review directly.
+
+Engineering accuracy spot-check
+The Hydraulics Cheat Sheet and glossary are sound: Hazen-Williams form, psi↔head conversions (0.433 / 2.31), velocity 2–5 ft/s, S/D ≥ 1.1–1.2, valve type definitions — all correct. The "pump shows 0 ft elevation change is valid (it provides friction head, not lift)" troubleshooting note is a nice touch that preempts a real student misconception.
+
+Remaining nitpicks (minor — keeping it from A+)
+Version label drift. The header badge reads "EPANET 2.3," but exports/compatibility correctly target EPANET 2.2+. The original run's[TITLE] block even said "Generated v3.0 / Seed 42" while the body referenced seed values inconsistently. Now that you have a changelog and build badges, just make sure the[TITLE] block, header badge, and handout all cite the same generator build (v3.6) on every export.
+
+SWMM ensemble validation depth. EPANET models get a BFS connectivity guarantee and S/D check. It's worth stating whether perturbed SWMM ensemble members get any analogous structural sanity check (e.g., outfall reachability, negative-slope conduits after invert perturbation), sinceZ ±ft on inverts could in principle create adverse-slope conduits.
+
+Calibration grading scope. The A–F scale is pressure/depth-RMSE-driven; you note flow uses relative error vs. AWWA's ~10% tolerance. Consider making explicit in the rubric whether a model can score "A" on pressure while failing flow — i.e., is the letter grade pressure-only or a composite? Students will ask.

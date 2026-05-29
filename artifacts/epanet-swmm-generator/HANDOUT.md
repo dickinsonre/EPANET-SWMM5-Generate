@@ -89,7 +89,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.5 · 2026-05-29**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.6 · 2026-05-29**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -446,7 +446,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v3.5",
+    "generator": "EPANET-SWMM Generator v3.6",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -618,6 +618,11 @@ fitness-of-output disclaimer, not a usage restriction.
 ### Changelog
 
 **v3.6 — 2026-05-29**
+- **Build-version stamps aligned to v3.6:** the version written into generated artifacts now
+  matches the header badge and changelog. Previously the EPANET/SWMM `[TITLE]` comments stamped
+  `v3.0`, the batch-ZIP `manifest.json` stamped `v3.0`, and the node-sweep `manifest.json` stamped
+  `v3.5`. The handout's build badge reference and `manifest.json` example were also updated from
+  `v3.5` to `v3.6`.
 - **Versioning & license wording clarified:** disambiguated "EPANET 2.3" (the bundled solver
   engine) from "EPANET 2.2+" (the range of software that can open the generated `.inp` files) —
   compatibility notes now read "compatible with EPANET 2.2+" rather than implying a version
