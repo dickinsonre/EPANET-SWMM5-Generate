@@ -851,7 +851,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
       <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
       <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
-      <span title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.6 · 2026-05-29</span>
+      <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.6 · 2026-05-29</span>
     </div>
   </div>
 </div>
@@ -3084,6 +3084,33 @@ const BOUNDARY_PAD_PCT = 0.08;     // Map boundary padding as fraction of extent
 // Safe min/max for large arrays (avoids stack overflow from spread operator)
 function safeMin(arr) { let m = Infinity; for (let i = 0; i < arr.length; i++) if (arr[i] < m) m = arr[i]; return m; }
 function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) if (arr[i] > m) m = arr[i]; return m; }
+
+// ─────────────────────────────────────────────────────────────────────────
+// SINGLE SOURCE OF TRUTH for the generator build version.
+// The header badge, every exported [TITLE] block, and the runtime self-check
+// all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
+// and is asserted equal to GEN_BUILD on load so the three can never drift.
+const GEN_BUILD = { version: 'v3.6', date: '2026-05-29' };
+const CHANGELOG_TOP = { version: 'v3.6', date: '2026-05-29' };
+const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
+const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
+// Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
+function buildVersionLine(prefix, engineName) {
+  return `${prefix}${engineName} — Generator ${GEN_BUILD.version} (${GEN_BUILD.date})`;
+}
+// One-line consistency assertion: badge text, [TITLE] writer, and changelog top
+// entry must all carry the same build version (and date). Returns true if OK.
+function assertBuildConsistency() {
+  const badge = document.getElementById('buildBadge');
+  const badgeVer = badge ? badge.textContent.trim().split('·')[0].trim() : '';
+  const titleLine = buildVersionLine(';', 'EPANET 2.3 Network');
+  const ok = badgeVer === GEN_BUILD.version
+    && titleLine.includes(GEN_BUILD.version)
+    && CHANGELOG_TOP.version === GEN_BUILD.version
+    && CHANGELOG_TOP.date === GEN_BUILD.date;
+  if (!ok) console.error('[build] Version drift detected — fix GEN_BUILD / CHANGELOG_TOP / badge / HANDOUT changelog', { badgeVer, titleLine, GEN_BUILD, CHANGELOG_TOP });
+  return ok;
+}
 
 let generatedINP = '';
 let networkData = null;
@@ -5662,7 +5689,8 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   const currentSeed = +(document.getElementById('randomSeed').value) || 42;
 
   a('[TITLE]');
-  a(`;EPANET 2.3 Network — Generator v3.6`);
+  a(buildVersionLine(';', 'EPANET 2.3 Network'));
+  a(`;Engine target: ${ENGINE_TARGET_EPANET}`);
   a(`;Generated: ${new Date().toISOString()}`);
   a(`;Seed: ${currentSeed}`);
   a(`;${jCount} junctions, ${reservoirs.length} reservoirs, ${tanks.length} tanks`);
@@ -6481,7 +6509,8 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
 
   const currentSeed = +(document.getElementById('randomSeed').value) || 42;
   a('[TITLE]');
-  a(`;;SWMM 5.2.4 Model — Generator v3.6`);
+  a(buildVersionLine(';;', 'SWMM 5.2.4 Model'));
+  a(`;;Engine target: ${ENGINE_TARGET_SWMM}`);
   a(`;;Generated: ${new Date().toISOString()}`);
   a(`;;Seed: ${currentSeed}`);
   a(`;;${junctions.length} junctions, ${outfalls.length} outfalls, ${subcatchments.length} subcatchments`);
@@ -9964,6 +9993,57 @@ async function ensembleExport() {
   finally { endExportProgress(epTok); btn.disabled = false; btn.textContent = '🎲 Generate Ensemble ZIP'; }
 }
 
+// ── Structural validation for perturbed SWMM ensemble members ──
+// Topology is held constant across members, so subcatchment routing and
+// node→outfall reachability are computed once (topology-invariant). Adverse
+// (≤0) conduit slopes are recomputed per member because junction inverts are
+// jittered, which can silently create negative/flat gravity sewers.
+function _swmmTopologyCheck(raw) {
+  const nodeIds = new Set(raw.nodes.map(n => n.id));
+  raw.outfalls.forEach(o => nodeIds.add(o.id));
+  const outfallIds = new Set(raw.nodes.filter(n => n.type === 'outfall').map(n => n.id));
+  raw.outfalls.forEach(o => outfallIds.add(o.id));
+  // Reverse adjacency: predecessors of each downstream node (gravity + pumps + force mains).
+  const preds = new Map();
+  const addEdge = (f, t) => { if (!preds.has(t)) preds.set(t, []); preds.get(t).push(f); };
+  raw.conduits.forEach(c => addEdge(c.from, c.to));
+  (raw.forceMains || []).forEach(c => addEdge(c.from, c.to));
+  (raw.swmmPumps || []).forEach(p => addEdge(p.from, p.to));
+  // Reverse BFS from every outfall → set of nodes that can drain to an outfall.
+  const reach = new Set();
+  const queue = [...outfallIds];
+  while (queue.length) {
+    const id = queue.shift();
+    if (reach.has(id)) continue;
+    reach.add(id);
+    (preds.get(id) || []).forEach(p => { if (!reach.has(p)) queue.push(p); });
+  }
+  const drainNodes = raw.nodes.filter(n => n.type === 'junction');
+  const unreachable = drainNodes.filter(n => !reach.has(n.id)).map(n => n.id);
+  const subMissing = raw.subcatchments.filter(s => !nodeIds.has(s.outlet)).map(s => s.id);
+  return {
+    nodeToOutfallOk: unreachable.length === 0, unreachable,
+    subRoutingOk: subMissing.length === 0, subMissing
+  };
+}
+// Per-member: recompute gravity-conduit slopes from the perturbed inverts.
+// Force mains are pressurized (pump-fed) so adverse slope is expected — skipped.
+function _swmmAdverseSlopes(pNodes, outfalls, conduits) {
+  const inv = new Map();
+  pNodes.forEach(n => { if (n.elev !== undefined) inv.set(n.id, n.elev); });
+  outfalls.forEach(o => { if (!inv.has(o.id) && o.elev !== undefined) inv.set(o.id, o.elev); });
+  const adverse = [];
+  let minSlope = Infinity;
+  conduits.forEach(c => {
+    const up = inv.get(c.from), dn = inv.get(c.to);
+    if (up === undefined || dn === undefined || !(c.length > 0)) return;
+    const slope = ((up + (c.inOffset || 0)) - (dn + (c.outOffset || 0))) / c.length;
+    if (slope < minSlope) minSlope = slope;
+    if (slope <= 0) adverse.push(c.id);
+  });
+  return { adverse, minSlope: minSlope === Infinity ? 0 : minSlope };
+}
+
 // SWMM 5.2.4 Monte Carlo Ensemble — fixed topology, perturbs Manning's n, DWF base,
 // junction inverts, subcatchment imperviousness, and storm depth. Rebuilds each member
 // via buildSWMMINP. Produces N .inp files + ensemble_manifest.csv documenting multipliers.
@@ -9984,7 +10064,10 @@ async function swmmEnsembleExport() {
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
     const raw = swmmRawData;
     const files = {};
-    const csv = ['member,seed,manning_n_mult,dwf_mult,invert_delta_ft_range,imperv_mult,rain_mult,mean_manning_n,dwf_base,rain_depth_in'];
+    // Topology-invariant structural checks (same for every member: topology held constant).
+    const topo = _swmmTopologyCheck(raw);
+    let failCount = 0;
+    const csv = ['member,seed,manning_n_mult,dwf_mult,invert_delta_ft_range,imperv_mult,rain_mult,mean_manning_n,dwf_base,rain_depth_in,structural_valid,adverse_slope_conduits,min_slope_ft_per_ft,subcatch_routing_ok,node_to_outfall_ok,flagged_conduits'];
     for (let i = 0; i < count; i++) {
       const memberSeed = baseSeed + 2000 + i;
       const prng = mulberry32(memberSeed);
@@ -10024,7 +10107,15 @@ async function swmmEnsembleExport() {
       const inp = buildSWMMINP(raw.cfg, pSwmm, pNodes, raw.outfalls, pSubs, pConduits, pStorm, raw.swmmPumps, pForceMains);
       const fname = `SWMM524_ensemble_${String(i+1).padStart(3,'0')}_seed${memberSeed}.inp`;
       files[fname] = inp;
-      csv.push(`${i+1},${memberSeed},${nPct.toFixed(3)},${dwfPct.toFixed(3)},±${zAbs},${impPct.toFixed(3)},${rainPct.toFixed(3)},${nN?(nSum/nN).toFixed(4):0},${pSwmm.dwfBase},${pSwmm.rainDepth}`);
+      // Structural validation: adverse (≤0) slopes from this member's jittered inverts,
+      // plus the topology-invariant subcatchment-routing / node→outfall guarantees.
+      const slopeChk = _swmmAdverseSlopes(pNodes, raw.outfalls, pConduits);
+      const structuralValid = slopeChk.adverse.length === 0 && topo.nodeToOutfallOk && topo.subRoutingOk;
+      if (!structuralValid) failCount++;
+      const _cap = 15;
+      const flagged = slopeChk.adverse.length === 0 ? ''
+        : slopeChk.adverse.slice(0, _cap).join(';') + (slopeChk.adverse.length > _cap ? `;+${slopeChk.adverse.length - _cap} more` : '');
+      csv.push(`${i+1},${memberSeed},${nPct.toFixed(3)},${dwfPct.toFixed(3)},±${zAbs},${impPct.toFixed(3)},${rainPct.toFixed(3)},${nN?(nSum/nN).toFixed(4):0},${pSwmm.dwfBase},${pSwmm.rainDepth},${structuralValid?'PASS':'FAIL'},${slopeChk.adverse.length},${slopeChk.minSlope.toFixed(5)},${topo.subRoutingOk?'PASS':'FAIL'},${topo.nodeToOutfallOk?'PASS':'FAIL'},"${flagged}"`);
     }
     tickExportProgress(count, count, 'zipping…', epTok);
     files['ensemble_manifest.csv'] = csv.join('\n');
@@ -10034,6 +10125,16 @@ async function swmmEnsembleExport() {
       `Topology: held constant (same junctions, conduits, outfalls, subcatchments, pumps)`,
       `Perturbations (uniform, per-member): Manning's n ±${(nPct*100).toFixed(0)}%, DWF base ±${(dwfPct*100).toFixed(0)}%, junction invert ±${zAbs} ft, subcatchment %imperv ±${(impPct*100).toFixed(0)}% (relative), storm depth ±${(rainPct*100).toFixed(0)}%`,
       `Base seed: ${baseSeed} (member seeds: ${baseSeed+2000} … ${baseSeed+2000+count-1})`,
+      '',
+      `Structural validation: ${count - failCount}/${count} members PASS, ${failCount} FAIL.`,
+      'ensemble_manifest.csv per-member structural columns:',
+      '  structural_valid      — PASS only if no adverse-slope conduits AND routing/outfall checks pass',
+      '  adverse_slope_conduits — count of gravity conduits whose slope went <= 0 after invert jitter',
+      '  min_slope_ft_per_ft   — minimum gravity-conduit slope in the member (negative = adverse)',
+      '  subcatch_routing_ok   — every subcatchment outlet resolves to a real node',
+      '  node_to_outfall_ok    — every junction still reaches an outfall (downstream BFS)',
+      '  flagged_conduits      — IDs of the adverse-slope conduits (capped, semicolon-separated)',
+      'Force mains are pressurized (pump-fed), so they are excluded from the slope check.',
       '',
       'Use ensemble_manifest.csv to map each .inp to its perturbation multipliers.',
       'Suitable for GLUE / Bayesian calibration / global sensitivity (Sobol, Morris) workflows.'
@@ -10150,6 +10251,11 @@ function redoConfig() {
 
 window.addEventListener('load',()=>{
   if(isMobile()){document.getElementById('controlsInner').classList.add('collapsed');}
+  // Derive the build badge from the single source of truth, then self-check that
+  // badge, [TITLE] writer, and changelog top entry all carry the same version.
+  const _badge = document.getElementById('buildBadge');
+  if (_badge) _badge.textContent = `${GEN_BUILD.version} · ${GEN_BUILD.date}`;
+  assertBuildConsistency();
   _initConfigHistory();
   setupAccessibility();
   setupTooltips();

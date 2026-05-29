@@ -223,7 +223,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block (seed + assumptions). |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v3.6`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -329,8 +329,15 @@ parameters:
 ZIP contents:
 
 - `SWMM524_ensemble_001_seed####.inp` … one `.inp` per member
-- `ensemble_manifest.csv` — multipliers plus mean Manning's n, DWF base, and rain depth
-- `README.txt` — describes the perturbation ranges and seed scheme
+- `ensemble_manifest.csv` — multipliers plus mean Manning's n, DWF base, and rain depth,
+  **and a per-member structural-validation block**: `structural_valid` (PASS/FAIL),
+  `adverse_slope_conduits` (count of gravity conduits whose slope went ≤ 0 after the invert
+  jitter), `min_slope_ft_per_ft`, `subcatch_routing_ok` (every subcatchment outlet resolves to
+  a real node), `node_to_outfall_ok` (every junction still reaches an outfall via downstream
+  BFS), and `flagged_conduits` (the offending conduit IDs). Force mains are pressurized
+  (pump-fed) and are excluded from the slope check. This gives SWMM ensembles the same
+  validity guarantee EPANET ensembles get from the BFS connectivity + S/D checks.
+- `README.txt` — describes the perturbation ranges, seed scheme, and a PASS/FAIL member tally
 
 Member seeds start at `baseSeed + 2000` (EPANET uses `baseSeed + 1000`), so the two
 ensembles never collide. The other exporters stay clear of both bands: the **node sweep**
@@ -618,6 +625,18 @@ fitness-of-output disclaimer, not a usage restriction.
 ### Changelog
 
 **v3.6 — 2026-05-29**
+- **Version single source of truth + drift guard:** the build version now lives in one
+  constant (`GEN_BUILD`) that drives the header badge and every exported `[TITLE]` block, and
+  the `[TITLE]` block additionally stamps the engine target (`loads in EPANET 2.2+` /
+  `loads in EPA SWMM 5.2+`) alongside the seed and timestamp. A one-line runtime assertion on
+  load checks that the badge, the `[TITLE]` writer, and the changelog top entry all carry the
+  same build string and logs a console error if they ever drift.
+- **SWMM ensemble structural validation:** each perturbed ensemble member is now checked for
+  adverse-slope (≤ 0) gravity conduits created by the junction-invert jitter, plus the
+  topology-invariant guarantees that every subcatchment routes to a real node and every node
+  still reaches an outfall. The pass/fail and the flagged conduit IDs are written into
+  `ensemble_manifest.csv` per member, giving SWMM the same validity credibility EPANET already
+  had.
 - **Build-version stamps aligned to v3.6:** the version written into generated artifacts now
   matches the header badge and changelog. Previously the EPANET/SWMM `[TITLE]` comments stamped
   `v3.0`, the batch-ZIP `manifest.json` stamped `v3.0`, and the node-sweep `manifest.json` stamped
