@@ -817,7 +817,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
       <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
       <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
-      <span title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.2 · 2026-05-29</span>
+      <span title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.3 · 2026-05-29</span>
     </div>
   </div>
 </div>
@@ -2924,6 +2924,7 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
 
   <div id="tab-results" style="display:none;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch;">
     <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
+      <button class="download-btn" onclick="runSolverFromResults()" id="resultsRunBtn" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#22c55e;color:#22c55e;">▶ Run Solver</button>
       <button class="download-btn" onclick="downloadResultsHTML()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download HTML Report</button>
       <select id="calParamSelect" onchange="updateCalParamLabel()" style="flex:none;padding:6px 10px;font-size:13px;min-height:36px;background:#1e293b;color:#f1f5f9;border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;">
         <optgroup label="Node Parameters">
@@ -2942,8 +2943,16 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
       <button class="download-btn" onclick="downloadCalibrationFile()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#f59e0b;color:#f59e0b;">↓ Cal File</button>
       <button class="download-btn" onclick="downloadAllCalibrationFiles()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#f59e0b;color:#f59e0b;">↓ All Cal Files (.zip)</button>
     </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;">
+      <span style="font-size:11px;color:var(--text-secondary);font-weight:600;">Calibration Scoring (AWWA M32):</span>
+      <button class="download-btn" onclick="saveTruthBaseline()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#60a5fa;color:#60a5fa;">📌 Save as Truth</button>
+      <button class="download-btn" onclick="scoreCalibration()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:#a78bfa;color:#a78bfa;">🎯 Score vs Truth</button>
+      <span id="truthStatus" style="font-size:11px;color:var(--text-dim);">No truth baseline saved</span>
+      <span title="Calibration workflow: 1) Run the solver on your 'truth' model and click Save as Truth. 2) Corrupt parameters (e.g. lower C-factors, change demands) and re-run the solver. 3) Click Score vs Truth to compute pressure/flow/demand RMSE graded against AWWA M32 targets." style="cursor:help;color:var(--text-dim);font-size:13px;">ⓘ</span>
+    </div>
+    <div id="calScoreBoard"></div>
     <div id="resultsContent" style="font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-secondary);line-height:1.6;">
-      <p style="color:var(--text-dim);">Run solver to generate results report.</p>
+      <p style="color:var(--text-dim);">Run the solver to generate a results report. <button onclick="runSolverFromResults()" style="margin-left:8px;background:none;border:1px solid #22c55e;color:#22c55e;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;">▶ Run Solver</button></p>
     </div>
   </div>
 </div>
@@ -9175,6 +9184,148 @@ function downloadCalibrationFile() {
   _triggerDownload(content, fname, 'text/plain');
 }
 
+// ── Automated Calibration Scoring (truth vs corrupted, AWWA M32) ──────────────
+// Workflow: run solver on the "truth" model → Save as Truth (snapshot), then
+// corrupt parameters and re-run → Score vs Truth computes RMSE for pressure,
+// flow and demand and grades against AWWA M32 calibration targets.
+let truthBaseline = null;
+
+async function runSolverFromResults() {
+  if (!generatedINP || generatedINP.length < 50) { showToast('Generate a network first', 'warning'); return; }
+  const btn = document.getElementById('resultsRunBtn');
+  const orig = btn ? btn.textContent : '';
+  try {
+    if (!solverModule || (solverType === 'epanet' && solverModule.type !== 'epanet-js') || (solverType === 'swmm' && !solverModule.FS)) {
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Loading engine...'; }
+      if (currentMode === 'swmm') { await loadSwmmEngine(); } else { await loadEpanetEngine(); }
+      document.getElementById('solverRow').style.display = 'flex';
+    }
+    if (btn) btn.textContent = '⏳ Solving...';
+    await runSolver();
+  } catch (e) {
+    console.error('runSolverFromResults error:', e);
+    showToast('Solver error: ' + (e && e.message ? e.message : e), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig || '▶ Run Solver'; }
+  }
+}
+
+function updateTruthStatus() {
+  const el = document.getElementById('truthStatus');
+  if (!el) return;
+  if (truthBaseline) {
+    const nN = Object.keys(truthBaseline.nodeResults || {}).length;
+    el.textContent = `Truth saved: ${truthBaseline.mode.toUpperCase()} · seed ${truthBaseline.seed} · ${nN} nodes · ${truthBaseline.units}`;
+    el.style.color = '#60a5fa';
+  } else {
+    el.textContent = 'No truth baseline saved';
+    el.style.color = 'var(--text-dim)';
+  }
+}
+
+function saveTruthBaseline() {
+  if (!solverResults || !solverResults.nodeResults || Object.keys(solverResults.nodeResults).length === 0) {
+    showToast('Run the solver first, then save the truth baseline', 'warning');
+    return;
+  }
+  truthBaseline = {
+    nodeResults: JSON.parse(JSON.stringify(solverResults.nodeResults)),
+    linkResults: JSON.parse(JSON.stringify(solverResults.linkResults || {})),
+    timesteps: (solverResults.timesteps || []).slice(),
+    units: currentUnits,
+    mode: currentMode,
+    seed: +(document.getElementById('randomSeed').value) || 42
+  };
+  updateTruthStatus();
+  showToast('Saved current solver results as truth baseline', 'success');
+}
+
+function _calPairs(truthRes, curRes, param) {
+  const pairs = [];
+  if (!truthRes || !curRes) return pairs;
+  for (const id of Object.keys(curRes)) {
+    const ta = truthRes[id], ca = curRes[id];
+    if (!ta || !ca) continue;
+    const n = Math.min(ta.length, ca.length);
+    for (let i = 0; i < n; i++) {
+      pairs.push([_extractCalVal(ta[i], param), _extractCalVal(ca[i], param)]);
+    }
+  }
+  return pairs;
+}
+
+function _calStats(pairs) {
+  if (!pairs.length) return null;
+  let se = 0, absTruth = 0;
+  for (const [t, c] of pairs) { se += (t - c) * (t - c); absTruth += Math.abs(t); }
+  const rmse = Math.sqrt(se / pairs.length);
+  const meanAbs = absTruth / pairs.length;
+  const pct = meanAbs > 1e-9 ? (rmse / meanAbs) * 100 : 0;
+  return { rmse, pct, n: pairs.length };
+}
+
+function scoreCalibration() {
+  const board = document.getElementById('calScoreBoard');
+  if (!truthBaseline) { showToast('Save a truth baseline first (📌 Save as Truth)', 'warning'); return; }
+  if (!solverResults || !solverResults.nodeResults || Object.keys(solverResults.nodeResults).length === 0) {
+    showToast('Run the solver on the corrupted model to compare', 'warning'); return;
+  }
+  if (truthBaseline.mode !== currentMode) {
+    showToast(`Truth baseline is ${truthBaseline.mode.toUpperCase()} but current mode is ${currentMode.toUpperCase()} — scores not comparable`, 'warning');
+  }
+  const isSI = currentUnits === 'SI';
+  const unitMismatch = truthBaseline.units !== currentUnits;
+
+  const presParam = currentMode === 'swmm' ? 'depth' : 'pressure';
+  const pres = _calStats(_calPairs(truthBaseline.nodeResults, solverResults.nodeResults, presParam));
+  const flow = _calStats(_calPairs(truthBaseline.linkResults, solverResults.linkResults, 'flow'));
+  const dem  = _calStats(_calPairs(truthBaseline.nodeResults, solverResults.nodeResults, currentMode === 'swmm' ? 'inflow' : 'demand'));
+
+  // Pressure/depth RMSE → grade (AWWA M32). Convert SI head (m) to psi for thresholds.
+  const presUnit = currentMode === 'swmm' ? (isSI ? 'm' : 'ft') : (isSI ? 'm' : 'psi');
+  let psiRmse = pres ? pres.rmse : null;
+  if (psiRmse !== null && currentMode === 'epanet' && isSI) psiRmse = psiRmse * 1.42233; // m head → psi
+  let grade = 'N/A', gColor = '#94a3b8', gLabel = 'No data';
+  if (psiRmse !== null) {
+    if (psiRmse < 1)      { grade = 'A'; gColor = '#22c55e'; gLabel = 'Level 3 (excellent)'; }
+    else if (psiRmse < 3) { grade = 'B'; gColor = '#22c55e'; gLabel = 'Level 1 (good)'; }
+    else if (psiRmse < 5) { grade = 'C'; gColor = '#f59e0b'; gLabel = 'Marginal'; }
+    else if (psiRmse < 8) { grade = 'D'; gColor = '#ef4444'; gLabel = 'Poor'; }
+    else                  { grade = 'F'; gColor = '#ef4444'; gLabel = 'Failed'; }
+  }
+  const cell = (s, unit, pctGreen, pctAmber) => {
+    if (!s) return '<td style="padding:4px 8px;color:#94a3b8;">—</td><td style="padding:4px 8px;color:#94a3b8;">—</td>';
+    let c = '#22c55e';
+    if (s.pct >= pctAmber) c = '#ef4444'; else if (s.pct >= pctGreen) c = '#f59e0b';
+    return `<td style="padding:4px 8px;color:#e2e8f0;">${s.rmse.toFixed(2)} ${unit}</td><td style="padding:4px 8px;color:${c};font-weight:600;">${s.pct.toFixed(1)}%</td>`;
+  };
+  const presColor = grade === 'A' || grade === 'B' ? '#22c55e' : (grade === 'C' ? '#f59e0b' : '#ef4444');
+
+  board.innerHTML = `
+    <div style="display:flex;gap:14px;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:72px;height:72px;border-radius:12px;background:${gColor}22;border:2px solid ${gColor};">
+        <span style="font-size:34px;font-weight:800;color:${gColor};line-height:1;">${grade}</span>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div style="font-size:14px;font-weight:700;color:#f1f5f9;margin-bottom:2px;">Calibration Grade — ${gLabel}</div>
+        <div style="font-size:12px;color:var(--text-secondary);">${currentMode === 'swmm' ? 'Node depth' : 'Pressure'} RMSE: <strong style="color:${presColor};">${pres ? pres.rmse.toFixed(2) + ' ' + presUnit : 'n/a'}</strong>${(currentMode === 'epanet' && isSI && pres) ? ` (≈ ${psiRmse.toFixed(2)} psi)` : ''} · AWWA M32: &lt;1 psi excellent, &lt;3 good, 3–5 marginal, &gt;5 poor</div>
+        ${unitMismatch ? '<div style="font-size:11px;color:#f59e0b;margin-top:4px;">⚠ Truth baseline units differ from current — scores may be inconsistent.</div>' : ''}
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;">
+      <thead><tr style="border-bottom:1px solid var(--border);color:var(--text-dim);text-align:left;">
+        <th style="padding:4px 8px;">Parameter</th><th style="padding:4px 8px;">RMSE</th><th style="padding:4px 8px;">Relative</th><th style="padding:4px 8px;">Samples</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:4px 8px;color:#60a5fa;">${currentMode === 'swmm' ? 'Node Depth' : 'Pressure'}</td>${cell(pres, presUnit, 5, 10)}<td style="padding:4px 8px;color:var(--text-dim);">${pres ? pres.n : 0}</td></tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:4px 8px;color:#4ade80;">Flow</td>${cell(flow, isSI ? (currentMode === 'swmm' ? 'CMS' : 'LPS') : (currentMode === 'swmm' ? 'CFS' : 'GPM'), 5, 10)}<td style="padding:4px 8px;color:var(--text-dim);">${flow ? flow.n : 0}</td></tr>
+        <tr><td style="padding:4px 8px;color:#60a5fa;">${currentMode === 'swmm' ? 'Inflow' : 'Demand'}</td>${cell(dem, isSI ? (currentMode === 'swmm' ? 'CMS' : 'LPS') : (currentMode === 'swmm' ? 'CFS' : 'GPM'), 5, 10)}<td style="padding:4px 8px;color:var(--text-dim);">${dem ? dem.n : 0}</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11px;color:var(--text-dim);margin:0 0 12px;">RMSE = root-mean-square error between the truth baseline and the current (corrupted/recovered) model across all shared elements and timesteps. Relative % is RMSE ÷ mean absolute truth value; green &lt;5%, amber 5–10%, red &gt;10% (typical AWWA M32 flow tolerance).</p>`;
+  showToast(`Calibration grade: ${grade} (${gLabel})`, grade === 'A' || grade === 'B' ? 'success' : (grade === 'C' ? 'warning' : 'error'));
+}
+
 function _miniZipCreate(filesObj) {
   const te = new TextEncoder();
   const entries = Object.entries(filesObj).map(([name, content]) => ({
@@ -9590,8 +9741,58 @@ async function quickSim() {
 
 // ═══════ INIT ═══════
 window.addEventListener('resize',()=>{if(networkData)renderAll();});
+// ── Config Undo/Redo (Ctrl+Z / Ctrl+Shift+Z) ────────────────────────────────
+// Snapshots all sidebar inputs/selects on each committed change so the user can
+// step backward/forward through configuration edits.
+let _cfgUndo = [], _cfgRedo = [], _cfgLast = null, _applyingCfg = false;
+function _snapInputs() {
+  const o = {};
+  document.querySelectorAll('#controlsPanel input, #controlsPanel select').forEach(el => {
+    if (!el.id) return;
+    o[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+  });
+  return o;
+}
+function _applyInputs(o) {
+  _applyingCfg = true;
+  Object.entries(o).forEach(([id, v]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = v; else el.value = v;
+  });
+  _applyingCfg = false;
+  try { if (typeof updateCountPreview === 'function') updateCountPreview(); } catch (e) {}
+  try { const s = document.getElementById('randomSeed'); if (s && typeof updateSeedDisplay === 'function') updateSeedDisplay(s.value); } catch (e) {}
+}
+function _initConfigHistory() {
+  _cfgLast = _snapInputs();
+  const panel = document.getElementById('controlsPanel');
+  if (!panel) return;
+  panel.addEventListener('change', () => {
+    if (_applyingCfg) return;
+    if (_cfgLast) { _cfgUndo.push(_cfgLast); if (_cfgUndo.length > 60) _cfgUndo.shift(); }
+    _cfgRedo = [];
+    _cfgLast = _snapInputs();
+  });
+}
+function undoConfig() {
+  if (!_cfgUndo.length) { showToast('Nothing to undo', 'warning', 1400); return; }
+  _cfgRedo.push(_snapInputs());
+  const prev = _cfgUndo.pop();
+  _applyInputs(prev); _cfgLast = prev;
+  showToast('Undo configuration change', 'success', 1200);
+}
+function redoConfig() {
+  if (!_cfgRedo.length) { showToast('Nothing to redo', 'warning', 1400); return; }
+  _cfgUndo.push(_snapInputs());
+  const next = _cfgRedo.pop();
+  _applyInputs(next); _cfgLast = next;
+  showToast('Redo configuration change', 'success', 1200);
+}
+
 window.addEventListener('load',()=>{
   if(isMobile()){document.getElementById('controlsInner').classList.add('collapsed');}
+  _initConfigHistory();
   setupAccessibility();
   setupTooltips();
   setupInputValidation();
@@ -9604,7 +9805,10 @@ window.addEventListener('load',()=>{
   document.addEventListener('keydown', e => {
     const mod = e.ctrlKey || e.metaKey;
     if (!mod) return;
-    if (e.key === 'g' || e.key === 'Enter') { e.preventDefault(); generateNetwork(); }
+    if (e.shiftKey && (e.key === 'Z' || e.key === 'z')) { e.preventDefault(); redoConfig(); }
+    else if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); undoConfig(); }
+    else if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redoConfig(); }
+    else if (e.key === 'g' || e.key === 'Enter') { e.preventDefault(); generateNetwork(); }
     else if (e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); if (generatedINP && typeof copyINP === 'function') copyINP(); }
     else if (e.key === 's' && generatedINP) { e.preventDefault(); downloadINP(); }
   });

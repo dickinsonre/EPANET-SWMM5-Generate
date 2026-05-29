@@ -88,7 +88,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.2 · 2026-05-29**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.3 · 2026-05-29**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -98,6 +98,11 @@ confirm compatibility with your desktop tools at a glance.
 | `Ctrl/⌘ + G` or `Ctrl/⌘ + Enter` | Generate network |
 | `Ctrl/⌘ + S` | Download INP |
 | `Ctrl/⌘ + Shift + C` | Copy INP to clipboard |
+| `Ctrl/⌘ + Z` | Undo configuration change |
+| `Ctrl/⌘ + Shift + Z` or `Ctrl/⌘ + Y` | Redo configuration change |
+
+Undo/redo step through committed changes to the sidebar settings (it does not undo a
+generated network — just the input values), so you can experiment freely and back out.
 
 ---
 
@@ -243,6 +248,30 @@ This tool is built for the classic calibration teaching pattern:
    results match the observed calibration file. Compare against the truth to grade the
    recovery.
 
+**Automated Calibration Scoring (in-app).** The **Results** tab now closes this loop without
+leaving the browser:
+
+1. Run the solver on your truth model (use the **▶ Run Solver** button right on the Results
+   tab — it auto-loads the WASM engine if needed).
+2. Click **📌 Save as Truth** to snapshot the truth results (mode, seed, units are recorded).
+3. Corrupt or recalibrate the model (change C-factors, demands, seed, etc.) and re-run the
+   solver.
+4. Click **🎯 Score vs Truth**. The tool computes **RMSE** for pressure (or node depth in
+   SWMM), flow, and demand across every shared element and timestep, then assigns a letter
+   grade against **AWWA M32** pressure targets:
+
+   | Grade | Pressure RMSE | Meaning |
+   |-------|---------------|---------|
+   | **A** (green) | < 1 psi | Level 3 calibration (excellent) |
+   | **B** (green) | < 3 psi | Level 1 calibration (good) |
+   | **C** (amber) | 3–5 psi | Marginal |
+   | **D** (red) | 5–8 psi | Poor |
+   | **F** (red) | > 8 psi | Failed |
+
+   Relative error (RMSE ÷ mean truth value) is color-coded green < 5%, amber 5–10%, red
+   > 10% — the typical AWWA M32 flow tolerance. SI head (m) is converted to psi for grading.
+   This enables automated grading for classroom use.
+
 The **Docs** tab includes worked calibration exercises with runnable Python/WNTR code
 (manual, automated, and demand-pattern calibration).
 
@@ -330,7 +359,7 @@ FCV (limits flow), TCV (throttle), GPV (custom head-loss curve).
 | **Pump shows "0 ft elevation change"** | The pump provides head for downstream *friction* losses, not elevation lift — this is valid. |
 | **Large model is slow / tab freezes** | 50K–100K nodes need significant memory; try a smaller preset, or use a desktop browser. |
 | **INP won't load in EPANET** | Run **Validate** first; check the reported errors (missing sections, dangling links). |
-| **Results tab is empty** | You must **Load WASM Engine → Run Solver** first; results then populate the RPT/Results tabs. |
+| **Results tab is empty** | Click **▶ Run Solver** on the Results tab (it auto-loads the WASM engine), or use **Load WASM Engine → Run Solver** in the sidebar; results then populate the RPT/Results tabs. |
 
 ---
 
@@ -371,6 +400,14 @@ produces files compatible with both.
 ---
 
 ### Changelog
+
+**v3.3 — 2026-05-29**
+- **Automated Calibration Scoring** on the Results tab: **📌 Save as Truth** + **🎯 Score
+  vs Truth** compute pressure/flow/demand RMSE and assign an A–F grade against AWWA M32
+  targets (green/amber/red), closing the calibration loop for automated classroom grading.
+- **▶ Run Solver** button directly on the Results tab (auto-loads the WASM engine) — no
+  need to go back to the sidebar.
+- **Undo/Redo** for sidebar configuration changes (`Ctrl/⌘+Z` / `Ctrl/⌘+Shift+Z` or `Ctrl/⌘+Y`).
 
 **v3.2 — 2026-05-29**
 - Engine + build version badges in the header (EPANET 2.3 / SWMM 5.2.4 / v3.2).
