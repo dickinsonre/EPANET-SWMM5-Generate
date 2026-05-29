@@ -864,7 +864,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
       <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
       <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
-      <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.7 · 2026-05-29</span>
+      <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.8 · 2026-05-29</span>
     </div>
   </div>
 </div>
@@ -1131,7 +1131,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         <div class="input-group"><label title="Water quality computation timestep (minutes). Must be ≤ hydraulic timestep.">Quality TS</label><input type="number" id="qualTimestep" value="5" min="1" max="60" inputmode="numeric"></div>
         <div class="input-group"><label title="Interval for writing results to report file (minutes).">Report TS</label><input type="number" id="rptTimestep" value="15" min="1" max="60" inputmode="numeric"></div>
       </div>
-      <div class="input-group"><label title="Friction loss formula. H-W (Hazen-Williams) is standard for pressure pipes. D-W for all flow regimes.">Head Loss</label>
+      <div class="input-group"><label title="Friction loss formula. H-W (Hazen-Williams) is standard for pressure pipes. D-W for all flow regimes. Pipe roughness is authored as a single C-factor; the INP auto-converts it to each formula's native units — sand-grain height (millifeet/mm) for D-W, Manning's n for C-M. The map/inspect panel still shows the stored C-factor.">Head Loss</label>
         <select id="headlossFormula"><option value="H-W" selected>Hazen-Williams</option><option value="D-W">Darcy-Weisbach</option><option value="C-M">Chezy-Manning</option></select>
       </div>
     </div>
@@ -3123,8 +3123,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v3.7', date: '2026-05-29' };
-const CHANGELOG_TOP = { version: 'v3.7', date: '2026-05-29' };
+const GEN_BUILD = { version: 'v3.8', date: '2026-05-29' };
+const CHANGELOG_TOP = { version: 'v3.8', date: '2026-05-29' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -5118,6 +5118,30 @@ function sizePipeByFlow(flow, isArterial, pipeLength, roughness) {
   return bestDia;
 }
 
+// Convert a pipe's stored Hazen-Williams C-factor into the roughness value EPANET
+// expects for the SELECTED headloss formula, in the active unit system. The generator
+// always stores pipe quality as a C-factor; only the [PIPES] roughness column needs to be
+// expressed in the formula's native units so the model is physically valid for any formula.
+//  - H-W: the C-factor itself (dimensionless).
+//  - D-W: equivalent sand-grain roughness height ε. EPANET reads ε in millifeet (US/GPM)
+//    or mm (SI/LPS). ε(m) = 3.7·D·exp(-C·D^0.068 / 13.9) with D in metres (documented in Docs).
+//  - C-M: Manning's n, mapped monotonically from the C-factor (smoother pipe → lower n).
+function pipeRoughnessForFormula(cFactor, diameterInches, formula) {
+  const C = cFactor || 100;
+  if (formula === 'D-W') {
+    const D = (diameterInches || 8) * 0.0254;                       // inches → metres
+    const eM = 3.7 * D * Math.exp(-C * Math.pow(D, 0.068) / 13.9);  // roughness height, metres
+    return currentUnits === 'SI'
+      ? Math.max(0.0015, Math.round(eM * 1000 * 1e4) / 1e4)         // mm
+      : Math.max(0.005, Math.round(eM * 3280.84 * 1e3) / 1e3);      // millifeet (m × 3280.84)
+  }
+  if (formula === 'C-M') {
+    const n = 0.010 + (140 - C) * (0.007 / 60);                     // C 140→0.010, C 80→0.017
+    return Math.min(0.030, Math.max(0.009, Math.round(n * 1e4) / 1e4));
+  }
+  return C; // H-W
+}
+
 function applyFlowBasedSizing(pipes, nodes, reservoirs, cols, rows, resPositions, tanks) {
   const nodeMap = {};
   nodes.forEach(n => { nodeMap[n.id] = n; });
@@ -5948,7 +5972,8 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   a('[PIPES]');a(';ID\tNode1\tNode2\tLength\tDiameter\tRoughness\tMinorLoss\tStatus');
   pipes.forEach(p=>{
     const ml=rng()<0.08?(0.5+Math.round(rng()*2*10)/10).toFixed(1):'0';
-    a(`${p.id}\t${p.node1}\t${p.node2}\t${f2(uL(p.length))}\t${f2(uD(p.diameter))}\t${p.roughness}\t${ml}\t${p.status}`);
+    const rough=pipeRoughnessForFormula(p.roughness, p.diameter, cfg.headlossFormula);
+    a(`${p.id}\t${p.node1}\t${p.node2}\t${f2(uL(p.length))}\t${f2(uD(p.diameter))}\t${rough}\t${ml}\t${p.status}`);
   });nl();
 
   a('[PUMPS]');a(';ID\tNode1\tNode2\tParameters');
@@ -10053,7 +10078,7 @@ async function batchExport() {
   try {
     const count = Math.min(50, Math.max(2, +(document.getElementById('batchCount').value) || 5));
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
-    const manifest = { generator: 'EPANET-SWMM Generator v3.7', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
+    const manifest = { generator: 'EPANET-SWMM Generator v3.8', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
     const seedEl = document.getElementById('randomSeed');
     const origSeed = seedEl.value;
     const savedINP = generatedINP;
@@ -10138,7 +10163,7 @@ async function nodeSweepExport() {
       partIdx++;
       const partEntries = allEntries.slice(downloaded, downloaded + count);
       partFiles['manifest.json'] = JSON.stringify({
-        generator: 'EPANET-SWMM Generator v3.7', mode: currentMode, units: currentUnits,
+        generator: 'EPANET-SWMM Generator v3.8', mode: currentMode, units: currentUnits,
         sweep: sweepMeta, part: partIdx, partModels: count, files: partEntries
       }, null, 2);
       const blob = _miniZipCreate(partFiles);

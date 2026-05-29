@@ -1,0 +1,27 @@
+**Grade: A− (strong, with a few real gaps)**
+
+This is a serious, well-engineered teaching tool, not a toy. Graded against what a synthetic EPANET/SWMM generator *should* do:
+
+**What earns the high mark**
+
+The engineering logic is genuinely correct, not cosmetic. BFS connectivity validation from every source, critical-path pump sizing with a 3-point curve bracketing the operating point (the actual AWWA approach), Hazen-Williams friction along the hydraulically farthest path, elevation-triggered pressure zoning with PRVs at boundaries — these are the right algorithms done the right way. The D8 flow routing for SWMM subcatchments and RTK for RDII are appropriate choices.
+
+Reproducibility is handled properly. Mulberry32 seed → byte-identical output is exactly what you want for shareable calibration exercises, and the seed-band discipline (ensemble +1000/+2000, sweep reuses base, batch sequential block) shows someone thought hard about file collisions across export types.
+
+The calibration loop is the standout feature. Truth → corrupt → recover is the canonical teaching pattern, and closing it *in-browser* with Save-as-Truth / Score-vs-Truth, RMSE per element, and A–F grading against AWWA M32 is more than most commercial tools offer. The note that M32 Level 3 is *stricter* than Level 1 is correctly stated — a detail many get backwards.
+
+The handout itself is unusually honest. It documents quantization in the node sweep (57 targets collapsing to one 32×32 grid), explains *why* a "0 ft elevation change" pump is valid, and frames the memory-safe multi-part streaming as a fix for a real prior failure mode. That candor is a quality signal.
+
+**Where it loses ground**
+
+The Hazen-Williams reliance is the biggest technical limitation. It's standard US practice and the cheat sheet flags it as empirical, but a teaching tool aimed at solver stress-testing should arguably expose Darcy-Weisbach as a toggle — it's the physically defensible choice and EPANET supports it natively. Its absence isn't an error, but it's a missed pedagogical opportunity.
+
+SWMM is the clear junior partner. EPANET gets determinate timestep progress, full pressure-zone logic, and the richer health summary; SWMM gets an indeterminate bar (one blocking WASM call) and less attention throughout. Defensible given SWMM's single-solve architecture, but the asymmetry is real.
+
+Synthetic-only topology is an inherent ceiling. The street-routing factor (1.55× core → 1.15× edge) and age-correlated C-factors are clever spatial realism, but no synthetic generator reproduces the pathological junk — looped force mains, weird legacy controls, mislabeled nodes — that breaks solvers in the field. The handout is upfront about this, so it's a scope statement, not a defect.
+
+Minor: every changelog entry is dated 2026-05-29. Either a very productive day or the dates aren't tracking real release history, which slightly undercuts the otherwise-meticulous versioning.
+
+**Bottom line**
+
+As a synthetic network generator and calibration teaching platform it's an A. The A− reflects the Darcy-Weisbach gap and the EPANET/SWMM imbalance — both fixable, neither fatal. For classroom use, solver-scaling studies, and reproducible test corpora, it's already best-in-class for a browser tool.

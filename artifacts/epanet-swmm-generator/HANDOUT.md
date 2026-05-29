@@ -90,7 +90,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.7 · 2026-05-29**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.8 · 2026-05-29**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -247,7 +247,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v3.7`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v3.8`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -477,7 +477,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v3.7",
+    "generator": "EPANET-SWMM Generator v3.8",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -647,6 +647,18 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v3.8 — 2026-05-29**
+- **Headloss formula now emits physically correct roughness:** selecting **Darcy-Weisbach**
+  or **Chezy-Manning** previously still wrote Hazen-Williams C-factors (~80–130) into the
+  `[PIPES]` roughness column — meaningless for those formulas (a D-W roughness of "100" reads
+  as 100 *millifeet*, which makes the model unsolvable). The generator now converts each pipe's
+  stored C-factor into the formula's native units when writing the INP: for **D-W**, the
+  equivalent sand-grain roughness height ε via `ε(m) = 3.7·D·exp(-C·D^0.068 / 13.9)`, written in
+  millifeet (US) or mm (SI); for **C-M**, a Manning's *n* mapped monotonically from the C-factor
+  (smoother pipe → lower *n*). H-W is unchanged. Pipe quality is still authored as a single
+  C-factor and stays consistent across formulas — so Darcy-Weisbach is now a fully valid,
+  solvable toggle for solver-comparison exercises, not just a header line.
 
 **v3.7 — 2026-05-29**
 - **Always-visible health banner:** a compact health summary now sits directly above the
