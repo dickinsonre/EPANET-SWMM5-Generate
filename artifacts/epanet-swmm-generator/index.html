@@ -133,6 +133,11 @@ body {
   min-height: 36px;
 }
 
+/* UI complexity mode — Simple hides advanced+expert, Advanced hides expert only */
+html[data-uimode="simple"] .lvl-advanced,
+html[data-uimode="simple"] .lvl-expert,
+html[data-uimode="advanced"] .lvl-expert { display: none !important; }
+
 .section-header h3 {
   font-size: 12px;
   font-weight: 600;
@@ -844,6 +849,11 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         <option value="auburn">🦅 Auburn University</option>
       </select>
     </div>
+    <div class="tab-row" id="uiModeRow" style="width:100%;margin-top:6px;" title="Controls how many settings are shown. Simple hides advanced parameters for new users.">
+      <button class="tab-btn active" id="uimodeSimple" onclick="setUIMode('simple')" style="flex:1;text-align:center;font-size:11px;min-height:32px;">🟢 Simple</button>
+      <button class="tab-btn" id="uimodeAdvanced" onclick="setUIMode('advanced')" style="flex:1;text-align:center;font-size:11px;min-height:32px;">🔵 Advanced</button>
+      <button class="tab-btn" id="uimodeExpert" onclick="setUIMode('expert')" style="flex:1;text-align:center;font-size:11px;min-height:32px;">🟣 Expert</button>
+    </div>
   </div>
 
   <div class="controls-inner" id="controlsInner">
@@ -1495,6 +1505,28 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       </div>
       <button class="download-btn" onclick="batchExport()" id="batchBtn" style="border-color:#a855f7;color:#a855f7;flex:1;">📦 Batch ZIP</button>
     </div>
+    <div class="dl-row epanet-only" id="ensembleRow" style="display:none;flex-direction:column;align-items:stretch;gap:6px;">
+      <div style="font-size:11px;color:var(--text-secondary);font-weight:600;">🎲 Monte Carlo Ensemble <span style="color:var(--text-dim);font-weight:400;">(fixed topology, perturbed parameters)</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Number of perturbed models to generate.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">N</label>
+          <input type="number" id="ensCount" value="50" min="2" max="200" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="C-factor (Hazen-Williams roughness) perturbation as +/- percent.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">C ±%</label>
+          <input type="number" id="ensCPct" value="15" min="0" max="50" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Base demand perturbation as +/- percent.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Q ±%</label>
+          <input type="number" id="ensDPct" value="20" min="0" max="50" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:78px;" title="Junction elevation perturbation as +/- feet.">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Z ±ft</label>
+          <input type="number" id="ensZAbs" value="2" min="0" max="20" step="0.5" style="width:100%;min-height:34px;padding:4px 6px;font-size:12px;">
+        </div>
+      </div>
+      <button class="download-btn" onclick="ensembleExport()" id="ensembleBtn" style="border-color:#ec4899;color:#ec4899;">🎲 Generate Ensemble ZIP</button>
+    </div>
     <div class="dl-row" id="solverRow" style="display:none;">
       <button class="download-btn" onclick="loadWASM()" id="wasmBtn" style="border-color:#f59e0b;color:#f59e0b;flex:1;">📦 Load WASM Engine</button>
       <button class="download-btn" onclick="runSolver()" id="runBtn" style="border-color:#22c55e;color:#22c55e;flex:1;" disabled>▶ Run Solver</button>
@@ -1558,13 +1590,15 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     </div>
   </div>
 
-  <div id="tab-stats" style="display:none;flex:1;overflow-y:auto;padding:8px 0;"><div class="stats-grid" id="statsGrid"></div></div>
+  <div id="tab-stats" style="display:none;flex:1;overflow-y:auto;padding:8px 0;"><div id="healthSummary" style="display:none;margin:0 0 12px;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;border:1px solid var(--border);"></div><div class="stats-grid" id="statsGrid"></div></div>
   <div id="tab-inp" style="display:none;">
     <div style="display:flex;gap:6px;margin-bottom:8px;">
       <button class="download-btn" onclick="downloadINP()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download .inp</button>
       <button class="download-btn" onclick="copyINP()" id="copyBtn2" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--accent-cyan);color:var(--accent-cyan);">📋 Copy All</button>
       <button class="download-btn" onclick="selectAllINP()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--text-dim);color:var(--text-dim);">☰ Select All</button>
+      <button class="download-btn" onclick="validateINP()" id="validateBtn" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--accent-green);color:var(--accent-green);">✓ Validate</button>
     </div>
+    <div id="validateResult" style="display:none;margin-bottom:8px;padding:8px 12px;border-radius:6px;font-size:12px;line-height:1.5;border:1px solid var(--border);"></div>
     <div class="inp-preview" id="inpPreview" style="user-select:text;-webkit-user-select:text;"><span class="comment">; Tap "Generate" to create network</span></div>
   </div>
 
@@ -2379,7 +2413,10 @@ Engine:        JavaScript with seeded PRNG (Mulberry32)
 Output:        .inp files (EPANET 2.2+ or SWMM 5.2+)
 Model Range:   50 to 100,000 nodes
 Author:        Robert Dickinson
-License:       Free for education and testing</pre>
+License:       MIT License — free to use, modify, and distribute,
+               including in published research, with attribution.
+               Provided "as is", no warranty. Not a substitute for
+               licensed professional engineering judgment.</pre>
             <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">What Makes Generated Models "Hydraulically Valid":</p>
             <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
               <li><strong>Connectivity Guarantee</strong> — BFS from all reservoirs, every junction confirmed reachable, isolated nodes = 0</li>
@@ -4306,6 +4343,47 @@ function renderStats(){
     }
   }
   document.getElementById('statsGrid').innerHTML=st.map(s=>`<div class="stat-card"><div class="value" style="color:${s.c}">${s.v}</div><div class="label">${s.l}</div></div>`).join('');
+  renderHealthSummary(nd, jc);
+}
+
+// One-line health summary — progressive disclosure (green/amber/red) shown above the stats grid
+function renderHealthSummary(nd, jc) {
+  const el = document.getElementById('healthSummary');
+  if (!el) return;
+  const ok = [], warn = [];
+  const conn = nd.connectivityPct != null ? nd.connectivityPct : 100;
+  const iso = nd.isolatedCount || 0;
+  if (iso > 0 || conn < 100) warn.push(`${iso} isolated node${iso===1?'':'s'} (${conn}% connected)`);
+  else ok.push(`${conn}% connected`);
+  if (currentMode === 'epanet') {
+    const sd = nd.supplyDemandRatio || 0;
+    if (sd >= 1.1) ok.push(`S/D ratio ${sd.toFixed(2)}`);
+    else if (sd >= 1.0) warn.push(`S/D ratio ${sd.toFixed(2)} (tight)`);
+    else warn.push(`S/D ratio ${sd.toFixed(2)} — supply deficit`);
+  }
+  // Pressure check from solver results, if available
+  let lowP = null;
+  try {
+    if (typeof solverResults !== 'undefined' && solverResults && solverResults.nodeResults) {
+      let cnt = 0;
+      Object.values(solverResults.nodeResults).forEach(arr => {
+        if (Array.isArray(arr)) { const minP = Math.min(...arr.map(r => (r && r.pressure != null) ? r.pressure : Infinity)); if (minP < 20) cnt++; }
+      });
+      lowP = cnt;
+    }
+  } catch(e) {}
+  if (lowP != null) { if (lowP === 0) ok.push('no pressures < 20 psi'); else warn.push(`${lowP} node${lowP===1?'':'s'} < 20 psi at some hour`); }
+  const severity = warn.length === 0 ? 'ok' : (warn.some(w => /deficit|isolated/.test(w)) ? 'bad' : 'warn');
+  const color = severity === 'ok' ? 'var(--accent-green)' : severity === 'warn' ? 'var(--accent-amber)' : 'var(--accent-red)';
+  const icon = severity === 'ok' ? '✅' : severity === 'warn' ? '⚠️' : '⛔';
+  const parts = [];
+  parts.push(`<strong style="color:${color}">${icon} ${jc.toLocaleString()} junctions</strong>`);
+  ok.forEach(o => parts.push(`<span style="color:var(--accent-green)">${o}</span>`));
+  warn.forEach(w => parts.push(`<span style="color:${color}">${w}</span>`));
+  el.style.display = 'block';
+  el.style.borderColor = color;
+  el.style.background = severity === 'ok' ? 'rgba(34,197,94,0.08)' : severity === 'warn' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
+  el.innerHTML = parts.join(' &nbsp;·&nbsp; ');
 }
 
 function renderINPPreview(inp){
@@ -4314,6 +4392,78 @@ function renderINPPreview(inp){
   el.innerHTML=dl.map(l=>l.startsWith('[')?`<span class="section-tag">${esc(l)}</span>`:l.startsWith(';')?`<span class="comment">${esc(l)}</span>`:esc(l)).join('\n');
 }
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ═══════ VALIDATE INP (lightweight structural check — no solver) ═══════
+// Verifies required sections, node/link cross-references, and [END]. Does NOT run hydraulics.
+function validateINP() {
+  const el = document.getElementById('validateResult');
+  if (!el) return;
+  if (!generatedINP) { showToast('Generate a network first','warning'); return; }
+  const inp = generatedINP;
+  const errors = [], warnings = [], info = [];
+  // Parse sections
+  const sections = {};
+  let cur = null;
+  inp.split('\n').forEach(raw => {
+    const line = raw.replace(/;.*$/, '').trim();
+    if (!line) return;
+    const m = line.match(/^\[([A-Z_]+)\]$/);
+    if (m) { cur = m[1]; sections[cur] = sections[cur] || []; return; }
+    if (cur) sections[cur].push(line);
+  });
+  const isSwmm = currentMode === 'swmm';
+  // Required sections
+  const required = isSwmm
+    ? ['JUNCTIONS','OUTFALLS','CONDUITS','OPTIONS']
+    : ['JUNCTIONS','PIPES','OPTIONS'];
+  required.forEach(s => { if (!sections[s]) errors.push(`Missing required section [${s}]`); });
+  if (!isSwmm && !sections['RESERVOIRS'] && !sections['TANKS']) errors.push('No [RESERVOIRS] or [TANKS] — network has no water source');
+  // Collect node ids (first token of each line)
+  const nodeIds = new Set();
+  (isSwmm ? ['JUNCTIONS','OUTFALLS','STORAGE','DIVIDERS'] : ['JUNCTIONS','RESERVOIRS','TANKS']).forEach(s => {
+    (sections[s]||[]).forEach(l => { const id = l.split(/\s+/)[0]; if (id) nodeIds.add(id); });
+  });
+  // Validate links reference existing nodes
+  let danglingLinks = 0, checkedLinks = 0;
+  const linkSecs = isSwmm ? ['CONDUITS','PUMPS'] : ['PIPES','PUMPS','VALVES'];
+  linkSecs.forEach(s => {
+    (sections[s]||[]).forEach(l => {
+      const t = l.split(/\s+/);
+      // columns: ID node1 node2 ...
+      if (t.length >= 3) {
+        checkedLinks++;
+        if (!nodeIds.has(t[1])) danglingLinks++;
+        if (!nodeIds.has(t[2])) danglingLinks++;
+      }
+    });
+  });
+  if (danglingLinks > 0) errors.push(`${danglingLinks} link endpoint(s) reference undefined nodes`);
+  // [END] marker
+  if (!/\[END\]\s*$/.test(inp.trim()) && !/\[END\]/.test(inp)) warnings.push('No [END] marker found');
+  // Duplicate node ids
+  const seen = new Set(), dups = new Set();
+  (isSwmm ? ['JUNCTIONS','OUTFALLS','STORAGE'] : ['JUNCTIONS','RESERVOIRS','TANKS']).forEach(s => {
+    (sections[s]||[]).forEach(l => { const id = l.split(/\s+/)[0]; if (seen.has(id)) dups.add(id); else seen.add(id); });
+  });
+  if (dups.size > 0) errors.push(`${dups.size} duplicate node ID(s) (e.g. ${[...dups].slice(0,3).join(', ')})`);
+  // Info
+  info.push(`${nodeIds.size.toLocaleString()} nodes`);
+  info.push(`${checkedLinks.toLocaleString()} links`);
+  info.push(`${Object.keys(sections).length} sections`);
+  // Render
+  const ok = errors.length === 0;
+  const color = !ok ? 'var(--accent-red)' : warnings.length ? 'var(--accent-amber)' : 'var(--accent-green)';
+  const icon = !ok ? '⛔' : warnings.length ? '⚠️' : '✅';
+  const head = !ok ? `${errors.length} error(s)` : warnings.length ? `Valid (${warnings.length} warning(s))` : 'Structurally valid';
+  let html = `<strong style="color:${color}">${icon} ${head}</strong> &nbsp;<span style="color:var(--text-dim)">${info.join(' · ')}</span>`;
+  if (errors.length) html += '<ul style="margin:6px 0 0;padding-left:18px;color:var(--accent-red)">' + errors.map(e=>`<li>${esc(e)}</li>`).join('') + '</ul>';
+  if (warnings.length) html += '<ul style="margin:6px 0 0;padding-left:18px;color:var(--accent-amber)">' + warnings.map(w=>`<li>${esc(w)}</li>`).join('') + '</ul>';
+  el.style.display = 'block';
+  el.style.borderColor = color;
+  el.style.background = !ok ? 'rgba(239,68,68,0.08)' : warnings.length ? 'rgba(245,158,11,0.08)' : 'rgba(34,197,94,0.08)';
+  el.innerHTML = html;
+  showToast(ok ? 'INP structurally valid' : `${errors.length} validation error(s)`, ok ? 'success' : 'error');
+}
 
 // ═══════ HELPERS ═══════
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
@@ -4826,7 +4976,9 @@ async function generateEPANETNetwork(silent){
   const peakDemand = totalAvgDemand * effectivePeaking;
   const designFireFlow = cfg.designMode ? (cfg.designFireFlow || 0) : 0;
   const totalDesignDemand = peakDemand + designFireFlow;
-  const supplyPerSource = totalDesignDemand / cfg.numReservoirs;
+  // Supply safety factor ensures default S/D ratio >= 1.1 (no out-of-the-box deficit)
+  const SUPPLY_SAFETY_FACTOR = 1.15;
+  const supplyPerSource = (totalDesignDemand / cfg.numReservoirs) * SUPPLY_SAFETY_FACTOR;
 
   // ═══ Build adjacency graph for BFS ═══
   const adj = {}; // nodeId -> [{nodeId, pipeLength, pipeDia, pipeRoughness}]
@@ -4891,6 +5043,7 @@ async function generateEPANETNetwork(silent){
   // Source pumps — sized via critical-path BFS
   const pumps = [];
   let puId = 1; // monotonic pump ID counter
+  let gravityFedCount = 0; // reservoirs with adequate gravity head (no pump) — still supply full share
   reservoirs.forEach((res,i)=>{
     const bfs = bfsCriticalPath(res.id, supplyPerSource);
     const criticalElev = bfs.farthestElev || maxJunctionElev;
@@ -4917,7 +5070,8 @@ async function generateEPANETNetwork(silent){
         puId++;
       }
     } else {
-      logEng('pumps', `Reservoir ${res.id} provides adequate gravity head (${res.head.toFixed(0)} ft) — no source pump needed (critical path loss: ${Math.round(frictionHead)} ft)`);
+      gravityFedCount++;
+      logEng('pumps', `Reservoir ${res.id} provides adequate gravity head (${res.head.toFixed(0)} ft) — no source pump needed (critical path loss: ${Math.round(frictionHead)} ft). Gravity supply: ${Math.round(supplyPerSource)} GPM`);
     }
   });
 
@@ -5240,28 +5394,32 @@ async function generateEPANETNetwork(silent){
       if (!reachable.has(nbr)) { reachable.add(nbr); bfsQueue.push(nbr); }
     });
   }
-  const totalNodes = nodes.length + reservoirs.length + tanks.length;
-  const isolatedNodes = nodes.filter(n => !reachable.has(n.id));
-  const connectivityPct = Math.round(reachable.size / totalNodes * 100);
+  // Reservoirs/tanks are converted grid nodes that REMAIN in `nodes` (id mutated in place at
+  // generation), so `nodes.length` already counts every entity. Do NOT add reservoirs/tanks again —
+  // that double-counts and produces a phantom isolated count even on a fully connected network.
+  const totalNodes = nodes.length;
+  const isolatedCount = Math.max(0, totalNodes - reachable.size);
+  const isolatedNodes = nodes.filter(n => !reachable.has(n.id)); // entities the BFS never reached
+  const connectivityPct = isolatedCount === 0 ? 100 : Math.min(99, Math.round(reachable.size / totalNodes * 100));
 
   // ═══ ROSSMAN A-FIX 3: Supply-demand ratio ═══
   const totalSupplyCapacity = pumps.filter(p=>p.type==='source').reduce((s,p)=>s+(p.designFlow||0),0) +
-    reservoirs.length * supplyPerSource * 0.5; // gravity-fed reservoirs contribute too
+    gravityFedCount * supplyPerSource; // gravity-fed reservoirs supply their full share (not half)
   const supplyDemandRatio = totalSupplyCapacity > 0 ? totalSupplyCapacity / totalDesignDemand : 0;
   const supplyAdequate = supplyDemandRatio >= 1.0;
 
-  logEng('network', `Connectivity: ${connectivityPct}% of ${totalNodes} nodes reachable from sources (${isolatedNodes.length} isolated)`);
+  logEng('network', `Connectivity: ${connectivityPct}% of ${totalNodes} nodes reachable from sources (${isolatedCount} isolated of ${totalNodes})`);
   logEng('network', `Supply adequacy — S/D ratio: ${supplyDemandRatio.toFixed(2)} (${supplyAdequate ? 'ADEQUATE' : 'DEFICIENT'}) — total supply capacity: ${totalSupplyCapacity.toFixed(0)} GPM vs total design demand: ${totalDesignDemand.toFixed(0)} GPM`);
   logEng('network', `Final network summary — ${nodes.filter(n=>n.type==='junction').length} junctions, ${reservoirs.length} reservoirs, ${tanks.length} tanks, ${pipes.length} pipes, ${pumps.length} pumps (${pumps.filter(p=>p.type==='source').length} source, ${pumps.filter(p=>p.type==='booster').length} booster), ${valves.length} valves`);
 
   // Build INP
-  const inp=buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng,totalAvgDemand,peakDemand,numPressureZones,connectivityPct,isolatedNodes.length,supplyDemandRatio);
+  const inp=buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng,totalAvgDemand,peakDemand,numPressureZones,connectivityPct,isolatedCount,supplyDemandRatio);
   generatedINP=inp;
   setProgress(pf,pl,85,'Building INP file...');await sleep(5);
 
   // Store data
   networkData={nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,cfg,totalAvgDemand,peakDemand,
-    numPressureZones,connectivityPct,isolatedCount:isolatedNodes.length,supplyDemandRatio,supplyAdequate,elevRange};
+    numPressureZones,connectivityPct,isolatedCount,supplyDemandRatio,supplyAdequate,elevRange};
   const aX=nodes.map(n=>n.x).concat(reservoirs.map(r=>r.x)).concat(tanks.map(t=>t.x));
   const aY=nodes.map(n=>n.y).concat(reservoirs.map(r=>r.y)).concat(tanks.map(t=>t.y));
   const bnd={minX:safeMin(aX),minY:safeMin(aY),maxX:safeMax(aX),maxY:safeMax(aY)};
@@ -5273,7 +5431,7 @@ async function generateEPANETNetwork(silent){
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('EPANET generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='⚡ GENERATE NETWORK + MAP';btn.classList.remove('generating');
-  document.getElementById('dlRow').style.display='flex';document.getElementById('dlRow2').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';document.getElementById('quickSimRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
+  document.getElementById('dlRow').style.display='flex';document.getElementById('dlRow2').style.display='flex';document.getElementById('solverRow').style.display='flex';document.getElementById('batchRow').style.display='flex';document.getElementById('ensembleRow').style.display='flex';document.getElementById('quickSimRow').style.display='flex';pb.style.display='none';if(pl){pl.style.display='none';pl.textContent='';}} }
 }
 
 // ═══════ INP BUILDER (with system-sized pump curves) ═══════
@@ -5462,6 +5620,38 @@ function setTheme(theme) {
     const sel = document.getElementById('themeSelect');
     if (sel) sel.value = saved;
   }
+})();
+
+// ═══════ UI COMPLEXITY MODE (Simple / Advanced / Expert) ═══════
+// Tag each settings section by complexity. Sections not listed default to "simple" (always visible).
+const UI_COMPLEXITY = {
+  advanced: ['Pipes & Valves','Demand Zones','Conduits & Outfalls',
+    'Pumps & Force Mains','Rainfall & Infiltration','SWMM Simulation'],
+  expert: ['Design Mode','Calibration','Water Quality','Groundwater & Aquifers','RDII (I&I)',
+    'Dry Weather Flow','Direct Inflows','LID Controls','Snowmelt (Optional)','Shapes & Culverts']
+};
+(function tagSectionComplexity() {
+  document.querySelectorAll('.settings-tab-content .section').forEach(sec => {
+    const h3 = sec.querySelector('.section-header h3');
+    if (!h3) return;
+    const title = h3.textContent.trim();
+    if (UI_COMPLEXITY.expert.includes(title)) sec.classList.add('lvl-expert');
+    else if (UI_COMPLEXITY.advanced.includes(title)) sec.classList.add('lvl-advanced');
+  });
+})();
+
+function setUIMode(mode) {
+  document.documentElement.setAttribute('data-uimode', mode);
+  ['simple','advanced','expert'].forEach(m => {
+    const btn = document.getElementById('uimode' + m.charAt(0).toUpperCase() + m.slice(1));
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+  localStorage.setItem('epswUIMode', mode);
+}
+
+(function restoreUIMode() {
+  const saved = localStorage.getItem('epswUIMode') || 'simple';
+  setUIMode(saved);
 })();
 
 function setUnits(units) {
@@ -9104,7 +9294,14 @@ function downloadGeoJSON() {
       properties: { id: p.id, diameter: p.diameter, roughness: p.roughness, length: p.length, status: p.status }
     });
   });
-  const geojson = JSON.stringify({ type: 'FeatureCollection', features }, null, 2);
+  // CRS metadata — legacy GeoJSON "crs" member (RFC 7946 dropped it, but QGIS/GDAL still read it).
+  // Coordinates are synthetic planar units; we tag a local state-plane EPSG so GIS tools assume feet.
+  const geojson = JSON.stringify({
+    type: 'FeatureCollection',
+    crs: { type: 'name', properties: { name: 'urn:ogc:def:crs:EPSG::2913' } },
+    metadata: { note: 'Synthetic network. Coordinates are planar (US survey feet). EPSG:2913 = NAD83(HARN) Oregon North (ftUS), assigned for GIS convenience only.' },
+    features
+  }, null, 2);
   const blob = new Blob([geojson], { type: 'application/geo+json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -9232,6 +9429,77 @@ async function batchExport() {
     showToast(`Exported ${count} models as ZIP`, 'success');
   } catch(e) { console.error('Batch export error:', e); showToast('Batch export failed: ' + e.message, 'error'); }
   finally { btn.disabled = false; btn.textContent = '📦 Batch ZIP'; }
+}
+
+// ═══════ MONTE CARLO ENSEMBLE (perturbed parameters, fixed topology) ═══════
+// Holds topology constant and perturbs C-factor, base demand, and elevation within bounds.
+// Produces N .inp files + ensemble_manifest.csv documenting each member's multipliers.
+async function ensembleExport() {
+  if (!generatedINP || !networkData) { showToast('Generate a network first','warning'); return; }
+  if (currentMode !== 'epanet') { showToast('Ensemble perturbation is EPANET-only','warning'); return; }
+  const btn = document.getElementById('ensembleBtn');
+  btn.disabled = true;
+  try {
+    const count = Math.min(200, Math.max(2, +(document.getElementById('ensCount').value) || 50));
+    const cPct = Math.max(0, +(document.getElementById('ensCPct').value) || 0) / 100;
+    const dPct = Math.max(0, +(document.getElementById('ensDPct').value) || 0) / 100;
+    const zAbs = Math.max(0, +(document.getElementById('ensZAbs').value) || 0);
+    const baseSeed = +(document.getElementById('randomSeed').value) || 42;
+    const nd = networkData;
+    const files = {};
+    // Manifest CSV header
+    const csv = ['member,seed,c_factor_mult,demand_mult,elev_delta_ft_range,mean_c_factor,total_demand_gpm'];
+    // Uniform perturbation in [-range, +range] using a seeded PRNG per member
+    for (let i = 0; i < count; i++) {
+      const memberSeed = baseSeed + 1000 + i;
+      const prng = mulberry32(memberSeed);
+      btn.textContent = `⏳ ${i+1}/${count}...`;
+      if (i % 8 === 0) await new Promise(r => setTimeout(r, 0));
+      // Clone nodes and pipes (deep enough for the fields buildINP reads)
+      const pNodes = nd.nodes.map(n => ({ ...n }));
+      const pPipes = nd.pipes.map(p => ({ ...p }));
+      let cSum = 0, cN = 0, demandSum = 0;
+      pPipes.forEach(p => {
+        const m = 1 + (prng() * 2 - 1) * cPct;
+        p.roughness = Math.max(20, Math.round((p.roughness || 100) * m));
+        cSum += p.roughness; cN++;
+      });
+      pNodes.forEach(n => {
+        if (n.type === 'junction') {
+          const dm = 1 + (prng() * 2 - 1) * dPct;
+          n.demand = Math.round((n.demand || 0) * dm * 100) / 100;
+          demandSum += n.demand;
+          if (n.elev !== undefined) n.elev = Math.round((n.elev + (prng() * 2 - 1) * zAbs) * 100) / 100;
+        }
+      });
+      const peaking = nd.cfg.designMode ? (nd.cfg.designPeaking || 2.0) : PEAKING_FACTOR;
+      const inp = buildINP(nd.cfg, pNodes, nd.reservoirs, nd.tanks, pPipes, nd.pumps, nd.valves,
+        nd.emitterNodes, prng, demandSum, demandSum * peaking,
+        nd.numPressureZones || 1, nd.connectivityPct || 100, nd.isolatedCount || 0, nd.supplyDemandRatio || 1);
+      const fname = `EPANET23_ensemble_${String(i+1).padStart(3,'0')}_seed${memberSeed}.inp`;
+      files[fname] = inp;
+      csv.push(`${i+1},${memberSeed},${cPct.toFixed(3)},${dPct.toFixed(3)},±${zAbs},${cN?Math.round(cSum/cN):0},${Math.round(demandSum)}`);
+    }
+    files['ensemble_manifest.csv'] = csv.join('\n');
+    files['README.txt'] = [
+      'Monte Carlo Ensemble — EPANET 2.3',
+      `Members: ${count}`,
+      `Topology: held constant (same nodes, pipes, pumps, valves)`,
+      `Perturbations (uniform, per-element): C-factor ±${(cPct*100).toFixed(0)}%, base demand ±${(dPct*100).toFixed(0)}%, elevation ±${zAbs} ft`,
+      `Base seed: ${baseSeed} (member seeds: ${baseSeed+1000} … ${baseSeed+1000+count-1})`,
+      '',
+      'Use ensemble_manifest.csv to map each .inp to its perturbation multipliers.',
+      'Suitable for GLUE / Bayesian calibration / global sensitivity (Sobol, Morris) workflows.'
+    ].join('\n');
+    const blob = _miniZipCreate(files);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `epanet_ensemble_${count}models.zip`; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    showToast(`Exported ${count}-model ensemble as ZIP`, 'success');
+  } catch(e) { console.error('Ensemble export error:', e); showToast('Ensemble export failed: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '🎲 Generate Ensemble ZIP'; }
 }
 
 // ═══════ QUICK SIM (Pressure Heatmap) ═══════
