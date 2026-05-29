@@ -1,0 +1,87 @@
+# UX Improvement Recommendations for the EPANET/SWMM Network Generator
+
+Based on the app's current structure, it's a remarkably powerful single-file tool — but that power is also its biggest UX challenge. There are dozens of collapsible sections (Grid & Topology, Terrain, Design Mode, Supply Sources, Pipes & Valves, Demand Zones, Calibration, Simulation, and an entirely parallel set for SWMM mode), each packed with numeric inputs. The core tension is **expert density vs. approachability**. Here's how to ease that.
+
+## 1. Reduce first-load intimidation (progressive disclosure)
+
+The current layout exposes nearly everything at once. Consider:
+
+- **Default to a "Simple" view** that shows only Preset, Mode (EPANET/SWMM), Units, Seed, and the Generate button. Add an "Advanced" toggle that reveals the full parameter tree.
+- **Collapse all sections by default except the active preset summary.** Right now the sheer number of expandable accordions (⊞ Grid, ⛰ Terrain, 🏗 Design, 💧 Supply, etc.) creates decision paralysis.
+- Lead with a **single prominent call-to-action**. The "⚡ GENERATE NETWORK + MAP" button should be sticky/always visible so users never have to scroll to act after changing a setting.
+
+## 2. Surface validation feedback earlier and more visibly
+
+The Stats tab and Log are excellent, but problems are only visible *after* generation. The example run shows a **"⚠ Deficit" supply status with an S/D ratio of 0.50** — that's a critical model issue buried in stats.
+
+- **Promote the Supply/Demand warning to a banner** at the top of the preview immediately after generation, with a one-click "Fix it" suggestion (e.g., "Add reservoir head or pumps?").
+- Use **inline parameter warnings** before generating — e.g., if elevation range > 80 ft, show a small note next to the terrain control: "Pressure zones will be auto-created."
+- Add a **traffic-light health summary** (Connectivity ✓, Supply ✗, Isolated nodes ✓) as a compact strip rather than 16 separate stat tiles.
+
+## 3. Make the stats panel scannable
+
+The Stats tab currently lists ~20 metrics as a flat grid (Junctions, Reservoirs, Tanks, Pipes, Pumps, Valves, Emitters, Closed, Avg Demand, Peak Demand, S/D Ratio, etc.).
+
+- **Group them into logical clusters**: "Topology," "Supply/Demand," "Quality Checks."
+- **Color-code by status** — green for healthy, amber/red for issues — so the eye lands on problems first (the deficit, the 0 isolated, the 99% connectivity).
+
+## 4. Improve the parameter input experience
+
+With this many numeric fields, small frictions multiply:
+
+- **Show live derived values** as you type. The grid section already does this well ("≈ 1,024 nodes, ~1,900 links") — extend that pattern everywhere (e.g., show estimated peak demand as you adjust base demand, estimated total pipe length, etc.).
+- **Add units inline and persistently** in each field label (some do, but ensure consistency when toggling US/SI).
+- **Sliders with numeric entry** for percentage values (Jitter, Diagonal Connections, % Imperv) so users can both eyeball and type precisely.
+- **Sensible min/max guardrails** with tooltips explaining valid ranges, reducing the chance of generating broken models.
+
+## 5. Clarify EPANET vs. SWMM mode switching
+
+When in EPANET mode, the Environment sections show "Switch to SWMM to configure stormwater environment parameters." That's good, but the mode switch reorganizes a lot of controls.
+
+- **Visually theme the two modes distinctly** (e.g., blue accent for EPANET water, green for SWMM stormwater) so users always know which mode they're in.
+- **Preserve shared settings** (seed, units, grid) across mode switches and confirm this to the user, so they don't fear losing configuration.
+
+## 6. Strengthen onboarding for new users
+
+The app bundles an enormous educational reference (EPANET fundamentals, calibration exercises, error codes). That's a hidden asset.
+
+- **Add a 30-second guided tour** on first visit highlighting: pick preset → adjust → generate → review stats → download.
+- **Contextual help icons** (?) next to advanced parameters that link to the relevant doc section (e.g., the K/T/R RDII fields → the RDII statistical basis explanation).
+- **Example/template gallery**: "Teaching model (150 nodes)," "Calibration truth model (750)," "Solver stress test (50K)" — matching the documented recommended-usage table, each loading a ready config.
+
+## 7. Improve the export & action workflow
+
+There's a dense row of export buttons (↓ .inp, 📋 Copy INP, ↓ Map PNG, ↓ Map+Net, ↓ DEM, ↓ GeoJSON, 💾 Config, 📂 Load, 📦 Batch ZIP, Load WASM, Run Solver, Quick Sim).
+
+- **Group exports under a single "Export ▾" menu** to reduce visual clutter, separating "Model files," "Map images," and "GIS/DEM."
+- **Disable/grey out solver-dependent buttons** (Download .rpt, Cal Files) until the solver has run, with a tooltip explaining why.
+- **Confirmation toasts** on download/copy so users know the action succeeded (especially "Copy INP" on mobile).
+
+## 8. Mobile experience polish
+
+The app advertises mobile optimization with bottom-drawer controls and 44px touch targets. To push further:
+
+- **Sticky generate button** at the bottom of the drawer.
+- **Swipeable tabs** for the preview panel (Map / Stats / INP / HGL / Log / RPT / Results).
+- Ensure the large INP text preview is **lazy-loaded or truncated** with "show full" — rendering thousands of lines (the example omitted 7,642 lines) can lag mobile browsers.
+
+## 9. Reproducibility and configuration management
+
+The Mulberry32 seeded PRNG is a great feature — make it more visible:
+
+- **Show the active seed prominently** and make "Copy Config" / "Load Config" more discoverable, since reproducibility is a key selling point for research use.
+- **Auto-save the last config to localStorage** so a refresh doesn't wipe a carefully tuned setup.
+- Consider a **shareable URL** that encodes seed + key parameters, so a generated model can be reproduced by sending a link.
+
+## 10. Quick wins (low effort, high impact)
+
+- Add a **"Generating…" progress indicator** for large models (50K–100K nodes) so the app doesn't appear frozen.
+- Make **section headers sticky** within long scrolling panels.
+- Add **keyboard shortcuts** (the docs mention epanet-js uses Shift+Enter — mirror that for Generate).
+- Provide a **"Reset to preset defaults"** button per section, so experimenting doesn't require a full page reload.
+
+---
+
+**Priority order if resources are limited:** (1) progressive disclosure / simple-vs-advanced view, (2) promoting validation warnings like the S/D deficit to a visible banner, (3) live derived values on inputs, and (4) a grouped export menu. These four address the biggest friction points — initial overwhelm and the gap between "generated" and "knowing whether the model is good."
+
+One note of uncertainty: my recommendations are based on the app's documented feature list and a single example session, not on direct interaction or usability testing. Before implementing, I'd suggest a quick round of testing with two user types the docs target — students/educators and researchers — since their needs diverge (simplicity vs. fine control), and that divide should guide where the simple/advanced line is drawn.

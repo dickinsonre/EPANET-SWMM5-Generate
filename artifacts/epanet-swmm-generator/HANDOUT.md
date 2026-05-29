@@ -90,7 +90,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.6 · 2026-05-29**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.7 · 2026-05-29**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -247,7 +247,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v3.6`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v3.7`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -477,7 +477,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v3.6",
+    "generator": "EPANET-SWMM Generator v3.7",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -647,6 +647,25 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v3.7 — 2026-05-29**
+- **Always-visible health banner:** a compact health summary now sits directly above the
+  preview tabs, so the network's status (junction count, percent connected, supply/demand
+  ratio) is visible on *every* tab after generation — not just on Stats. It is color-coded
+  green/amber/red, links to the full Stats view via "Details →", and (EPANET only, when a
+  supply deficit or isolated nodes are detected) offers a one-click **🔧 Fix it** button.
+- **One-click auto-fix:** the banner's **Fix it** button heuristically adjusts the generation
+  parameters — bumping reservoirs/pumps/source head to close a supply/demand deficit, or
+  reducing dead-ends/closed pipes and raising the diagonal-link percentage to reconnect
+  isolated nodes — then regenerates the network automatically.
+- **Grouped, color-coded Stats:** the Stats tab is now organized into labelled clusters
+  (Topology, Supply & Demand, Quality Checks, Demand Zones, Design Basis for EPANET; Topology,
+  Zones & Output for SWMM) instead of one flat grid, making the numbers far easier to scan.
+- **Settings auto-persist across refresh:** your configuration (mode, units, all sidebar
+  settings, seed, and the Lock-seed state) is saved to the browser after each generation and
+  restored automatically on the next visit, so a refresh never wipes a carefully tuned setup.
+  A brief "Restored your last settings" toast confirms the restore. With Lock seed on, a reload
+  reproduces the exact same network.
 
 **v3.6 — 2026-05-29**
 - **AI Assistant tab (powered by Claude):** a new **🤖 AI** tab summarizes *what the program

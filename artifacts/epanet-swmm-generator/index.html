@@ -330,6 +330,9 @@ input[type="range"]::-webkit-slider-thumb {
   margin-bottom: 16px;
 }
 
+.stats-group-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.stats-group-title:first-child{margin-top:0;}
+
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -861,7 +864,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
       <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
       <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
-      <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.6 · 2026-05-29</span>
+      <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.7 · 2026-05-29</span>
     </div>
   </div>
 </div>
@@ -1649,7 +1652,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <h2>Preview</h2>
     <div class="tab-row">
       <button class="tab-btn active" onclick="switchTab('map',this)">Map</button>
-      <button class="tab-btn" onclick="switchTab('stats',this)">Stats</button>
+      <button class="tab-btn" onclick="switchTab('stats',this)" id="statsTabBtn">Stats</button>
       <button class="tab-btn" onclick="switchTab('inp',this)">INP</button>
       <button class="tab-btn" onclick="switchTab('docs',this)">Docs</button>
       <button class="tab-btn" onclick="switchTab('hgl',this)">HGL</button>
@@ -1659,6 +1662,8 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <button class="tab-btn" onclick="switchTab('ai',this)" id="aiTabBtn">🤖 AI</button>
     </div>
   </div>
+
+  <div id="previewBanner" style="display:none;align-items:center;gap:10px;justify-content:space-between;margin:0 0 8px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:12px;line-height:1.4;"></div>
 
   <div id="tab-map" style="flex:1;display:flex;flex-direction:column;">
     <div class="canvas-container" id="canvasContainer" style="position:relative;">
@@ -1692,7 +1697,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     </div>
   </div>
 
-  <div id="tab-stats" style="display:none;flex:1;overflow-y:auto;padding:8px 0;"><div id="healthSummary" style="display:none;margin:0 0 12px;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;border:1px solid var(--border);"></div><div class="stats-grid" id="statsGrid"></div></div>
+  <div id="tab-stats" style="display:none;flex:1;overflow-y:auto;padding:8px 0;"><div id="healthSummary" style="display:none;margin:0 0 12px;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;border:1px solid var(--border);"></div><div id="statsGrid"></div></div>
   <div id="tab-ai" style="display:none;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch;padding:10px 6px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
       <span style="font-size:18px;">🤖</span>
@@ -3118,8 +3123,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v3.6', date: '2026-05-29' };
-const CHANGELOG_TOP = { version: 'v3.6', date: '2026-05-29' };
+const GEN_BUILD = { version: 'v3.7', date: '2026-05-29' };
+const CHANGELOG_TOP = { version: 'v3.7', date: '2026-05-29' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -4542,70 +4547,88 @@ function selectAllINP() {
 function renderStats(){
   const nd=networkData;if(!nd)return;
   const jc=nd.nodes.filter(n=>n.type==='junction').length;
-  const st=[];
+  const groups=[];
 
   if(currentMode==='swmm') {
-    // SWMM stats
+    // SWMM stats — grouped for scannability
     const z={};nd.nodes.forEach(n=>{if(n.type==='junction')z[n.zone]=(z[n.zone]||0)+1;});
-    st.push({l:'Junctions',v:jc.toLocaleString(),c:'var(--accent-blue)'});
-    st.push({l:'Outfalls',v:nd.outfallCount||0,c:'var(--accent-green)'});
-    st.push({l:'Subcatchments',v:(nd.subcatchments||0).toLocaleString(),c:'var(--accent-teal)'});
-    st.push({l:'Conduits',v:(nd.conduitCount||0).toLocaleString(),c:'var(--text-primary)'});
-    st.push({l:'Pumps',v:(nd.pumpCount||0),c:'var(--accent-red)'});
-    st.push({l:'Force Mains',v:(nd.forceMainCount||0),c:'var(--accent-amber)'});
-    st.push({l:'Storm',v:nd.stormType||'',c:'var(--accent-amber)'});
-    Object.entries(z).forEach(([k,v])=>st.push({l:k,v:v.toLocaleString(),c:'var(--text-secondary)'}));
-    st.push({l:'INP Size',v:(generatedINP.length/1024).toFixed(0)+' KB',c:'var(--text-dim)'});
+    groups.push({t:'Topology',items:[
+      {l:'Junctions',v:jc.toLocaleString(),c:'var(--accent-blue)'},
+      {l:'Outfalls',v:nd.outfallCount||0,c:'var(--accent-green)'},
+      {l:'Subcatchments',v:(nd.subcatchments||0).toLocaleString(),c:'var(--accent-teal)'},
+      {l:'Conduits',v:(nd.conduitCount||0).toLocaleString(),c:'var(--text-primary)'},
+      {l:'Pumps',v:(nd.pumpCount||0),c:'var(--accent-red)'},
+      {l:'Force Mains',v:(nd.forceMainCount||0),c:'var(--accent-amber)'},
+    ]});
+    const env=[{l:'Storm',v:nd.stormType||'',c:'var(--accent-amber)'}];
+    Object.entries(z).forEach(([k,v])=>env.push({l:k,v:v.toLocaleString(),c:'var(--text-secondary)'}));
+    env.push({l:'INP Size',v:(generatedINP.length/1024).toFixed(0)+' KB',c:'var(--text-dim)'});
+    groups.push({t:'Zones & Output',items:env});
   } else {
-    // EPANET stats
+    // EPANET stats — grouped: Topology, Supply & Demand, Quality Checks
     const z={};nd.nodes.forEach(n=>{if(n.type==='junction')z[n.zone]=(z[n.zone]||0)+1;});
     const supplyOk = nd.supplyAdequate;
-    st.push({l:'Junctions',v:jc.toLocaleString(),c:'var(--accent-blue)'});
-    st.push({l:'Reservoirs',v:nd.reservoirs.length,c:'var(--accent-green)'});
-    st.push({l:'Tanks',v:nd.tanks.length,c:'var(--accent-amber)'});
-    st.push({l:'Pipes',v:nd.pipes.length.toLocaleString(),c:'var(--text-primary)'});
-    st.push({l:'Pumps',v:nd.pumps.length,c:'var(--accent-red)'});
-    st.push({l:'Valves',v:nd.valves.length,c:'#a855f7'});
-    st.push({l:'Emitters',v:nd.emitterNodes.length,c:'var(--accent-cyan)'});
-    st.push({l:'Closed',v:nd.pipes.filter(p=>p.status==='Closed').length,c:'var(--accent-red)'});
-    st.push({l:'Avg Demand',v:(nd.totalAvgDemand||0).toFixed(0)+' GPM',c:'var(--accent-cyan)'});
-    st.push({l:'Peak Demand',v:(nd.peakDemand||0).toFixed(0)+' GPM',c:'var(--accent-amber)'});
-    st.push({l:'Supply Status',v:supplyOk?'✓ Adequate':'⚠ Deficit',c:supplyOk?'var(--accent-green)':'var(--accent-red)'});
-    st.push({l:'S/D Ratio',v:(nd.supplyDemandRatio||0).toFixed(2),c:nd.supplyDemandRatio>=1.0?'var(--accent-green)':'var(--accent-red)'});
-    st.push({l:'Press. Zones',v:nd.numPressureZones||1,c:'#a78bfa'});
-    st.push({l:'Elev Range',v:(nd.elevRange||0).toFixed(0)+' ft',c:'var(--text-secondary)'});
-    st.push({l:'Connectivity',v:(nd.connectivityPct||0)+'%',c:nd.connectivityPct>=99?'var(--accent-green)':nd.connectivityPct>=90?'var(--accent-amber)':'var(--accent-red)'});
-    st.push({l:'Isolated',v:nd.isolatedCount||0,c:nd.isolatedCount>0?'var(--accent-red)':'var(--accent-green)'});
-    Object.entries(z).forEach(([k,v])=>st.push({l:k,v:v.toLocaleString(),c:'var(--text-secondary)'}));
-    st.push({l:'INP Size',v:(generatedINP.length/1024).toFixed(0)+' KB',c:'var(--text-dim)'});
-    st.push({l:'Pipe Len ×',v:'1.15–1.55 (density)',c:'var(--text-dim)'});
-    st.push({l:'Pipe Sizing',v:'Flow-Based',c:'#a855f7'});
+    const sd = nd.supplyDemandRatio||0;
+    groups.push({t:'Topology',items:[
+      {l:'Junctions',v:jc.toLocaleString(),c:'var(--accent-blue)'},
+      {l:'Reservoirs',v:nd.reservoirs.length,c:'var(--accent-green)'},
+      {l:'Tanks',v:nd.tanks.length,c:'var(--accent-amber)'},
+      {l:'Pipes',v:nd.pipes.length.toLocaleString(),c:'var(--text-primary)'},
+      {l:'Pumps',v:nd.pumps.length,c:'var(--accent-red)'},
+      {l:'Valves',v:nd.valves.length,c:'#a855f7'},
+      {l:'Emitters',v:nd.emitterNodes.length,c:'var(--accent-cyan)'},
+      {l:'Press. Zones',v:nd.numPressureZones||1,c:'#a78bfa'},
+    ]});
+    groups.push({t:'Supply & Demand',items:[
+      {l:'Avg Demand',v:(nd.totalAvgDemand||0).toFixed(0)+' GPM',c:'var(--accent-cyan)'},
+      {l:'Peak Demand',v:(nd.peakDemand||0).toFixed(0)+' GPM',c:'var(--accent-amber)'},
+      {l:'Supply Status',v:supplyOk?'✓ Adequate':'⚠ Deficit',c:supplyOk?'var(--accent-green)':'var(--accent-red)'},
+      {l:'S/D Ratio',v:sd.toFixed(2),c:sd>=1.1?'var(--accent-green)':sd>=1.0?'var(--accent-amber)':'var(--accent-red)'},
+    ]});
+    groups.push({t:'Quality Checks',items:[
+      {l:'Connectivity',v:(nd.connectivityPct||0)+'%',c:nd.connectivityPct>=99?'var(--accent-green)':nd.connectivityPct>=90?'var(--accent-amber)':'var(--accent-red)'},
+      {l:'Isolated',v:nd.isolatedCount||0,c:nd.isolatedCount>0?'var(--accent-red)':'var(--accent-green)'},
+      {l:'Closed',v:nd.pipes.filter(p=>p.status==='Closed').length,c:'var(--text-secondary)'},
+      {l:'Elev Range',v:(nd.elevRange||0).toFixed(0)+' ft',c:'var(--text-secondary)'},
+      {l:'Pipe Sizing',v:'Flow-Based',c:'#a855f7'},
+      {l:'Pipe Len ×',v:'1.15–1.55',c:'var(--text-dim)'},
+      {l:'INP Size',v:(generatedINP.length/1024).toFixed(0)+' KB',c:'var(--text-dim)'},
+    ]});
+    if(Object.keys(z).length){
+      groups.push({t:'Demand Zones',items:Object.entries(z).map(([k,v])=>({l:k,v:v.toLocaleString(),c:'var(--text-secondary)'}))});
+    }
     if (nd.cfg && nd.cfg.designMode) {
-      st.push({l:'Design Mode',v:'ON',c:'#a855f7'});
-      st.push({l:'Population',v:(nd.cfg.designPop||0).toLocaleString(),c:'#a855f7'});
-      st.push({l:'Per-Capita',v:(nd.cfg.designGPCD||100)+' gpcd',c:'#a855f7'});
-      st.push({l:'Peaking',v:'×'+(nd.cfg.designPeaking||2.0).toFixed(1),c:'#a855f7'});
-      st.push({l:'Fire Flow',v:(nd.cfg.designFireFlow||0)+' GPM',c:'#a855f7'});
+      groups.push({t:'Design Basis',items:[
+        {l:'Design Mode',v:'ON',c:'#a855f7'},
+        {l:'Population',v:(nd.cfg.designPop||0).toLocaleString(),c:'#a855f7'},
+        {l:'Per-Capita',v:(nd.cfg.designGPCD||100)+' gpcd',c:'#a855f7'},
+        {l:'Peaking',v:'×'+(nd.cfg.designPeaking||2.0).toFixed(1),c:'#a855f7'},
+        {l:'Fire Flow',v:(nd.cfg.designFireFlow||0)+' GPM',c:'#a855f7'},
+      ]});
     }
   }
-  document.getElementById('statsGrid').innerHTML=st.map(s=>`<div class="stat-card"><div class="value" style="color:${s.c}">${s.v}</div><div class="label">${s.l}</div></div>`).join('');
+  document.getElementById('statsGrid').innerHTML=groups.map(g=>
+    `<div class="stats-group-title">${g.t}</div><div class="stats-grid">`+
+    g.items.map(s=>`<div class="stat-card"><div class="value" style="color:${s.c}">${s.v}</div><div class="label">${s.l}</div></div>`).join('')+
+    `</div>`
+  ).join('');
   renderHealthSummary(nd, jc);
+  renderPreviewBanner(nd, jc);
 }
 
-// One-line health summary — progressive disclosure (green/amber/red) shown above the stats grid
-function renderHealthSummary(nd, jc) {
-  const el = document.getElementById('healthSummary');
-  if (!el) return;
-  const ok = [], warn = [];
+// Shared health computation used by both the Stats-tab summary and the always-visible preview banner.
+function computeHealth(nd, jc) {
+  const ok = [], warn = [], why = [];
+  let deficit = false, isolated = false;
   const conn = nd.connectivityPct != null ? nd.connectivityPct : 100;
   const iso = nd.isolatedCount || 0;
-  if (iso > 0 || conn < 100) warn.push(`${iso} isolated node${iso===1?'':'s'} (${conn}% connected)`);
+  if (iso > 0 || conn < 100) { warn.push(`${iso} isolated node${iso===1?'':'s'} (${conn}% connected)`); isolated = true; }
   else ok.push(`${conn}% connected`);
   if (currentMode === 'epanet') {
     const sd = nd.supplyDemandRatio || 0;
     if (sd >= 1.1) ok.push(`S/D ratio ${sd.toFixed(2)}`);
     else if (sd >= 1.0) warn.push(`S/D ratio ${sd.toFixed(2)} (tight)`);
-    else warn.push(`S/D ratio ${sd.toFixed(2)} — supply deficit`);
+    else { warn.push(`S/D ratio ${sd.toFixed(2)} — supply deficit`); deficit = true; }
   }
   // Pressure check from solver results, if available
   let lowP = null;
@@ -4622,26 +4645,87 @@ function renderHealthSummary(nd, jc) {
   const severity = warn.length === 0 ? 'ok' : (warn.some(w => /deficit|isolated/.test(w)) ? 'bad' : 'warn');
   const color = severity === 'ok' ? 'var(--accent-green)' : severity === 'warn' ? 'var(--accent-amber)' : 'var(--accent-red)';
   const icon = severity === 'ok' ? '✅' : severity === 'warn' ? '⚠️' : '⛔';
+  if (isolated) why.push('<strong>Isolated nodes:</strong> some junctions can\'t be reached from any source — usually too many dead ends or closed pipes breaking the looped grid. <em>Fix:</em> lower Dead Ends / Closed Pipes, or raise Diagonal % to add redundant paths.');
+  if (deficit) why.push('<strong>Supply deficit:</strong> total source capacity is below peak demand — reservoir head too low, too few pumps, or demand too high. <em>Fix:</em> raise Reservoir Head, add a Pump, or enable Design Mode to auto-size sources to the population.');
+  else if (warn.some(w => /tight/.test(w))) why.push('<strong>Tight supply:</strong> S/D is just above 1.0 with little reserve. <em>Fix:</em> raise Reservoir Head or add storage/pumps for a comfortable 1.1–1.2 margin.');
+  if (warn.some(w => /psi/.test(w))) why.push('<strong>Low pressure:</strong> some junctions fall below 20 psi during the run — undersized pipes, insufficient head, or high localized demand. <em>Fix:</em> increase reservoir head / pump capacity, or pipe diameters along the deficient path.');
+  return { ok, warn, why, severity, color, icon, deficit, isolated, jc };
+}
+
+// One-line health summary — progressive disclosure (green/amber/red) shown above the stats grid
+function renderHealthSummary(nd, jc) {
+  const el = document.getElementById('healthSummary');
+  if (!el) return;
+  const h = computeHealth(nd, jc);
+  const { ok, warn, why, severity, color, icon } = h;
   const parts = [];
   parts.push(`<strong style="color:${color}">${icon} ${jc.toLocaleString()} junctions</strong>`);
   ok.forEach(o => parts.push(`<span style="color:var(--accent-green)">${o}</span>`));
   warn.forEach(w => parts.push(`<span style="color:${color}">${w}</span>`));
   let html = parts.join(' &nbsp;·&nbsp; ');
-  if (severity !== 'ok') {
-    const why = [];
-    if (warn.some(w => /isolated/.test(w))) why.push('<strong>Isolated nodes:</strong> some junctions can\'t be reached from any source — usually too many dead ends or closed pipes breaking the looped grid. <em>Fix:</em> lower Dead Ends / Closed Pipes, or raise Diagonal % to add redundant paths.');
-    if (warn.some(w => /deficit/.test(w))) why.push('<strong>Supply deficit:</strong> total source capacity is below peak demand — reservoir head too low, too few pumps, or demand too high. <em>Fix:</em> raise Reservoir Head, add a Pump, or enable Design Mode to auto-size sources to the population.');
-    else if (warn.some(w => /tight/.test(w))) why.push('<strong>Tight supply:</strong> S/D is just above 1.0 with little reserve. <em>Fix:</em> raise Reservoir Head or add storage/pumps for a comfortable 1.1–1.2 margin.');
-    if (warn.some(w => /psi/.test(w))) why.push('<strong>Low pressure:</strong> some junctions fall below 20 psi during the run — undersized pipes, insufficient head, or high localized demand. <em>Fix:</em> increase reservoir head / pump capacity, or pipe diameters along the deficient path.');
-    if (why.length) {
-      html += ` &nbsp; <button type="button" onclick="(function(b){var d=document.getElementById('healthWhy');var open=d.style.display!=='none';d.style.display=open?'none':'block';b.textContent=open?'Why? ▾':'Why? ▴';})(this)" style="background:none;border:1px solid ${color};color:${color};border-radius:4px;font-size:11px;padding:1px 8px;cursor:pointer;vertical-align:middle;">Why? ▾</button>`;
-      html += `<div id="healthWhy" style="display:none;margin-top:8px;font-size:12px;color:var(--text-secondary);line-height:1.6;"><ul style="margin:0;padding-left:18px;">${why.map(w=>`<li>${w}</li>`).join('')}</ul></div>`;
-    }
+  if (severity !== 'ok' && why.length) {
+    html += ` &nbsp; <button type="button" onclick="(function(b){var d=document.getElementById('healthWhy');var open=d.style.display!=='none';d.style.display=open?'none':'block';b.textContent=open?'Why? ▾':'Why? ▴';})(this)" style="background:none;border:1px solid ${color};color:${color};border-radius:4px;font-size:11px;padding:1px 8px;cursor:pointer;vertical-align:middle;">Why? ▾</button>`;
+    html += `<div id="healthWhy" style="display:none;margin-top:8px;font-size:12px;color:var(--text-secondary);line-height:1.6;"><ul style="margin:0;padding-left:18px;">${why.map(w=>`<li>${w}</li>`).join('')}</ul></div>`;
   }
   el.style.display = 'block';
   el.style.borderColor = color;
   el.style.background = severity === 'ok' ? 'rgba(34,197,94,0.08)' : severity === 'warn' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
   el.innerHTML = html;
+}
+
+// Always-visible banner above the preview tabs — surfaces critical issues (deficit, isolation)
+// the moment a model is generated, even while the user is on the Map tab.
+function renderPreviewBanner(nd, jc) {
+  const el = document.getElementById('previewBanner');
+  if (!el) return;
+  const h = computeHealth(nd, jc);
+  const chips = [`<strong style="color:${h.color}">${h.icon} ${jc.toLocaleString()} junctions</strong>`];
+  h.ok.forEach(o => chips.push(`<span style="color:var(--accent-green)">${o}</span>`));
+  h.warn.forEach(w => chips.push(`<span style="color:${h.color}">${w}</span>`));
+  let actions = '';
+  if (h.severity !== 'ok' && currentMode === 'epanet' && (h.deficit || h.isolated)) {
+    actions += `<button type="button" onclick="autoFixGenParams()" style="background:${h.color};border:none;color:#0b0f17;border-radius:5px;font-size:11px;font-weight:600;padding:4px 11px;cursor:pointer;white-space:nowrap;">🔧 Fix it</button>`;
+  }
+  actions += `<button type="button" onclick="switchTab('stats',document.getElementById('statsTabBtn'))" style="background:none;border:1px solid ${h.color};color:${h.color};border-radius:5px;font-size:11px;padding:4px 11px;cursor:pointer;white-space:nowrap;">Details →</button>`;
+  el.style.display = 'flex';
+  el.style.borderColor = h.color;
+  el.style.background = h.severity === 'ok' ? 'rgba(34,197,94,0.08)' : h.severity === 'warn' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0;">${chips.join('<span style="opacity:.4">·</span>')}</div><div style="display:flex;gap:6px;flex-shrink:0;">${actions}</div>`;
+}
+
+// One-click "Fix it" — heuristically adjusts generation parameters to resolve a supply deficit
+// and/or isolated nodes, then regenerates. EPANET only.
+function autoFixGenParams() {
+  const nd = networkData;
+  if (!nd) return;
+  if (currentMode !== 'epanet') { showToast('Auto-fix is available in EPANET mode', 'warning'); return; }
+  const getV = id => { const el = document.getElementById(id); return el ? +el.value : 0; };
+  const setV = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const changes = [];
+  const sd = nd.supplyDemandRatio || 0;
+  // Supply deficit → scale sources up toward S/D ≈ 1.2 and raise reservoir head
+  if (sd > 0 && sd < 1.0) {
+    const factor = Math.min(4, 1.2 / sd);
+    const curRes = Math.max(1, getV('numReservoirs'));
+    const curPumps = getV('numPumps');
+    const newRes = Math.min(12, Math.max(curRes + 1, Math.ceil(curRes * factor)));
+    const newPumps = Math.min(12, Math.max(newRes, Math.ceil((curPumps || curRes) * factor)));
+    if (newRes > curRes) { setV('numReservoirs', newRes); changes.push(`reservoirs ${curRes}→${newRes}`); }
+    if (newPumps > curPumps) { setV('numPumps', newPumps); changes.push(`pumps ${curPumps}→${newPumps}`); }
+    const curHead = getV('reservoirHead');
+    const newHead = Math.max(curHead, Math.round((getV('elevMax') + 120) * 1.1));
+    if (newHead > curHead) { setV('reservoirHead', newHead); changes.push(`reservoir head ${curHead}→${newHead} ft`); }
+  }
+  // Isolated nodes → reduce fragmentation, add redundant looped paths
+  if ((nd.isolatedCount || 0) > 0 || (nd.connectivityPct != null && nd.connectivityPct < 100)) {
+    const de = getV('deadEnds'); if (de > 0) { const v = Math.floor(de / 2); setV('deadEnds', v); changes.push(`dead ends ${de}→${v}`); }
+    const cp = getV('closedPipes'); if (cp > 0) { const v = Math.floor(cp / 2); setV('closedPipes', v); changes.push(`closed pipes ${cp}→${v}`); }
+    const dp = getV('diagonalPct'); const v = Math.min(60, dp + 15); if (v > dp) { setV('diagonalPct', v); changes.push(`diagonal ${dp}%→${v}%`); }
+  }
+  if (!changes.length) { showToast('No automatic fix available — adjust parameters manually', 'warning'); return; }
+  if (typeof updateCountPreview === 'function') updateCountPreview();
+  showToast('Applied: ' + changes.join(', ') + ' — regenerating…', 'success', 5000);
+  generateNetwork();
 }
 
 // ---- AI Assistant ----
@@ -5813,7 +5897,7 @@ async function generateEPANETNetwork(silent){
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
   if(!silent){setProgress(pf,pl,95,'Rendering map...');await sleep(5);
   renderAll();renderStats();renderINPPreview(inp);renderEngLog();setTimeout(renderHGL,100);
-  const lBtn=document.getElementById('logTabBtn');if(lBtn)lBtn.style.display='';}
+  const lBtn=document.getElementById('logTabBtn');if(lBtn)lBtn.style.display='';persistConfig();}
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('EPANET generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='⚡ GENERATE NETWORK + MAP';btn.classList.remove('generating');
@@ -6630,7 +6714,7 @@ async function generateSWMMNetwork(silent) {
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
 
   if(!silent){setProgress(pf,pl,95,'Rendering map...');await sleep(5);
-  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);}
+  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);persistConfig();}
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('SWMM generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='🌧 GENERATE SWMM MODEL + MAP';btn.classList.remove('generating');
@@ -9881,47 +9965,83 @@ function loadConfig() {
     reader.onload = function(ev) {
       try {
         const cfg = JSON.parse(ev.target.result);
-        // Restore mode and units
-        if (cfg._mode) setMode(cfg._mode);
-        if (cfg._units) setUnits(cfg._units);
-        if (cfg._seed) document.getElementById('randomSeed').value = cfg._seed;
-        // Restore common fields
-        if (cfg.addDiscontinuity !== undefined) {
-          const chkD = document.getElementById('chkDiscontinuity');
-          if (chkD) chkD.checked = cfg.addDiscontinuity;
-        }
-        const fields = ['gridRows','gridCols','nodeSpacing','jitter','diagonalPct','deadEnds',
-          'elevMin','elevMax','terrainType','hillCount','numReservoirs','numTanks','numPumps',
-          'reservoirHead','tankMaxLevel','pipeTransmission','pipeDistribution','cMin','cMax',
-          'numPRV','numFCV','closedPipes','pctResidential','pctCommercial','pctIndustrial','pctMixed',
-          'demandMin','demandMax','numEmitters','simDuration','hydTimestep','cityName','numParks','numLakes','mapStyle'];
-        fields.forEach(f => {
-          const el = document.getElementById(f);
-          if (el && cfg[f] !== undefined) el.value = cfg[f];
-        });
-        // Restore Design Mode fields
-        if (cfg.designMode !== undefined) {
-          const chkDM = document.getElementById('chkDesignMode');
-          if (chkDM) chkDM.checked = cfg.designMode;
-          ['designPop','designGPCD','designPeaking','designFireFlow'].forEach(f => {
-            const el = document.getElementById(f);
-            if (el && cfg[f] !== undefined) el.value = cfg[f];
-          });
-          toggleDesignMode();
-        }
-        // Restore SWMM fields
-        Object.keys(cfg).forEach(k => {
-          if (k.startsWith('swmm_')) {
-            const el = document.getElementById(k.substring(5));
-            if (el) { if (el.type === 'checkbox') el.checked = cfg[k]; else el.value = cfg[k]; }
-          }
-        });
-        updateCountPreview();
+        applyConfigObject(cfg);
       } catch(err) { alert('Invalid config file: ' + err.message); }
     };
     reader.readAsText(file);
   };
   input.click();
+}
+
+// Apply a parsed config object to the UI controls. Shared by file-load and localStorage-restore.
+function applyConfigObject(cfg) {
+  if (!cfg) return;
+  if (cfg._mode) setMode(cfg._mode);
+  if (cfg._units) setUnits(cfg._units);
+  if (cfg._seed !== undefined) { const s = document.getElementById('randomSeed'); if (s) s.value = cfg._seed; }
+  // Checkbox fields. Maps the readConfig() key -> the checkbox element id (they differ for some).
+  const checkboxFields = { addDiscontinuity:'chkDiscontinuity', lockSeed:'lockSeed',
+    waterQuality:'chkWaterQuality', secondaryDemands:'chkSecondaryDemands', useTags:'chkTags' };
+  Object.keys(checkboxFields).forEach(key => {
+    if (cfg[key] !== undefined) {
+      const el = document.getElementById(checkboxFields[key]);
+      if (el) el.checked = cfg[key];
+    }
+  });
+  // Value/select fields. Kept symmetric with readConfig() so a saved config round-trips exactly.
+  const fields = ['gridRows','gridCols','nodeSpacing','jitter','diagonalPct','deadEnds',
+    'elevMin','elevMax','terrainType','hillCount','numReservoirs','numTanks','numPumps',
+    'reservoirHead','tankMaxLevel','pipeTransmission','pipeDistribution','cMin','cMax',
+    'numPRV','numFCV','closedPipes','pctResidential','pctCommercial','pctIndustrial','pctMixed',
+    'demandMin','demandMax','numEmitters','simDuration','hydTimestep','qualTimestep','rptTimestep',
+    'headlossFormula','cityName','numParks','numLakes','mapStyle'];
+  fields.forEach(f => {
+    const el = document.getElementById(f);
+    if (el && cfg[f] !== undefined) el.value = cfg[f];
+  });
+  if (cfg.designMode !== undefined) {
+    const chkDM = document.getElementById('chkDesignMode');
+    if (chkDM) chkDM.checked = cfg.designMode;
+    ['designPop','designGPCD','designPeaking','designFireFlow'].forEach(f => {
+      const el = document.getElementById(f);
+      if (el && cfg[f] !== undefined) el.value = cfg[f];
+    });
+    toggleDesignMode();
+  }
+  Object.keys(cfg).forEach(k => {
+    if (k.startsWith('swmm_')) {
+      const el = document.getElementById(k.substring(5));
+      if (el) { if (el.type === 'checkbox') el.checked = cfg[k]; else el.value = cfg[k]; }
+    }
+  });
+  updateCountPreview();
+}
+
+// Auto-save the current config to localStorage after each generation, and restore it on next load
+// so a refresh never wipes a carefully tuned setup. Key: epswConfig.
+function persistConfig() {
+  try {
+    const cfg = readConfig();
+    cfg._mode = currentMode;
+    cfg._units = currentUnits;
+    cfg._seed = +(document.getElementById('randomSeed').value) || 42;
+    const chkL = document.getElementById('lockSeed');
+    if (chkL) cfg.lockSeed = chkL.checked;
+    if (currentMode === 'swmm') {
+      document.querySelectorAll('.swmm-only input, .swmm-only select').forEach(el => {
+        if (el.id) cfg['swmm_' + el.id] = el.type === 'checkbox' ? el.checked : el.value;
+      });
+    }
+    localStorage.setItem('epswConfig', JSON.stringify(cfg));
+  } catch(e) {}
+}
+function restorePersistedConfig() {
+  try {
+    const raw = localStorage.getItem('epswConfig');
+    if (!raw) return false;
+    applyConfigObject(JSON.parse(raw));
+    return true;
+  } catch(e) { return false; }
 }
 
 // ═══════ BATCH EXPORT (ZIP) ═══════
@@ -9933,7 +10053,7 @@ async function batchExport() {
   try {
     const count = Math.min(50, Math.max(2, +(document.getElementById('batchCount').value) || 5));
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
-    const manifest = { generator: 'EPANET-SWMM Generator v3.6', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
+    const manifest = { generator: 'EPANET-SWMM Generator v3.7', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
     const seedEl = document.getElementById('randomSeed');
     const origSeed = seedEl.value;
     const savedINP = generatedINP;
@@ -10018,7 +10138,7 @@ async function nodeSweepExport() {
       partIdx++;
       const partEntries = allEntries.slice(downloaded, downloaded + count);
       partFiles['manifest.json'] = JSON.stringify({
-        generator: 'EPANET-SWMM Generator v3.6', mode: currentMode, units: currentUnits,
+        generator: 'EPANET-SWMM Generator v3.7', mode: currentMode, units: currentUnits,
         sweep: sweepMeta, part: partIdx, partModels: count, files: partEntries
       }, null, 2);
       const blob = _miniZipCreate(partFiles);
@@ -10421,6 +10541,8 @@ window.addEventListener('load',()=>{
     else if (e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); if (generatedINP && typeof copyINP === 'function') copyINP(); }
     else if (e.key === 's' && generatedINP) { e.preventDefault(); downloadINP(); }
   });
+  // Restore the last-used config (auto-saved to localStorage) so a refresh doesn't wipe a tuned setup
+  if (restorePersistedConfig()) showToast('Restored your last settings', 'success', 2500);
   // Seed display: update on input change and show initial value
   const seedInput = document.getElementById('randomSeed');
   if(seedInput) seedInput.addEventListener('input', ()=>updateSeedDisplay(seedInput.value));
