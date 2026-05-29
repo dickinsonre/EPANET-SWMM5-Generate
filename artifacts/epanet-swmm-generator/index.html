@@ -814,6 +814,11 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   <div class="header-text">
     <h1 id="appTitle">EPANET 2.3 &amp; SWMM 5.2.4 Generator</h1>
     <p id="appSubtitle">Hydraulically valid water distribution models with city backdrop</p>
+    <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
+      <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
+      <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
+      <span title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.2 · 2026-05-29</span>
+    </div>
   </div>
 </div>
 
@@ -1299,7 +1304,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <div class="section-body hidden">
       <div class="checkbox-row"><input type="checkbox" id="swmmRDII"><label for="swmmRDII">Enable RDII</label></div>
       <div class="input-row">
-        <div class="input-group"><label title="Percentage of junction nodes receiving RDII loading. Downtown nodes get higher I<label>% Nodes with RDII</label>I (UH1-UH2).">% Nodes with RDII</label><input type="number" id="swmmRDIIPct" value="40" min="0" max="100" inputmode="numeric"></div>
+        <div class="input-group"><label title="Percentage of junction nodes receiving RDII loading. Downtown nodes get higher RDII unit hydrographs (UH1-UH2).">% Nodes with RDII</label><input type="number" id="swmmRDIIPct" value="40" min="0" max="100" inputmode="numeric"></div>
         <div class="input-group"><label title="Contributing sewer area per RDII node (acres). Multiplied by R to get inflow volume.">Sewer Area (ac/node)</label><input type="number" id="swmmSewerArea" value="10" min="1" max="200" inputmode="numeric"></div>
       </div>
       <div class="input-row-3">

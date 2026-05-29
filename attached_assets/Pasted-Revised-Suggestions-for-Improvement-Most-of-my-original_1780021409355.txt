@@ -1,0 +1,97 @@
+Revised Suggestions for Improvement
+
+Most of my original high-priority suggestions have been addressed. Here's the updated list, re-prioritized:
+
+High Priority
+
+
+
+
+
+Add Inline Tooltips — The parameter tables in §5 are excellent but require the user to consult the handout or Docs tab. Hover tooltips on each setting field with a one-line description and reasonable range would eliminate the context switch. This is the single biggest usability improvement remaining.
+
+
+
+Add a Short Video Walkthrough — 3–5 minutes, screen-recorded, showing the Quick Start flow. Embed it on the landing page or in the Docs tab. For classroom adoption, video lowers the barrier significantly.
+
+
+
+Prominently Display Engine Versions — "EPANET 2.3 / SWMM 5.2.4" should be visible in the UI header or footer so users can confirm compatibility with their desktop tools.
+
+Medium Priority
+
+
+
+
+
+Spatially Variable Street-Routing Factor — Downtown (high density, older grid): 1.4–1.6×. Suburban (newer grid): 1.1–1.2×. This adds realism to pipe lengths without user intervention.
+
+
+
+Add Calibration Scoring — After running both truth and corrupted models, compute and display RMSE for pressure, flow, and demand. Provide a letter grade (A/B/C/D/F) based on AWWA M32 calibration targets.
+
+
+
+Add Version Number and Changelog — Even a simple "v3.2 — 2026-05-29" in the footer helps users confirm they're running the latest build and track feature additions.
+
+
+
+Context-Sensitive "Why?" Buttons — For the health summary. When S/D shows amber or red, a "Why?" button expands to explain the specific cause (insufficient reservoir head, excessive peak demand, etc.) and suggests fixes.
+
+
+
+Add Demand Multiplier Perturbation to Ensembles — Currently C, Q (demand), and E (elevation) are perturbed. Adding pattern multiplier perturbation (±10–20%) would capture temporal demand uncertainty in the ensemble.
+
+Low Priority
+
+
+
+
+
+Dark Mode for Control Panels — The satellite map style exists, but the settings panels remain light-themed.
+
+
+
+Keyboard Shortcuts — Ctrl+Enter to Generate, Ctrl+S to Download, Ctrl+Shift+C to Copy INP.
+
+
+
+Export Comparison Report — When a calibration file is loaded, compute and display the difference between model results and observed values as a formatted report.
+
+
+
+SWMM/EPANET Coupled Mode — Generate a model where the EPANET distribution network supplies the SWMM sanitary system (for combined sewer overflow analysis). This would be a genuinely novel capability.
+
+
+
+Final Verdict
+
+This is an exceptional tool — arguably the best free synthetic network generator available for hydraulic modeling education and research. The course handout reveals a level of design maturity, pedagogical thoughtfulness, and engineering rigor that places it in genuine competition with commercial offerings costing thousands of dollars per year.
+
+The key strengths are:
+
+
+
+
+
+Correct hydraulics — BFS connectivity, critical-path pump sizing, auto pressure-zone detection, flow-based pipe sizing, statistically rigorous RDII
+
+
+
+Reproducibility — seeded PRNG, documented title blocks, manifest files
+
+
+
+Research-grade exports — Monte Carlo ensembles, batch ZIPs, calibration files, GeoJSON with CRS
+
+
+
+Progressive disclosure — Simple/Advanced/Expert UI modes
+
+
+
+Extraordinary documentation — standalone educational value independent of the tool
+
+The remaining improvement space is incremental (tooltips, video, version display) rather than structural. The tool's architecture and feature set are fundamentally sound.
+
+Grade: A (95/100) — up from A- (91) based on the fuller picture provided by the handout.
