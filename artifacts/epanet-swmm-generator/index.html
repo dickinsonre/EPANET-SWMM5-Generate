@@ -9710,30 +9710,66 @@ async function nodeSweepExport() {
   try {
     const baseSeed = +(seedEl.value) || 42;
     const prefix = currentMode === 'epanet' ? 'EPANET23' : 'SWMM524';
-    const manifest = { generator: 'EPANET-SWMM Generator v3.5', mode: currentMode, units: currentUnits,
-      sweep: { minNodes: minN, maxNodes: maxN, interval: step, models: targets.length }, files: [] };
-    const files = {};
-    for (let i = 0; i < targets.length; i++) {
+    const N = targets.length;
+    // Stream output into multiple ZIP "parts" so memory never grows unbounded: a part is
+    // flushed (zipped + downloaded + freed) once it reaches ~64 MB of INP text OR 1000 models,
+    // whichever comes first. Bounding by cumulative SIZE handles both many-small and few-huge
+    // sweeps. A single-part run keeps the original clean filename.
+    const MAX_PART_BYTES = 64 * 1024 * 1024;
+    const MAX_PART_FILES = 1000;
+    const idxWidth = Math.max(3, String(N).length);
+    const sweepMeta = { minNodes: minN, maxNodes: maxN, interval: step, models: N };
+    const allEntries = [];
+    let partFiles = {}, partBytes = 0, partIdx = 0, downloaded = 0;
+    const triggerDownload = (blob, name) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; a.style.display = 'none';
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    };
+    const flushPart = async (isFinal) => {
+      const count = Object.keys(partFiles).length;
+      if (count === 0) return;
+      partIdx++;
+      const partEntries = allEntries.slice(downloaded, downloaded + count);
+      partFiles['manifest.json'] = JSON.stringify({
+        generator: 'EPANET-SWMM Generator v3.5', mode: currentMode, units: currentUnits,
+        sweep: sweepMeta, part: partIdx, partModels: count, files: partEntries
+      }, null, 2);
+      const blob = _miniZipCreate(partFiles);
+      const name = (isFinal && partIdx === 1)
+        ? `${currentMode}_node_sweep_${N}models.zip`
+        : `${currentMode}_node_sweep_part${String(partIdx).padStart(2, '0')}_${count}models.zip`;
+      triggerDownload(blob, name);
+      downloaded += count;
+      partFiles = {}; partBytes = 0;
+      await new Promise(r => setTimeout(r, 400)); // let the download flush and memory reclaim
+    };
+    for (let i = 0; i < N; i++) {
       const target = Math.max(9, targets[i]);
       const dim = Math.max(3, Math.min(316, Math.round(Math.sqrt(target))));
       rowsEl.value = dim; colsEl.value = dim;
-      btn.textContent = `⏳ ${i+1}/${targets.length}...`;
-      await new Promise(r => setTimeout(r, 10));
+      btn.textContent = `⏳ ${i+1}/${N}${partIdx ? ` · part ${partIdx+1}` : ''}`;
+      await new Promise(r => setTimeout(r));
       if (currentMode === 'epanet') { await generateEPANETNetwork(true); } else { await generateSWMMNetwork(true); }
       const actualNodes = networkData.nodes.length;
-      const idx = String(i + 1).padStart(3, '0');
+      const idx = String(i + 1).padStart(idxWidth, '0');
       const fname = `${prefix}_${idx}_target${target}_${dim}x${dim}_${actualNodes}nodes_seed${baseSeed}.inp`;
-      files[fname] = generatedINP;
-      manifest.files.push({ filename: fname, targetNodes: target, gridRows: dim, gridCols: dim, actualNodes, pipes: networkData.pipes.length, seed: baseSeed });
+      partFiles[fname] = generatedINP;
+      partBytes += generatedINP.length;
+      allEntries.push({ filename: fname, targetNodes: target, gridRows: dim, gridCols: dim, actualNodes, pipes: networkData.pipes.length, seed: baseSeed });
+      // Don't flush on the last iteration: let the final flush own the remainder so a run
+      // that happens to fit in exactly one part keeps the clean single-part filename.
+      if (i < N - 1 && (partBytes >= MAX_PART_BYTES || Object.keys(partFiles).length >= MAX_PART_FILES)) {
+        await flushPart(false);
+      }
     }
-    files['manifest.json'] = JSON.stringify(manifest, null, 2);
-    const blob = _miniZipCreate(files);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${currentMode}_node_sweep_${targets.length}models.zip`; a.style.display = 'none';
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
-    showToast(`Exported ${targets.length}-model node sweep as ZIP`, 'success');
+    await flushPart(true);
+    if (downloaded !== N) throw new Error(`Node sweep integrity check failed: wrote ${downloaded} of ${N} models`);
+    showToast(partIdx > 1
+      ? `Exported ${N}-model node sweep as ${partIdx} ZIP parts`
+      : `Exported ${N}-model node sweep as ZIP`, 'success');
   } catch(e) { console.error('Node sweep export error:', e); showToast('Node sweep export failed: ' + e.message, 'error'); }
   finally {
     rowsEl.value = origRows; colsEl.value = origCols;

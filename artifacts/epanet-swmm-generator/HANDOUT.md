@@ -400,8 +400,11 @@ different seeds, or use **Batch ZIP** for same-size/different-seed sets.)
 
 #### What you get — ZIP contents
 
-The download is `<mode>_node_sweep_<N>models.zip` (e.g. `epanet_node_sweep_20models.zip`)
-containing:
+A small/medium sweep downloads as a single `<mode>_node_sweep_<N>models.zip`
+(e.g. `epanet_node_sweep_20models.zip`). Large sweeps are **streamed as multiple ZIP parts**
+— see *Limits & performance* below — named
+`<mode>_node_sweep_part01_<count>models.zip`, `…_part02_…`, and so on; each part is a fully
+self-contained ZIP. Either way, every ZIP contains:
 
 - **One `.inp` per step**, named:
 
@@ -438,8 +441,11 @@ containing:
   }
 ```
 
-  Every requested step appears in `files[]`, so you can always compare **target vs. realized**
-  size and pipe count at a glance, and drive downstream scripts directly off the manifest.
+  Every model that part contains appears in `files[]`, so you can always compare
+  **target vs. realized** size and pipe count at a glance, and drive downstream scripts
+  directly off the manifest. For multi-part runs each part carries its own `manifest.json`
+  with `part` / `partModels` fields covering just that part's models — concatenate the
+  `files[]` arrays across parts to reconstruct the full run.
 
 #### Limits & performance
 
@@ -447,11 +453,21 @@ containing:
   tool refuses and asks you to widen the Step or narrow the range.
 - **Size cap: ≈99,856 nodes** per model (the 316×316 grid ceiling).
 - Models are generated **sequentially in the browser**, yielding to the UI between each so the
-  tab stays responsive and shows live `i / N` progress on the button. Practical runtime scales
-  with both the number of models **and** their sizes — a few dozen small models finish in
-  seconds, whereas thousands of large (10k+ node) models can take many minutes and a large
-  amount of memory, since every `.inp` is held in memory until the ZIP is assembled. For very
-  large sweeps, prefer smaller per-model sizes, or split the range into several runs.
+  tab stays responsive and shows live `i / N` (and `· part P`) progress on the button.
+- **Memory-safe multi-part streaming.** To keep memory bounded on big runs, the tool does
+  **not** hold the whole sweep in memory. Instead it accumulates models into a part and flushes
+  that part to a downloaded ZIP — then frees the memory — once the part reaches **~64 MB** of
+  `.inp` text **or 1000 models**, whichever comes first. So a run is delivered as one ZIP when
+  it's small, or as several numbered parts (`…_part01…`, `…_part02…`) when it's large. This is
+  why a very large sweep produces multiple downloads. (Earlier builds buffered everything and
+  could exhaust tab memory on large sweeps — this streaming approach fixes that.)
+- **Allow multiple downloads.** Because parts download automatically as they complete, your
+  browser may prompt to "allow multiple file downloads" on the first large run — accept it, or
+  the later parts will be blocked.
+- Practical runtime scales with both the number of models **and** their sizes — a few dozen
+  small models finish in seconds, whereas thousands of large (10k+ node) models can still take
+  many minutes (memory is bounded, but CPU time is not). For the fastest big runs, prefer
+  smaller per-model sizes.
 
 #### Worked workflow — solver scaling study
 
@@ -577,9 +593,12 @@ produces files compatible with both.
   Filenames carry a zero-padded index + target so they never collide; `swmmRawData` is
   saved/restored so a SWMM sweep doesn't disturb the ensemble export.
 - **Node-sweep model cap raised to 100,000** models per run (was 100). Per-model size cap
-  remains ≈99,856 nodes (316×316 grid). Note that very large sweeps are generated
-  sequentially in the browser and held in memory until the ZIP is assembled — see the
-  performance notes in §10.1.
+  remains ≈99,856 nodes (316×316 grid).
+- **Node-sweep memory-safe multi-part streaming:** large sweeps no longer buffer the whole run
+  in memory (which could freeze the tab around a few hundred models). The tool now flushes a
+  downloaded ZIP part every ~64 MB of `.inp` text or 1000 models and frees the memory, so big
+  runs arrive as numbered parts (`…_part01…`, `…_part02…`). Allow "multiple downloads" if your
+  browser prompts. See §10.1 performance notes.
 
 **v3.4 — 2026-05-29**
 - **SWMM Monte Carlo ensemble export** (parallel to the EPANET one): fixed-topology,

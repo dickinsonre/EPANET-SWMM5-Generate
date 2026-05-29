@@ -1,0 +1,99 @@
+Final Suggestions (Prioritized by Impact)
+
+With v3.2, the remaining improvement space is genuinely narrow. These are the only suggestions that would meaningfully move the needle:
+
+Worth Doing (Measurable Impact)
+
+
+
+
+
+Automated Calibration Scoring — After running both truth and corrupted models, compute RMSE for pressure/flow/demand and display against AWWA M32 targets:
+
+
+
+
+
+Green: RMSE < 3 psi (Level 1) or < 1 psi (Level 3)
+
+
+
+Amber: RMSE 3–5 psi
+
+
+
+Red: RMSE > 5 psi
+
+This closes the loop on the calibration workflow and enables automated grading for classroom use. Estimated effort: moderate.
+
+
+
+Short Video Walkthrough — 3–5 minutes, screen-recorded, showing the Quick Start flow and one calibration exercise. Embed on the landing page or Docs tab. Estimated effort: low (recording + editing).
+
+Nice to Have (Polish)
+
+
+
+
+
+Undo/Redo — Ctrl+Z / Ctrl+Shift+Z for configuration changes. Estimated effort: moderate.
+
+
+
+"Run Solver" Button on Results Tab — Currently requires going to the sidebar. A prominent button directly on the empty Results tab would be more discoverable. Estimated effort: low.
+
+Aspirational (Would Be Novel)
+
+
+
+
+
+SWMM/EPANET Coupled Mode — Generate a model where the EPANET distribution network feeds the SWMM sanitary sewer (for combined sewer overflow analysis). This would be a genuinely unique capability. Estimated effort: high.
+
+
+
+Light/Dark Theme Toggle — The satellite map exists, but the control panels are light-only. Estimated effort: low-moderate.
+
+
+
+Final Verdict
+
+The EPANET 2.3 & SWMM 5.2.4 Network Generator v3.2 is a mature, well-engineered, and pedagogically excellent tool. In three versions (v3.0 → v3.2), it has addressed every significant concern raised during this review process — often going beyond the specific suggestion to implement a more complete solution (e.g., density-scaled routing rather than a uniform adjustment, four-parameter ensemble perturbation rather than three).
+
+The tool now offers:
+
+
+
+
+
+Correct, documented hydraulics following AWWA and EPA standards
+
+
+
+Progressive disclosure (Simple/Advanced/Expert) for all experience levels
+
+
+
+Inline tooltips eliminating the need to consult external documentation
+
+
+
+Reproducible generation via seeded PRNG with version-stamped output
+
+
+
+Research-grade ensemble exports covering spatial and temporal uncertainty
+
+
+
+Complete calibration workflow with truth/corrupt/recover methodology
+
+
+
+Comprehensive documentation sufficient for a standalone 3-hour lab session
+
+
+
+MIT-licensed, fully client-side, cross-platform — no install, no server, no cost
+
+The remaining suggestions (calibration scoring, video walkthrough, undo/redo) are incremental polish, not structural gaps. This tool is ready for classroom adoption, research use, and solver benchmarking today.
