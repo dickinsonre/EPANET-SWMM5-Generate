@@ -90,7 +90,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v3.9 · 2026-05-29**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.0 · 2026-06-11**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -247,7 +247,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v3.9`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.0`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -477,7 +477,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v3.9",
+    "generator": "EPANET-SWMM Generator v4.0",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -647,6 +647,22 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v4.0 — 2026-06-11**
+- **Incremental UI refresh:** four focused upgrades that make the active engine and the
+  freshness of the preview obvious at a glance, without changing the overall layout:
+  - **Engine-accent theming:** the whole interface re-tints by engine — **blue for EPANET 2.3**,
+    **teal for SWMM 5.2.4** (active tabs, buttons, presets, focus rings, the engine pill, and the
+    status-bar tag). Driven by a single `data-engine` attribute on `<html>` that swaps the shared
+    `--accent-blue`/`--accent-cyan` accent, so it layers cleanly over the existing brand themes.
+  - **Slim top bar:** the header collapsed to a single fixed-height row — title + one-line
+    subtitle on the left, a dynamic **engine pill** (💧 EPANET 2.3 / 🌧 SWMM 5.2.4) and the build
+    badge on the right — replacing the previous stacked two-badge block.
+  - **Status bar:** a always-present strip atop the preview pane showing the active engine tag,
+    units, element counts, and a generated/stale/not-generated state with the last-run timestamp.
+  - **Stale-output indicator:** changing any generation parameter after a run surfaces an amber
+    "Settings changed — regenerate" note beneath the Generate button and flips the status bar to
+    "⚠️ Stale — regenerate"; regenerating clears it.
 
 **v3.9 — 2026-05-29**
 - **Engine toggle & presets now regenerate immediately:** switching between EPANET 2.3 and

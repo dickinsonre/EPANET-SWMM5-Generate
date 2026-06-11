@@ -59,6 +59,57 @@
   --accent-amber: #dd550c; --accent-red: #dd550c; --water-gradient: linear-gradient(135deg, #03244d, #dd550c);
 }
 
+/* ═══════ ENGINE ACCENT — EPANET (blue, default) ↔ SWMM (teal) ═══════ */
+/* Placed after the brand themes so flipping the engine re-tints the whole UI
+   (active tabs, buttons, presets, focus rings) via the shared --accent-blue. */
+html[data-engine="swmm"] {
+  --accent-blue: #14b8a6;
+  --accent-cyan: #2dd4bf;
+  --water-gradient: linear-gradient(135deg, #0f766e, #14b8a6);
+}
+
+/* ═══════ SLIM TOP BAR — engine pill ═══════ */
+.engine-pill {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--accent-blue) 16%, transparent);
+  color: var(--accent-blue);
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 45%, transparent);
+}
+
+/* ═══════ STATUS BAR (preview pane) ═══════ */
+.status-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 12px; margin: 0 0 8px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-panel);
+  font-size: 12px; color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+}
+.status-bar .sb-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: 999px; font-weight: 700; font-size: 11px;
+  background: color-mix(in srgb, var(--accent-blue) 16%, transparent);
+  color: var(--accent-blue);
+  border: 1px solid color-mix(in srgb, var(--accent-blue) 40%, transparent);
+}
+.status-bar .sb-sep { opacity: .35; }
+.status-bar .sb-spacer { flex: 1; }
+.status-bar .sb-state { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-weight: 600; }
+.status-bar .sb-state.ok { color: var(--accent-green); }
+.status-bar .sb-state.stale { color: var(--accent-amber); }
+.status-bar .sb-state.none { color: var(--text-dim); }
+
+/* ═══════ STALE-OUTPUT INDICATOR (near Generate) ═══════ */
+.stale-note {
+  display: none; align-items: center; gap: 7px;
+  margin-top: 8px; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent-amber) 50%, transparent);
+  background: color-mix(in srgb, var(--accent-amber) 12%, transparent);
+  color: var(--accent-amber); font-size: 12px; line-height: 1.35;
+}
+.stale-note.show { display: flex; }
+
 body {
   font-family: 'DM Sans', sans-serif;
   background: var(--bg-deep);
@@ -72,7 +123,8 @@ body {
 .app-header {
   background: linear-gradient(180deg, #0f1729 0%, var(--bg-deep) 100%);
   border-bottom: 1px solid var(--border);
-  padding: 12px 16px;
+  padding: 0 16px;
+  height: 52px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -858,14 +910,13 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
     <line x1="26" y1="15" x2="22" y2="25" stroke="#06b6d4" stroke-width="1.5" opacity="0.6"/>
     <line x1="14" y1="14" x2="26" y2="14" stroke="#60a5fa" stroke-width="1.5" opacity="0.4"/>
   </svg>
-  <div class="header-text">
-    <h1 id="appTitle">EPANET 2.3 &amp; SWMM 5.2.4 Generator</h1>
-    <p id="appSubtitle">Hydraulically valid water distribution models with city backdrop</p>
-    <div class="version-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center;">
-      <span title="EPANET solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(59,130,246,0.16);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">EPANET 2.3</span>
-      <span title="SWMM solver engine version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(20,184,166,0.16);color:#2dd4bf;border:1px solid rgba(20,184,166,0.35);">SWMM 5.2.4</span>
-      <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v3.9 · 2026-05-29</span>
-    </div>
+  <div class="header-text" style="display:flex;align-items:baseline;gap:10px;min-width:0;">
+    <h1 id="appTitle">EPANET 2.3 Generator</h1>
+    <p id="appSubtitle" style="margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Water distribution models with city backdrop &amp; DEM export</p>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0;">
+    <span id="enginePill" class="engine-pill" title="Active solver engine">💧 EPANET 2.3</span>
+    <span id="buildBadge" title="Generator build version" style="font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:10px;background:rgba(148,163,184,0.16);color:var(--text-dim);border:1px solid rgba(148,163,184,0.3);">v4.0 · 2026-06-11</span>
   </div>
 </div>
 
@@ -1536,6 +1587,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   <!-- Generate -->
   <div class="generate-section">
     <button class="generate-btn" id="genBtn" onclick="generateNetwork()">⚡ GENERATE NETWORK + MAP</button>
+    <div id="staleNote" class="stale-note"><span>⚠️</span><span>Settings changed since the last run — regenerate to update the map &amp; INP.</span></div>
     <div class="progress-bar" id="progressBar" style="display:none;"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
     <div class="progress-label" id="progressLabel" style="display:none;"></div>
     <div class="dl-row" id="dlRow" style="display:none;">
@@ -1648,6 +1700,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 
 <!-- ═══════ PREVIEW ═══════ -->
 <div class="preview-panel">
+  <div id="statusBar" class="status-bar"></div>
   <div class="preview-header">
     <h2>Preview</h2>
     <div class="tab-row">
@@ -3123,8 +3176,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v3.9', date: '2026-05-29' };
-const CHANGELOG_TOP = { version: 'v3.9', date: '2026-05-29' };
+const GEN_BUILD = { version: 'v4.0', date: '2026-06-11' };
+const CHANGELOG_TOP = { version: 'v4.0', date: '2026-06-11' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -3147,6 +3200,8 @@ function assertBuildConsistency() {
 
 let generatedINP = '';
 let networkData = null;
+let outputStale = false;   // true when generation params changed after the last successful run
+let lastGenTime = null;    // timestamp of the last successful generation (for the status bar)
 let swmmRawData = null;
 let engineeringLog = [];
 
@@ -4619,6 +4674,11 @@ function renderStats(){
   ).join('');
   renderHealthSummary(nd, jc);
   renderPreviewBanner(nd, jc);
+  // A fresh network just rendered → clear any stale flag and stamp the status bar.
+  outputStale = false;
+  lastGenTime = new Date();
+  hideStaleNote();
+  renderStatusBar();
 }
 
 // Shared health computation used by both the Stats-tab summary and the always-visible preview banner.
@@ -6179,11 +6239,17 @@ function setUnits(units) {
     l.textContent = l.textContent.replace(/\(CFS\)|\(CMS\)/g, '('+cfs+')');
     l.textContent = l.textContent.replace(/\(in\/hr\)|\(mm\/hr\)/g, '('+inhr+')');
   });
+  // Units affect the generated INP, so an existing network is now stale.
+  if (networkData) markStale();
+  renderStatusBar();
 }
 
 function setMode(mode, regen) {
   const changed = currentMode !== mode;
   currentMode = mode;
+  document.documentElement.setAttribute('data-engine', mode);
+  const _ep = document.getElementById('enginePill');
+  if (_ep) _ep.textContent = mode==='epanet' ? '💧 EPANET 2.3' : '🌧 SWMM 5.2.4';
   document.getElementById('modeEpanet').classList.toggle('active', mode==='epanet');
   document.getElementById('modeSwmm').classList.toggle('active', mode==='swmm');
   document.querySelectorAll('.epanet-only').forEach(el => el.style.display = mode==='epanet' ? '' : 'none');
@@ -6232,6 +6298,44 @@ function clearOutputPreview() {
   // next generateNetwork()). Calling renderPreviewBanner() here would throw — it requires args.
   const pb = document.getElementById('previewBanner');
   if (pb) pb.style.display = 'none';
+  outputStale = false;
+  hideStaleNote();
+  renderStatusBar();
+}
+
+// ── Status bar + stale-output indicator ──────────────────────────────────────
+// The status bar (top of the preview pane) always shows the active engine, units,
+// element counts (once generated) and a generated/stale/not-generated state.
+function renderStatusBar() {
+  const el = document.getElementById('statusBar');
+  if (!el) return;
+  const engineLabel = currentMode==='epanet' ? '💧 EPANET 2.3' : '🌧 SWMM 5.2.4';
+  const unitLabel = currentUnits==='US' ? 'US Customary' : 'SI / Metric';
+  const chips = [`<span class="sb-tag">${engineLabel}</span>`, `<span>${unitLabel}</span>`];
+  if (networkData && networkData.nodes) {
+    chips.push('<span class="sb-sep">·</span>', `<span>${networkData.nodes.length.toLocaleString()} junctions</span>`);
+    if (networkData.pipes) chips.push('<span class="sb-sep">·</span>', `<span>${networkData.pipes.length.toLocaleString()} ${currentMode==='swmm' ? 'conduits' : 'pipes'}</span>`);
+  }
+  let state;
+  if (!networkData) state = '<span class="sb-state none">○ Not generated</span>';
+  else if (outputStale) state = '<span class="sb-state stale">⚠️ Stale — regenerate</span>';
+  else { const t = lastGenTime ? lastGenTime.toLocaleTimeString() : ''; state = `<span class="sb-state ok">✓ Generated${t ? ' ' + t : ''}</span>`; }
+  el.innerHTML = chips.join('') + '<span class="sb-spacer"></span>' + state;
+}
+
+// Mark the current preview as stale (a generation parameter changed since the last run).
+function markStale() {
+  if (typeof _applyingCfg !== 'undefined' && _applyingCfg) return; // programmatic restore, not a user edit
+  if (!networkData || outputStale) return;                          // nothing generated yet, or already flagged
+  outputStale = true;
+  const note = document.getElementById('staleNote');
+  if (note) note.classList.add('show');
+  renderStatusBar();
+}
+
+function hideStaleNote() {
+  const note = document.getElementById('staleNote');
+  if (note) note.classList.remove('show');
 }
 
 // ═══════ DESIGN STORMS ═══════
@@ -10108,7 +10212,7 @@ async function batchExport() {
   try {
     const count = Math.min(50, Math.max(2, +(document.getElementById('batchCount').value) || 5));
     const baseSeed = +(document.getElementById('randomSeed').value) || 42;
-    const manifest = { generator: 'EPANET-SWMM Generator v3.9', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
+    const manifest = { generator: 'EPANET-SWMM Generator v4.0', mode: currentMode, units: currentUnits, batchSize: count, files: [] };
     const seedEl = document.getElementById('randomSeed');
     const origSeed = seedEl.value;
     const savedINP = generatedINP;
@@ -10193,7 +10297,7 @@ async function nodeSweepExport() {
       partIdx++;
       const partEntries = allEntries.slice(downloaded, downloaded + count);
       partFiles['manifest.json'] = JSON.stringify({
-        generator: 'EPANET-SWMM Generator v3.9', mode: currentMode, units: currentUnits,
+        generator: 'EPANET-SWMM Generator v4.0', mode: currentMode, units: currentUnits,
         sweep: sweepMeta, part: partIdx, partModels: count, files: partEntries
       }, null, 2);
       const blob = _miniZipCreate(partFiles);
@@ -10602,6 +10706,19 @@ window.addEventListener('load',()=>{
   const seedInput = document.getElementById('randomSeed');
   if(seedInput) seedInput.addEventListener('input', ()=>updateSeedDisplay(seedInput.value));
   updateSeedDisplay(seedInput ? seedInput.value : 42);
+  // Mark the preview stale when any generation parameter changes after a run.
+  const _cp = document.getElementById('controlsPanel');
+  if (_cp) {
+    const _onParamChange = (e) => {
+      const t = e.target;
+      if (!t || !t.id || t.id === 'themeSelect') return; // theme is cosmetic, not a model parameter
+      if (t.tagName === 'INPUT' || t.tagName === 'SELECT') markStale();
+    };
+    _cp.addEventListener('input', _onParamChange);
+    _cp.addEventListener('change', _onParamChange);
+  }
+  document.documentElement.setAttribute('data-engine', currentMode);
+  renderStatusBar();
   setTimeout(()=>generateNetwork(),250);
 });
 </script>
