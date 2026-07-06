@@ -6313,7 +6313,11 @@ function renderStatusBar() {
   const unitLabel = currentUnits==='US' ? 'US Customary' : 'SI / Metric';
   const chips = [`<span class="sb-tag">${engineLabel}</span>`, `<span>${unitLabel}</span>`];
   if (networkData && networkData.nodes) {
-    chips.push('<span class="sb-sep">·</span>', `<span>${networkData.nodes.length.toLocaleString()} junctions</span>`);
+    // Count only junction-type nodes so this matches the Stats panel exactly.
+    // networkData.nodes also contains reservoirs/tanks/outfalls, so a raw
+    // nodes.length would over-report vs Stats (and mislead scripting).
+    const jc = networkData.nodes.filter(n => n.type === 'junction').length;
+    chips.push('<span class="sb-sep">·</span>', `<span>${jc.toLocaleString()} junctions</span>`);
     if (networkData.pipes) chips.push('<span class="sb-sep">·</span>', `<span>${networkData.pipes.length.toLocaleString()} ${currentMode==='swmm' ? 'conduits' : 'pipes'}</span>`);
   }
   let state;
