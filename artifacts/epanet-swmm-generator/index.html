@@ -1797,7 +1797,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <p><strong>Pipes:</strong> Length = Euclidean distance × a density-scaled street-routing factor (1.55× in the dense/older core → 1.15× at suburban edges). Diameters: transmission (24–36") along corridors and near sources, secondary (12–20") on arterials every 5th row/column, distribution (6–12") elsewhere. C-factors spatially correlated: downtown (center) = old pipes (C=80–100), suburban (edges) = new pipes (C=110–130).</p>
       <p><strong>Pipe Age:</strong> Each pipe assigned an installation year correlated with distance from center (1950s downtown → 2020s suburban). Written as decade-tagged link attributes (YR1960s, YR1990s, etc.).</p>
       <p><strong>Pumps &amp; Valves:</strong> No parallel links. Every pump and valve is inserted by splitting an existing pipe and creating an intermediate junction. Booster pumps include a closed bypass pipe for isolation. PRVs are placed at elevation zone boundaries (pressure zones auto-detected when terrain range exceeds 80 ft).</p>
-      <p><strong>Pressure Zones:</strong> When the elevation range exceeds 80 ft, the system is divided into zones of ~70 ft each. PRVs are placed at pipes that cross zone boundaries, with settings computed from downstream elevation + 50 psi target.</p>
+      <p><strong>Pressure Zones:</strong> When the elevation range exceeds 80 ft, the system is divided into zones of ~70 ft each. PRVs are placed at pipes that cross zone boundaries, with the setting written as downstream pressure (50 psi target; the generation log also reports the equivalent HGL for context).</p>
       <p><strong>Demand Zones:</strong> Four zones spatially clustered (not random): Industrial seeded in NW corner, Commercial along a central spine, Mixed in a defined area, Residential fills everywhere else. Four diurnal patterns with realistic multipliers (residential morning/evening peaks, commercial midday, industrial plateau, mixed blend).</p>
       <p><strong>Calibration Features:</strong> Emitter nodes (leaks/hydrants), optional chlorine water quality model with bulk/wall decay, secondary demands for unaccounted-for water and fire flow, node/pipe tags for zone-based grouping.</p>
       <p><strong>Connectivity Validation:</strong> Post-generation BFS from all sources verifies every junction is reachable. Isolated node count displayed in Stats.</p>
@@ -5728,11 +5728,14 @@ async function generateEPANETNetwork(silent){
       // Check if this pipe crosses a zone break (high side to low side)
       for (const brk of zoneBreaks) {
         if (highElev > brk && lowElev < brk && (highElev - lowElev) > 10) {
-          // PRV setting: target pressure at downstream side ≈ 50 psi = 115 ft HGL above downstream elev
+          // PRV setting is downstream PRESSURE (psi in US models), NOT an HGL value.
+          // EPANET interprets the [VALVES] Setting column for a PRV as pressure;
+          // the equivalent HGL is reported in the log for narrative context only.
           const downstreamElev = Math.min(n1.elev, n2.elev);
-          const prvSetting = Math.round(downstreamElev + 50 * PSI_TO_FT); // HGL target
+          const prvSetting = 50; // psi — target downstream pressure
+          const prvHGL = Math.round(downstreamElev + prvSetting * PSI_TO_FT); // for log narrative
           if (insertValveAtPipe(pi, 'PRV', prvSetting)) {
-            logEng('valves', `PRV V${vI-1} placed at pipe ${pipes[pi].id} — elevation drops from ${highElev.toFixed(0)} ft to ${lowElev.toFixed(0)} ft (crosses zone break at ${brk.toFixed(0)} ft), setting: ${prvSetting} ft HGL (50 psi target at downstream elev ${downstreamElev.toFixed(0)} ft)`);
+            logEng('valves', `PRV V${vI-1} placed at pipe ${pipes[pi].id} — elevation drops from ${highElev.toFixed(0)} ft to ${lowElev.toFixed(0)} ft (crosses zone break at ${brk.toFixed(0)} ft), setting: ${prvSetting} psi downstream pressure (≈ ${prvHGL} ft HGL at downstream elev ${downstreamElev.toFixed(0)} ft)`);
             zonePRVsPlaced++;
             break;
           }
@@ -5814,9 +5817,10 @@ async function generateEPANETNetwork(silent){
         usedPipeIndices.add(pi);
         discPumpsPlaced++;
       } else if (flowsDownhill && discPRVsPlaced < Math.ceil(maxDiscInfra / 2)) {
-        const prvSetting = Math.round(lowNode.elev + 50 * PSI_TO_FT);
+        const prvSetting = 50; // psi — downstream pressure (EPANET PRV setting is pressure, not HGL)
+        const prvHGL = Math.round(lowNode.elev + prvSetting * PSI_TO_FT);
         if (insertValveAtPipe(pi, 'PRV', prvSetting)) {
-          logEng('valves', `Discontinuity PRV V${vI - 1} at ${d.type} crossing — ${elevDrop.toFixed(0)} ft downhill, setting: ${prvSetting} ft HGL`);
+          logEng('valves', `Discontinuity PRV V${vI - 1} at ${d.type} crossing — ${elevDrop.toFixed(0)} ft downhill, setting: ${prvSetting} psi downstream (≈ ${prvHGL} ft HGL)`);
           discPRVsPlaced++;
         }
       }
@@ -5824,9 +5828,10 @@ async function generateEPANETNetwork(silent){
     if (discPumpsPlaced + discPRVsPlaced === 0 && bestCrossing) {
       const bc = bestCrossing;
       const lowElev = Math.min(bc.n1.elev, bc.n2.elev);
-      const prvSet = Math.round(lowElev + 50 * PSI_TO_FT);
+      const prvSet = 50; // psi — downstream pressure (EPANET PRV setting is pressure, not HGL)
+      const prvSetHGL = Math.round(lowElev + prvSet * PSI_TO_FT);
       if (insertValveAtPipe(bc.pi, 'PRV', prvSet)) {
-        logEng('valves', `Fallback discontinuity PRV V${vI - 1} at ${d.type} crossing — best candidate with ${bc.elevDrop.toFixed(0)} ft change, setting: ${prvSet} ft HGL`);
+        logEng('valves', `Fallback discontinuity PRV V${vI - 1} at ${d.type} crossing — best candidate with ${bc.elevDrop.toFixed(0)} ft change, setting: ${prvSet} psi downstream (≈ ${prvSetHGL} ft HGL)`);
         discPRVsPlaced++;
       }
     }
@@ -6050,7 +6055,13 @@ function buildINP(cfg,nodes,reservoirs,tanks,pipes,pumps,valves,emitterNodes,rng
   pumps.forEach(p=>a(`${p.id}\t${p.node1}\t${p.node2}\tHEAD ${p.curve}`));nl();
 
   a('[VALVES]');a(';ID\tNode1\tNode2\tDia\tType\tSetting\tMinorLoss');
-  valves.forEach(v=>a(`${v.id}\t${v.node1}\t${v.node2}\t${v.diameter}\t${v.type}\t${v.setting}\t0`));nl();
+  // Setting units are type-dependent: PRV/PSV/PBV = pressure (psi US → m SI, 1 psi = 0.7031 m),
+  // FCV = flow (GPM US → LPS SI). Diameter converts in → mm like pipes.
+  const uP = v => si ? (v * 0.7031) : v;
+  valves.forEach(v=>{
+    const setting = (v.type==='FCV') ? f2(uQ(v.setting)) : f2(uP(v.setting));
+    a(`${v.id}\t${v.node1}\t${v.node2}\t${f2(uD(v.diameter))}\t${v.type}\t${setting}\t0`);
+  });nl();
 
   if(cfg.useTags){
     a('[TAGS]');
