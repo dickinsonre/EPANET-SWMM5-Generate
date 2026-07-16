@@ -1,7 +1,9 @@
 # EPANET 2.3 & SWMM 5.2.4 Network Generator — Course Handout
 
-A practical guide to generating, inspecting, and calibrating hydraulically valid water
+A practical guide to generating, inspecting, solver-verifying, and calibrating water
 distribution (EPANET) and stormwater/sewer (SWMM) models entirely in your browser.
+Hydraulic validity is confirmed by actually running the built-in WASM solver (see the
+tier badges above the preview), not assumed at generation time.
 
 > **One-line summary:** This tool builds realistic test networks — from a 50-node village
 > to a 100,000-node city — with proper connectivity, supply/demand balance, and spatial
@@ -65,7 +67,8 @@ same network — essential for sharing examples and calibration exercises.
    **health summary** tells you at a glance if the model is sound).
 6. Go to the **INP** tab → **Download .inp**, or open it in EPANET/SWMM directly.
 
-That's a complete, hydraulically valid model. Everything else is refinement.
+That's a complete, structurally sound model — the tier badges above the preview show
+whether the solver has verified it hydraulically. Everything else is refinement.
 
 ---
 
@@ -90,7 +93,7 @@ That's a complete, hydraulically valid model. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.0 · 2026-06-11**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.1 · 2026-07-16**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -247,7 +250,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.0`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.1`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -477,7 +480,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v4.0",
+    "generator": "EPANET-SWMM Generator v4.1",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -647,6 +650,29 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v4.1 — 2026-07-16**
+- **Solver-gated validation with tier badges:** a new badge strip above the preview shows an
+  honest five-step ladder — **Generated → Syntax → Topology → Solver → QA**. "Generated" no
+  longer implies hydraulic validity: the Solver badge turns green only after the WASM engine
+  actually converges, and QA only after pressures pass an engineering screen (no negative
+  pressures, few nodes below 20 psi, max under ~100 psi equivalent). EPANET models up to
+  2,500 junctions are steady-state solved **automatically** right after generation; larger
+  models and SWMM show a pending badge with instructions (Quick Sim / Run Solver). Quick Sim
+  and the full extended-period solver also update the badges, and the Validation Report
+  header now reads "Solver + QA Passed" instead of "Model Valid".
+- **Technical accuracy audit:** documentation claims were tightened — the overview no longer
+  calls unsolved output "hydraulically valid"; pump-curve guidance now correctly states that
+  EPANET accepts a single design point (auto-expanding it to 3 points) with a 3-point curve
+  *recommended*; the control-rule precedence text now matches the PRIORITY semantics described
+  in the Rule-Based Controls section; supply-demand figures are labeled as
+  "generator-estimated source capacity (planning estimate, not a solver result)"; the 80-ft
+  pressure-zone threshold is labeled a generator heuristic; and a disclaimer notes that color
+  themes imply no affiliation or endorsement.
+- **Task-oriented workflow UX:** a **Configure › Generate › Validate › Export** stage strip at
+  the top of the sidebar tracks where you are (green = done, cyan = current, red = failed
+  validation), and a new **settings search box** filters sections across all four settings
+  tabs at once — matches auto-expand, and clearing the box restores the normal tab view.
 
 **v4.0 — 2026-06-11**
 - **Incremental UI refresh:** four focused upgrades that make the active engine and the

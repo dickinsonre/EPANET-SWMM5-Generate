@@ -951,6 +951,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         <option value="osu">🦫 Oregon State University</option>
         <option value="auburn">🦅 Auburn University</option>
       </select>
+      <div style="font-size:9px;color:var(--text-dim);margin-top:3px;line-height:1.3;">Themes are cosmetic color palettes only — no affiliation with or endorsement by any organization is implied.</div>
     </div>
     <div class="tab-row" id="uiModeRow" style="width:100%;margin-top:6px;" title="Controls how many settings are shown. Simple hides advanced parameters for new users.">
       <button class="tab-btn active" id="uimodeSimple" onclick="setUIMode('simple')" style="flex:1;text-align:center;font-size:11px;min-height:32px;">🟢 Simple</button>
@@ -960,6 +961,17 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   </div>
 
   <div class="controls-inner" id="controlsInner">
+
+  <!-- Workflow stage indicator: Configure → Generate → Validate → Export -->
+  <div id="stageStrip" aria-label="Workflow stages" style="display:flex;align-items:center;gap:4px;margin:0 0 8px;font-size:10px;flex-wrap:wrap;"></div>
+
+  <!-- Settings search -->
+  <div style="margin:0 0 8px;position:relative;">
+    <input type="text" id="settingsSearch" placeholder="🔍 Search settings… (e.g. demand, rainfall, seed)" oninput="filterSettings(this.value)" aria-label="Search settings"
+      style="width:100%;padding:7px 28px 7px 10px;font-size:12px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;">
+    <button id="settingsSearchClear" onclick="const s=document.getElementById('settingsSearch');s.value='';filterSettings('');s.focus();" aria-label="Clear search"
+      style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:2px 4px;">✕</button>
+  </div>
 
   <div class="settings-tabs" role="tablist" aria-label="Settings categories">
     <button class="settings-tab-btn active" onclick="switchSettingsTab('network',this)" role="tab" aria-selected="true" aria-controls="stab-network" tabindex="0">Network</button>
@@ -1701,6 +1713,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 <!-- ═══════ PREVIEW ═══════ -->
 <div class="preview-panel">
   <div id="statusBar" class="status-bar"></div>
+  <div id="tierStrip" role="status" aria-label="Model validation tiers" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px;font-size:11px;"></div>
   <div class="preview-header">
     <h2>Preview</h2>
     <div class="tab-row">
@@ -1786,7 +1799,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <p style="color:var(--text-dim);font-size:12px;margin-bottom:16px;">Single-file HTML application &bull; ~160 KB &bull; No dependencies &bull; Mobile-optimized</p>
 
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">Overview</h3>
-      <p>This application generates hydraulically valid, calibration-ready water distribution (EPANET) and stormwater collection (SWMM) models of any size — from 50-node teaching examples to 100,000-node city-scale networks. Each model includes a procedurally generated city map backdrop with streets, buildings, parks, lakes, rivers, railroads, and highways. Models are exportable as .inp files compatible with EPANET 2.2+, EPA SWMM 5.2+, WNTR, PySWMM, InfoWorks ICM, or any compatible hydraulic modeling platform.</p>
+      <p>This application generates structurally complete, solver-testable water distribution (EPANET) and stormwater collection (SWMM) models of any size — hydraulic behavior is verified by actually running the built-in WASM solver (see the tier badges above the preview), not assumed at generation time. Models range from 50-node teaching examples to 100,000-node city-scale networks. Each model includes a procedurally generated city map backdrop with streets, buildings, parks, lakes, rivers, railroads, and highways. Models are exportable as .inp files compatible with EPANET 2.2+, EPA SWMM 5.2+, WNTR, PySWMM, InfoWorks ICM, or any compatible hydraulic modeling platform.</p>
 
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">EPANET 2.3 Mode — Water Distribution</h3>
       <p><strong>Network Topology:</strong> Grid-based layout with configurable jitter (position perturbation), diagonal cross-connections for looping, and dead-end branches. Grid size from 3×3 to 316×316. Eight presets from Tiny (50 nodes) through City (100K nodes).</p>
@@ -1797,11 +1810,11 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <p><strong>Pipes:</strong> Length = Euclidean distance × a density-scaled street-routing factor (1.55× in the dense/older core → 1.15× at suburban edges). Diameters: transmission (24–36") along corridors and near sources, secondary (12–20") on arterials every 5th row/column, distribution (6–12") elsewhere. C-factors spatially correlated: downtown (center) = old pipes (C=80–100), suburban (edges) = new pipes (C=110–130).</p>
       <p><strong>Pipe Age:</strong> Each pipe assigned an installation year correlated with distance from center (1950s downtown → 2020s suburban). Written as decade-tagged link attributes (YR1960s, YR1990s, etc.).</p>
       <p><strong>Pumps &amp; Valves:</strong> No parallel links. Every pump and valve is inserted by splitting an existing pipe and creating an intermediate junction. Booster pumps include a closed bypass pipe for isolation. PRVs are placed at elevation zone boundaries (pressure zones auto-detected when terrain range exceeds 80 ft).</p>
-      <p><strong>Pressure Zones:</strong> When the elevation range exceeds 80 ft, the system is divided into zones of ~70 ft each. PRVs are placed at pipes that cross zone boundaries, with the setting written as downstream pressure (50 psi target; the generation log also reports the equivalent HGL for context).</p>
+      <p><strong>Pressure Zones:</strong> Generator heuristic (not a code requirement): when the elevation range exceeds 80 ft, the system is divided into zones of ~70 ft each. PRVs are placed at pipes that cross zone boundaries, with the setting written as downstream pressure (50 psi target; the generation log also reports the equivalent HGL for context).</p>
       <p><strong>Demand Zones:</strong> Four zones spatially clustered (not random): Industrial seeded in NW corner, Commercial along a central spine, Mixed in a defined area, Residential fills everywhere else. Four diurnal patterns with realistic multipliers (residential morning/evening peaks, commercial midday, industrial plateau, mixed blend).</p>
       <p><strong>Calibration Features:</strong> Emitter nodes (leaks/hydrants), optional chlorine water quality model with bulk/wall decay, secondary demands for unaccounted-for water and fire flow, node/pipe tags for zone-based grouping.</p>
       <p><strong>Connectivity Validation:</strong> Post-generation BFS from all sources verifies every junction is reachable. Isolated node count displayed in Stats.</p>
-      <p><strong>Supply-Demand Check:</strong> Total average and peak demand (×1.6 peaking factor) are computed and compared to supply capacity. Green/red indicator in Stats tab.</p>
+      <p><strong>Supply-Demand Check:</strong> Total average and peak demand (×1.6 peaking factor) are computed and compared to the generator-estimated source capacity (pump design flows + a nominal share per gravity reservoir — a planning estimate, not a solver result). Green/red indicator in Stats tab.</p>
 
       <h3 style="color:var(--accent-cyan);font-size:15px;margin:20px 0 8px;">SWMM 5.2.4 Mode — Stormwater &amp; Sanitary Sewer</h3>
       <p><strong>Junctions:</strong> Manholes with invert elevation = ground elevation − cover depth. Max depth computed from ground-to-invert difference. Spatially clustered land-use zones control impervious percentage.</p>
@@ -2096,7 +2109,7 @@ For every loop:  Σh_L around loop = 0       (Conservation of Energy)</pre>
             <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Links (Things That Connect Nodes)</p>
             <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
               <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;width:25%;">PIPES</td><td style="padding:4px 6px;">Conduits. All pipes assumed full. Flow direction: higher head → lower head.</td></tr>
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;">PUMPS</td><td style="padding:4px 6px;">Add head to flow. Types: 3-point curve (required), single-point, constant power. Need at least 3 points for proper curve.</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.08);"><td style="padding:4px 6px;color:#22c55e;">PUMPS</td><td style="padding:4px 6px;">Add head to flow. Types: multi-point head curve, single-point (EPANET auto-expands to a 3-point curve), constant power. A 3-point curve (shutoff, design, max flow) is recommended for realistic behavior.</td></tr>
               <tr><td style="padding:4px 6px;color:#22c55e;">VALVES</td><td style="padding:4px 6px;">PRV (limits downstream P), PSV (maintains upstream P), PBV (fixed P drop), FCV (limits flow), TCV (throttle), GPV (custom headloss curve).</td></tr>
             </table>
           </div>
@@ -2226,7 +2239,7 @@ Peak = 1.6 at 6 PM   Minimum = 0.2 at 3 AM</pre>
         <details style="background:rgba(0,200,150,0.04);border:1px solid rgba(0,200,150,0.15);border-radius:6px;padding:0;">
           <summary style="padding:10px 14px;cursor:pointer;color:var(--accent-cyan);font-size:13px;font-weight:600;">Part 9: Pumps and Energy</summary>
           <div style="padding:4px 14px 14px;font-size:12px;color:var(--text-secondary);line-height:1.7;">
-            <p><strong>Critical:</strong> EPANET needs at least 3 points for a proper pump curve — shutoff head (zero flow), design point (near BEP), and maximum flow.</p>
+            <p><strong>Recommended:</strong> a 3-point pump curve — shutoff head (zero flow), design point (near BEP), and maximum flow. EPANET also accepts a single design point and synthesizes the other two (0 flow → 133% head; 2× flow → 0 head), but an explicit 3-point curve gives more realistic off-design behavior.</p>
             <pre style="background:rgba(0,0,0,0.3);padding:10px;border-radius:4px;overflow-x:auto;font-size:11px;color:#8ff;">[CURVES]
 ;ID      Flow(GPM)  Head(ft)
 PUMP1    0          180     ; Shutoff head
@@ -2244,7 +2257,7 @@ At 85% speed: Flow=85%, Head=72.25%, Power=61.4% → huge savings!</pre>
   18 hr/day at $0.10/kWh → $58.14/day
   + demand charge 32.3 kW × $50/kW = $1,615/mo</pre>
             <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Pump Controls:</p>
-            <p style="font-size:11px;">Simple: <code style="color:#8ff;">LINK PUMP1 OPEN IF NODE TANK1 BELOW 20.0</code>. Rule-based: IF/AND/OR/THEN with priority. Rules override simple controls; last matching rule wins.</p>
+            <p style="font-size:11px;">Simple: <code style="color:#8ff;">LINK PUMP1 OPEN IF NODE TANK1 BELOW 20.0</code>. Rule-based: IF/AND/OR/THEN with PRIORITY. Rule-based controls override simple controls when both apply; among competing rules, higher PRIORITY wins and, at equal priority, the first listed rule wins (see Rule-Based Controls below).</p>
           </div>
         </details>
 
@@ -2310,7 +2323,7 @@ Typical values:
             <table style="width:100%;border-collapse:collapse;font-size:11px;margin:6px 0;">
               <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;width:40%;">System Unbalanced</td><td style="padding:3px 6px;">Disconnected nodes</td></tr>
               <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;">Negative pressures</td><td style="padding:3px 6px;">Elevation errors (unit mismatch?)</td></tr>
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;">Pump exceeds max flow</td><td style="padding:3px 6px;">Pump curve has &lt;3 points</td></tr>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;">Pump exceeds max flow</td><td style="padding:3px 6px;">Operating point beyond the curve's max flow — extend the curve or resize the pump</td></tr>
               <tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:3px 6px;color:#ef4444;">Zero flow everywhere</td><td style="padding:3px 6px;">All pipes CLOSED</td></tr>
               <tr><td style="padding:3px 6px;color:#ef4444;">Tank empties in 1 hour</td><td style="padding:3px 6px;">Demand >> supply</td></tr>
             </table>
@@ -2381,7 +2394,7 @@ Typical values:
             <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
               <li><strong>Disconnected nodes</strong> (most common) — junction has no open pipe path to any source. Run connectivity check.</li>
               <li><strong>Impossible demands</strong> — total demand exceeds supply capacity. Verify peak × base is realistic.</li>
-              <li><strong>Pump curve errors</strong> — shutoff head lower than highest node. Provide 3-point curve.</li>
+              <li><strong>Pump curve errors</strong> — shutoff head lower than highest node it must serve. A 3-point curve (recommended) makes off-design behavior explicit.</li>
               <li><strong>PRV/PSV conflicts</strong> — two PRVs in series with conflicting settings, or PSV downstream of PRV.</li>
               <li><strong>Tight convergence</strong> — relax ACCURACY to 0.01, increase TRIALS to 100, set UNBALANCED CONTINUE 10.</li>
             </ol>
@@ -2598,8 +2611,8 @@ License:       MIT License — free to use, modify, and distribute,
             <ol style="margin:4px 0;padding-left:20px;font-size:11px;">
               <li><strong>Connectivity Guarantee</strong> — BFS from all reservoirs, every junction confirmed reachable, isolated nodes = 0</li>
               <li><strong>Pump Sizing via Critical Path</strong> — BFS traces farthest node, H-W friction calculation, 3-point curve brackets operating point</li>
-              <li><strong>Pressure Zone Detection</strong> — if elevation range &gt;80 ft, auto-divides into ~70 ft zones with PRVs at boundaries</li>
-              <li><strong>Supply-Demand Balance</strong> — supply capacity computed from reservoir heads + pumps, S/D ratio displayed</li>
+              <li><strong>Pressure Zone Detection</strong> — generator heuristic: if elevation range &gt;80 ft, auto-divides into ~70 ft zones with PRVs at boundaries</li>
+              <li><strong>Supply-Demand Balance</strong> — generator-estimated source capacity from pump design flows + gravity reservoirs (planning estimate, not a solver result), S/D ratio displayed</li>
               <li><strong>Realistic Spatial Patterns</strong> — demand zones (Industrial NW, Commercial center), C-factors correlated with position, pipe ages 1950s→2020s</li>
             </ol>
             <p style="color:var(--text-primary);font-weight:600;margin:8px 0 4px;">Recommended Usage:</p>
@@ -3181,8 +3194,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v4.0', date: '2026-06-11' };
-const CHANGELOG_TOP = { version: 'v4.0', date: '2026-06-11' };
+const GEN_BUILD = { version: 'v4.1', date: '2026-07-16' };
+const CHANGELOG_TOP = { version: 'v4.1', date: '2026-07-16' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -4924,11 +4937,9 @@ function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g
 
 // ═══════ VALIDATE INP (lightweight structural check — no solver) ═══════
 // Verifies required sections, node/link cross-references, and [END]. Does NOT run hydraulics.
-function validateINP() {
-  const el = document.getElementById('validateResult');
-  if (!el) return;
-  if (!generatedINP) { showToast('Generate a network first','warning'); return; }
-  const inp = generatedINP;
+// Silent core of the structural INP check — returns {errors, warnings, info} without touching the UI.
+// Used by both the Validate button (validateINP) and the tiered validation badges (runTieredValidation).
+function computeINPValidation(inp) {
   const errors = [], warnings = [], info = [];
   // Parse sections
   const sections = {};
@@ -4979,6 +4990,14 @@ function validateINP() {
   info.push(`${nodeIds.size.toLocaleString()} nodes`);
   info.push(`${checkedLinks.toLocaleString()} links`);
   info.push(`${Object.keys(sections).length} sections`);
+  return { errors, warnings, info };
+}
+
+function validateINP() {
+  const el = document.getElementById('validateResult');
+  if (!el) return;
+  if (!generatedINP) { showToast('Generate a network first','warning'); return; }
+  const { errors, warnings, info } = computeINPValidation(generatedINP);
   // Render
   const ok = errors.length === 0;
   const color = !ok ? 'var(--accent-red)' : warnings.length ? 'var(--accent-amber)' : 'var(--accent-green)';
@@ -5978,7 +5997,7 @@ async function generateEPANETNetwork(silent){
   const supplyAdequate = supplyDemandRatio >= 1.0;
 
   logEng('network', `Connectivity: ${connectivityPct}% of ${totalNodes} nodes reachable from sources (${isolatedCount} isolated of ${totalNodes})`);
-  logEng('network', `Supply adequacy — S/D ratio: ${supplyDemandRatio.toFixed(2)} (${supplyAdequate ? 'ADEQUATE' : 'DEFICIENT'}) — total supply capacity: ${totalSupplyCapacity.toFixed(0)} GPM vs total design demand: ${totalDesignDemand.toFixed(0)} GPM`);
+  logEng('network', `Supply adequacy — S/D ratio: ${supplyDemandRatio.toFixed(2)} (${supplyAdequate ? 'ADEQUATE' : 'DEFICIENT'}) — generator-estimated source capacity: ${totalSupplyCapacity.toFixed(0)} GPM vs total design demand: ${totalDesignDemand.toFixed(0)} GPM (planning estimate — run the solver to verify actual delivery)`);
   logEng('network', `Final network summary — ${nodes.filter(n=>n.type==='junction').length} junctions, ${reservoirs.length} reservoirs, ${tanks.length} tanks, ${pipes.length} pipes, ${pumps.length} pumps (${pumps.filter(p=>p.type==='source').length} source, ${pumps.filter(p=>p.type==='booster').length} booster), ${valves.length} valves`);
 
   // Build INP
@@ -5996,7 +6015,8 @@ async function generateEPANETNetwork(silent){
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
   if(!silent){setProgress(pf,pl,95,'Rendering map...');await sleep(5);
   renderAll();renderStats();renderINPPreview(inp);renderEngLog();setTimeout(renderHGL,100);
-  const lBtn=document.getElementById('logTabBtn');if(lBtn)lBtn.style.display='';persistConfig();}
+  const lBtn=document.getElementById('logTabBtn');if(lBtn)lBtn.style.display='';persistConfig();
+  setTimeout(()=>{runTieredValidation();},60);}
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('EPANET generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='⚡ GENERATE NETWORK + MAP';btn.classList.remove('generating');
@@ -6239,6 +6259,84 @@ function setUIMode(mode) {
   setUIMode(saved);
 })();
 
+// ═══════ WORKFLOW STAGE INDICATOR (Configure → Generate → Validate → Export) ═══════
+function renderStageIndicator() {
+  const el = document.getElementById('stageStrip');
+  if (!el) return;
+  const hasNet = !!networkData;
+  const solverT = tierState && tierState.solver ? tierState.solver.s : null;
+  const qaT = tierState && tierState.qa ? tierState.qa.s : null;
+  const validated = solverT === 'pass' && (qaT === 'pass' || qaT === 'warn');
+  const validating = solverT === 'running';
+  const stages = [
+    { label: 'Configure', state: 'done', hint: 'Pick a preset or adjust settings' },
+    { label: 'Generate', state: hasNet ? 'done' : 'active', hint: hasNet ? 'Network generated' : 'Click Generate to build the model' },
+    { label: 'Validate', state: !hasNet ? 'todo' : validated ? 'done' : validating ? 'active' : solverT === 'fail' || qaT === 'fail' ? 'fail' : 'active',
+      hint: !hasNet ? 'Available after generation' : 'Solver-gated checks — see the tier badges above the preview' },
+    { label: 'Export', state: hasNet && validated ? 'done' : hasNet ? 'active' : 'todo',
+      hint: hasNet ? 'Download .inp / DEM / GeoJSON below' : 'Available after generation' }
+  ];
+  const col = s => s === 'done' ? 'var(--accent-green)' : s === 'fail' ? 'var(--accent-red)' : s === 'active' ? 'var(--accent-cyan)' : 'var(--text-dim)';
+  const ic = s => s === 'done' ? '✓' : s === 'fail' ? '✗' : s === 'active' ? '●' : '○';
+  el.innerHTML = stages.map((st, i) =>
+    (i ? '<span style="opacity:.35;">›</span>' : '') +
+    `<span title="${esc(st.hint)}" style="display:inline-flex;align-items:center;gap:3px;color:${col(st.state)};border:1px solid ${st.state === 'todo' ? 'var(--border)' : col(st.state)};border-radius:9px;padding:2px 8px;white-space:nowrap;cursor:default;">${ic(st.state)} ${st.label}</span>`
+  ).join('');
+}
+
+// ═══════ SETTINGS SEARCH ═══════
+// Filters .section blocks across ALL settings tabs by matching heading/label/tooltip text.
+// While a query is active, matched sections from every tab are shown (tab bar dimmed);
+// clearing the query restores the normal tab view and complexity-mode visibility.
+function filterSettings(query) {
+  const q = (query || '').trim().toLowerCase();
+  const clearBtn = document.getElementById('settingsSearchClear');
+  if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+  const tabs = document.querySelectorAll('.settings-tab-content');
+  const tabBar = document.querySelector('.settings-tabs');
+  if (!q) {
+    tabs.forEach(t => { t.style.display = ''; t.querySelectorAll('.section').forEach(s => { s.style.display = ''; }); });
+    if (tabBar) tabBar.style.opacity = '';
+    const note = document.getElementById('searchNoResults');
+    if (note) note.remove();
+    return;
+  }
+  if (tabBar) tabBar.style.opacity = '0.4';
+  // Sections hidden by the Simple/Advanced/Expert complexity mode stay hidden
+  // (CSS uses !important) — count them separately so we can tell the user.
+  const mode = document.documentElement.getAttribute('data-uimode') || 'simple';
+  const hiddenByMode = s =>
+    (mode === 'simple' && (s.classList.contains('lvl-advanced') || s.classList.contains('lvl-expert'))) ||
+    (mode === 'advanced' && s.classList.contains('lvl-expert'));
+  let matches = 0, hiddenMatches = 0;
+  tabs.forEach(t => {
+    let tabHasMatch = false;
+    t.querySelectorAll('.section').forEach(s => {
+      const txt = (s.textContent + ' ' + Array.from(s.querySelectorAll('[title]')).map(e => e.getAttribute('title')).join(' ')).toLowerCase();
+      const hit = txt.includes(q);
+      if (hit && hiddenByMode(s)) { hiddenMatches++; s.style.display = 'none'; return; }
+      s.style.display = hit ? '' : 'none';
+      if (hit) { tabHasMatch = true; matches++; s.classList.remove('collapsed'); const b = s.querySelector('.section-body'); if (b) b.style.display = ''; }
+    });
+    t.style.display = tabHasMatch ? 'block' : 'none';
+  });
+  let note = document.getElementById('searchNoResults');
+  const needNote = matches === 0 || hiddenMatches > 0;
+  if (needNote) {
+    if (!note) {
+      note = document.createElement('div');
+      note.id = 'searchNoResults';
+      note.style.cssText = 'font-size:11px;color:var(--text-dim);padding:8px 4px;';
+      document.querySelector('.settings-tabs').after(note);
+    }
+    note.textContent = matches === 0
+      ? (hiddenMatches > 0
+        ? `${hiddenMatches} matching section(s) are hidden in ${mode.charAt(0).toUpperCase() + mode.slice(1)} mode — switch to ${mode === 'simple' ? 'Advanced or Expert' : 'Expert'} mode to see them.`
+        : `No settings match "${query}" — try a different term.`)
+      : `${hiddenMatches} more matching section(s) hidden in ${mode.charAt(0).toUpperCase() + mode.slice(1)} mode — switch to ${mode === 'simple' ? 'Advanced or Expert' : 'Expert'} mode to see them.`;
+  } else if (note) note.remove();
+}
+
 function setUnits(units) {
   currentUnits = units;
   document.getElementById('unitsUS').classList.toggle('active', units==='US');
@@ -6316,6 +6414,7 @@ function clearOutputPreview() {
   if (pb) pb.style.display = 'none';
   outputStale = false;
   hideStaleNote();
+  resetTiers();
   renderStatusBar();
 }
 
@@ -6356,6 +6455,116 @@ function markStale() {
 function hideStaleNote() {
   const note = document.getElementById('staleNote');
   if (note) note.classList.remove('show');
+}
+
+// ── Tiered validation badges (solver-gated) ─────────────────────────────────
+// Honest status ladder: Generated → Syntax → Topology → Solver → QA.
+// "Generated" only means the generator ran; hydraulic validity is claimed ONLY
+// after the WASM solver actually converges (Solver tier) and results pass the
+// engineering QA screen (QA tier). Statuses: pass | warn | fail | running | pending.
+let tierState = null;
+const AUTO_VALIDATE_MAX_JUNCTIONS = 2500;
+// Run token: incremented on every reset/new validation run so stale async solve
+// completions (from a previous generation) can never stamp results onto a newer model.
+let _tierRunId = 0;
+
+function resetTiers() { _tierRunId++; tierState = null; renderTierBadges(); }
+function setTier(name, s, d) {
+  if (!tierState) tierState = {};
+  tierState[name] = { s, d: d || '' };
+  renderTierBadges();
+}
+function renderTierBadges() {
+  const el = document.getElementById('tierStrip');
+  if (!el) return;
+  if (typeof renderStageIndicator === 'function') renderStageIndicator();
+  if (!tierState) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const defs = [['generated','Generated'],['syntax','Syntax'],['topology','Topology'],['solver','Solver'],['qa','QA']];
+  const icon = s => s==='pass'?'✅':s==='warn'?'⚠':s==='fail'?'❌':s==='running'?'⏳':'○';
+  const color = s => s==='pass'?'var(--accent-green)':s==='warn'?'var(--accent-amber)':s==='fail'?'var(--accent-red)':'var(--text-dim)';
+  el.style.display = 'flex';
+  el.innerHTML = defs.map(([k, label], i) => {
+    const t = tierState[k] || { s: 'pending', d: 'Not checked yet' };
+    const c = color(t.s);
+    return (i ? '<span style="opacity:.35;">→</span>' : '') +
+      `<span title="${esc(label + ': ' + (t.d || t.s))}" style="display:inline-flex;align-items:center;gap:4px;border:1px solid ${c};color:${c};border-radius:10px;padding:2px 9px;cursor:default;white-space:nowrap;">${icon(t.s)} ${label}</span>`;
+  }).join('');
+}
+
+// Unit-aware pressure QA from a {nodeId: pressure} map (steady-state screen).
+// Pressures are in the INP's native unit: psi (US) or m of head (SI).
+function applyPressureQA(pressures) {
+  const si = currentUnits === 'SI';
+  const lowThr = si ? 20 * 0.7031 : 20;   // 20 psi
+  const highThr = si ? 100 * 0.7031 : 100; // 100 psi
+  const unit = si ? 'm' : 'psi';
+  let neg = 0, low = 0, total = 0, maxP = -Infinity;
+  Object.values(pressures).forEach(p => {
+    if (typeof p !== 'number' || !isFinite(p)) return;
+    total++;
+    if (p < 0) neg++; else if (p < lowThr) low++;
+    if (p > maxP) maxP = p;
+  });
+  if (total === 0) { setTier('qa', 'pending', 'No node pressures returned'); return; }
+  if (neg > 0) setTier('qa', 'fail', `${neg} node(s) with negative pressure — model does not meet QA screen`);
+  else if (low > total * 0.1) setTier('qa', 'warn', `${low} of ${total} nodes below 20 psi at steady state`);
+  else if (maxP > highThr) setTier('qa', 'warn', `Max pressure ${maxP.toFixed(0)} ${unit} exceeds 100 psi equivalent`);
+  else setTier('qa', 'pass', `Steady-state screen passed — 0 negative, ${low} below 20 psi, max ${maxP.toFixed(0)} ${unit}`);
+}
+
+// Runs the badge ladder after each generation. For EPANET models up to
+// AUTO_VALIDATE_MAX_JUNCTIONS junctions the steady-state solver runs
+// automatically; larger models (and SWMM) leave Solver/QA pending with an
+// explicit hint so we never imply solver-backed validity without a solve.
+async function runTieredValidation() {
+  if (!networkData || !generatedINP) return;
+  const rid = ++_tierRunId;
+  tierState = {};
+  setTier('generated', 'pass', 'Model generated (topology + heuristics only — not yet a hydraulic claim)');
+  const v = computeINPValidation(generatedINP);
+  setTier('syntax', v.errors.length ? 'fail' : 'pass',
+    v.errors.length ? v.errors.join('; ') : `Structural check passed (${v.info.join(', ')})`);
+  const nd = networkData;
+  const iso = nd.isolatedCount || 0;
+  const conn = nd.connectivityPct != null ? nd.connectivityPct : 100;
+  setTier('topology', (iso === 0 && conn === 100) ? 'pass' : 'warn',
+    iso === 0 ? 'All nodes reachable from a source' : `${iso} isolated node(s), ${conn}% connected`);
+  if (currentMode !== 'epanet') {
+    setTier('solver', 'pending', 'Run the SWMM engine (Load WASM Engine → Run Solver) to verify hydraulics');
+    setTier('qa', 'pending', 'Requires a solver run');
+    return;
+  }
+  const jc = nd.nodes.filter(n => n.type === 'junction').length;
+  if (v.errors.length) {
+    setTier('solver', 'pending', 'Fix syntax errors before solving');
+    setTier('qa', 'pending', 'Requires a successful solve');
+    return;
+  }
+  if (jc > AUTO_VALIDATE_MAX_JUNCTIONS) {
+    setTier('solver', 'pending', `Auto-solve skipped for large model (${jc.toLocaleString()} junctions) — use ⚡ Quick Sim or Run Solver`);
+    setTier('qa', 'pending', 'Requires a solver run');
+    return;
+  }
+  if (_solverBusy) {
+    setTier('solver', 'pending', 'Solver busy — use ⚡ Quick Sim when free');
+    setTier('qa', 'pending', 'Requires a solver run');
+    return;
+  }
+  setTier('solver', 'running', 'Running steady-state solve…');
+  _solverBusy = true;
+  try {
+    const pressures = await steadyStateSolve();
+    if (rid !== _tierRunId) return; // a newer generation superseded this run — discard
+    setTier('solver', 'pass', 'Steady-state solve converged (OWA-EPANET WASM)');
+    applyPressureQA(pressures);
+  } catch (e) {
+    console.error('Auto-validation solve error:', e);
+    if (rid !== _tierRunId) return;
+    setTier('solver', 'fail', 'Solve failed: ' + e.message);
+    setTier('qa', 'pending', 'Requires a successful solve');
+  } finally {
+    _solverBusy = false;
+  }
 }
 
 // ═══════ DESIGN STORMS ═══════
@@ -6893,7 +7102,8 @@ async function generateSWMMNetwork(silent) {
   cityMapData=generateCityMap(bnd,cfg,mulberry32(777));
 
   if(!silent){setProgress(pf,pl,95,'Rendering map...');await sleep(5);
-  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);persistConfig();}
+  renderAll();renderStats();renderINPPreview(inp);setTimeout(renderHGL,100);persistConfig();
+  setTimeout(()=>{runTieredValidation();},60);}
   if(!silent)advanceSeedIfUnlocked();
   } catch(e) { console.error('SWMM generation error:', e); if(!silent)alert('Generation error: ' + e.message); }
   finally { if(!silent){btn.disabled=false;btn.textContent='🌧 GENERATE SWMM MODEL + MAP';btn.classList.remove('generating');
@@ -8055,6 +8265,19 @@ async function runSolver() {
       onTimeSliderChange();
       addSolverParamOptions();
       analyzeValidation();
+      // Solver-gated badges: a full run just completed for the current engine.
+      if (solverResults.type === 'epanet') {
+        setTier('solver', 'pass', 'Full extended-period solve completed (OWA-EPANET WASM)');
+        if (validationReport) {
+          const m = { green: 'pass', yellow: 'warn', red: 'fail' };
+          setTier('qa', m[validationReport.severity] || 'pending',
+            validationReport.severity === 'green' ? 'Full-simulation QA checks passed'
+              : `${validationReport.recommendations.length} QA finding(s) — see Validation Report on the Map/Stats tabs`);
+        }
+      } else {
+        setTier('solver', 'pass', 'SWMM run completed');
+        setTier('qa', 'pending', 'Review continuity errors and warnings in the RPT tab');
+      }
       renderAll();
       setTimeout(renderHGL, 100);
       generateRPT();
@@ -8322,7 +8545,7 @@ function renderValidationUI() {
   const v = validationReport;
   const badge = v.severity === 'green' ? '✅' : v.severity === 'yellow' ? '⚠️' : '❌';
   const badgeColor = v.severity === 'green' ? '#22c55e' : v.severity === 'yellow' ? '#f59e0b' : '#ef4444';
-  const statusText = v.severity === 'green' ? 'Model Valid' : v.severity === 'yellow' ? 'Minor Issues' : 'Critical Issues';
+  const statusText = v.severity === 'green' ? 'Solver + QA Passed' : v.severity === 'yellow' ? 'Solver Passed — QA Warnings' : 'Solver Ran — QA Failed';
 
   let html = `<div style="background:rgba(${v.severity==='green'?'34,197,94':v.severity==='yellow'?'245,158,11':'239,68,68'},0.1);border:1px solid ${badgeColor};border-radius:10px;padding:16px;margin-bottom:16px;">`;
   html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">`;
@@ -10593,6 +10816,30 @@ async function swmmEnsembleExport() {
 // ═══════ QUICK SIM (Pressure Heatmap) ═══════
 let quickSimPressures = null;
 
+// Shared steady-state solve: loads the EPANET WASM engine if needed, solves the
+// current generatedINP, and returns a {nodeId: pressure} map. Used by Quick Sim
+// (heatmap) and by the auto-validation badge ladder. Caller manages _solverBusy.
+async function steadyStateSolve() {
+  if (!solverModule || solverModule.type !== 'epanet-js') {
+    await loadEpanetEngine();
+  }
+  await new Promise(r => setTimeout(r));
+  const ws = solverModule._epanetWs;
+  const model = new window.__EpanetProject(ws);
+  ws.writeFile('quicksim.inp', generatedINP);
+  model.open('quicksim.inp', 'quicksim.rpt', 'quicksim.out');
+  try {
+    model.solveH();
+    const pressures = {};
+    for (let i = 1; i <= model.getCount(0); i++) {
+      pressures[model.getNodeId(i)] = model.getNodeValue(i, 11);
+    }
+    return pressures;
+  } finally {
+    try { model.close(); } catch (e) {}
+  }
+}
+
 async function quickSim() {
   if (!generatedINP || !networkData) { showToast('Generate a network first', 'warning'); return; }
   if (currentMode !== 'epanet') { showToast('Quick Sim is only available in EPANET mode', 'warning'); return; }
@@ -10603,28 +10850,17 @@ async function quickSim() {
   const qsTok = startExportProgress('Quick Sim: loading engine…');
   markExportIndeterminate(null, qsTok);
   try {
-    if (!solverModule || solverModule.type !== 'epanet-js') {
-      await loadEpanetEngine();
-    }
     btn.textContent = '⏳ Solving...';
     setSolverStatus('Quick Sim: running steady-state...');
     markExportIndeterminate('Quick Sim: running steady-state…', qsTok);
-    await new Promise(r => setTimeout(r));
-    const ws = solverModule._epanetWs;
-    const model = new window.__EpanetProject(ws);
-    ws.writeFile('quicksim.inp', generatedINP);
-    model.open('quicksim.inp', 'quicksim.rpt', 'quicksim.out');
-    model.solveH();
-    const nd = networkData;
-    const junctions = nd.nodes.filter(n => n.type === 'junction');
-    const pressures = {};
-    for (let i = 1; i <= model.getCount(0); i++) {
-      const nodeId = model.getNodeId(i);
-      const p = model.getNodeValue(i, 11);
-      pressures[nodeId] = p;
-    }
-    model.close();
+    const qsRid = _tierRunId;
+    const pressures = await steadyStateSolve();
+    const junctions = networkData.nodes.filter(n => n.type === 'junction');
     quickSimPressures = pressures;
+    if (qsRid === _tierRunId) { // only stamp tiers if no newer generation superseded this solve
+      setTier('solver', 'pass', 'Steady-state solve converged (Quick Sim)');
+      applyPressureQA(pressures);
+    }
     document.getElementById('showResults').checked = false;
     renderAll();
     setSolverStatus(`✓ Quick Sim complete — pressure heatmap displayed (${junctions.length} nodes)`);
@@ -10635,6 +10871,7 @@ async function quickSim() {
     console.error('Quick Sim error:', e);
     setSolverStatus(`⚠ Quick Sim error: ${e.message}`);
     showToast('Quick Sim failed: ' + e.message, 'error');
+    setTier('solver', 'fail', 'Quick Sim solve failed: ' + e.message);
   } finally {
     endExportProgress(qsTok);
     _solverBusy = false;
@@ -10705,6 +10942,7 @@ window.addEventListener('load',()=>{
   setupTooltips();
   setupInputValidation();
   setupCanvasInspect();
+  renderStageIndicator();
   document.querySelectorAll('.tab-btn').forEach(b => b.setAttribute('role', 'tab'));
   const genBtn = document.getElementById('genBtn');
   if (genBtn) genBtn.setAttribute('aria-label', 'Generate hydraulic network model');
