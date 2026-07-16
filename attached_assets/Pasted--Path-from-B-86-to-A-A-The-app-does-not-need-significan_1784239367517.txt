@@ -1,0 +1,836 @@
+# Path from **B+ (86)** to **A− / A**
+
+The app does **not** need significantly more features. It needs to make its existing capabilities more **trustworthy, understandable, testable, and polished**.
+
+A practical target:
+
+- **A−: 90–92** — technically credible, streamlined, and consistently validated.
+- **A: 93–96** — independently verifiable, highly usable, accessible, and professionally documented.
+
+## The five upgrades that matter most
+
+| Priority | Upgrade | Approx. impact |
+|---|---|---:|
+| 1 | Solver-gated validation and honest status badges | +2.0 |
+| 2 | Technical accuracy and engine provenance | +1.5 |
+| 3 | Simplified, task-oriented UX | +1.5 |
+| 4 | Automated regression testing and validation evidence | +1.5 |
+| 5 | Accessibility and professional documentation | +1.0 |
+|  | **Potential total** | **+7.5** |
+
+Completing the first three should reach **A− territory**. Completing all five well should produce an **A-level application**.
+
+---
+
+# 1. Make validation the central product feature
+
+## Current weakness
+
+The app reports connectivity, supply-demand ratio, and generated topology before the hydraulic or routing solver is necessarily run. These are valuable generation checks, but they do not prove that a model is hydraulically successful.
+
+Terms such as:
+
+- “Hydraulically valid”
+- “Calibration-ready”
+- “Adequate”
+- “100% valid”
+
+should be reserved for clearly defined test results.
+
+## Replace one “valid” state with validation levels
+
+Every generated model should receive a validation panel like this:
+
+### Model validation
+
+| Check | Status | Details |
+|---|---|---|
+| INP syntax | ✅ Passed | Parsed by OWA-EPANET 2.3.x |
+| References and IDs | ✅ Passed | 0 missing references |
+| Connectivity | ✅ Passed | 1,057/1,057 nodes reachable |
+| Hydraulic convergence | ✅ Passed | 73/73 hydraulic periods |
+| Minimum pressure | ⚠ Warning | 8 nodes below 20 psi |
+| Maximum pressure | ✅ Passed | 76.4 psi |
+| Pump operating range | ⚠ Warning | PU7 exceeds preferred range at hour 18 |
+| Tank operation | ❌ Failed | T4 reaches minimum level |
+| Overall status | ⚠ Conditional | Solver passed; engineering criteria not fully met |
+
+## Recommended badges
+
+Use these exact categories:
+
+1. **Generated**
+2. **Syntax Passed**
+3. **Topology Passed**
+4. **Solver Passed**
+5. **QA Criteria Passed**
+6. **User Reviewed**
+
+Do not show a green engineering-valid badge immediately after generation.
+
+## Automatically run the solver
+
+For Tiny through Large models:
+
+> Generate → Parse → Solve → Validate → Display results
+
+For larger models, show:
+
+> “Full validation may take approximately 20 seconds and use 1.3 GB of memory. Run now?”
+
+## EPANET acceptance checks
+
+Automatically inspect the entire simulation, not only`T=0:00`:
+
+- All hydraulic periods converged
+- No fatal engine errors
+- Minimum and maximum pressure
+- Nodes below user-defined pressure thresholds
+- Negative-pressure count
+- Maximum pipe velocity
+- Maximum unit headloss
+- Pumps operating beyond their defined curves
+- Excessive pump cycling
+- Empty or overflowing tanks
+- Tank recovery after 24-hour cycles
+- PRV/PSV/FCV operating states
+- Unmet pressure-dependent demand
+- Water-quality mass balance
+- Chlorine, age, or trace thresholds where enabled
+
+## SWMM acceptance checks
+
+Report:
+
+- Runoff continuity error
+- Flow-routing continuity error
+- Water-quality continuity error
+- Flooding volume
+- Surcharge duration
+- Unstable routing periods
+- Conduits exceeding capacity
+- Nodes exceeding maximum depth
+- Outfall flow totals
+- Pump utilization
+- LID water balance
+- Groundwater and RDII contributions
+
+## Important distinction
+
+Let users define criteria instead of claiming universal validity:
+
+```text
+Validation profile:
+○ Educational
+○ Typical planning
+○ Conservative design screening
+○ Custom
+```
+
+The app can say:
+
+> “Passed the selected validation profile.”
+
+It should not say:
+
+> “Approved for engineering design.”
+
+### Grade effect
+
+Implementing this properly would likely move the app from **86 to approximately 88** by itself.
+
+---
+
+# 2. Complete a technical accuracy audit
+
+The extensive documentation increases the app’s value, but it also creates a large accuracy surface. One incorrect statement can reduce trust in everything else.
+
+## Audit these areas first
+
+### PRV settings
+
+Clearly distinguish:
+
+- Downstream node elevation
+- Target downstream pressure
+- Equivalent hydraulic grade
+- Value written to the EPANET`[VALVES]` section
+
+Example:
+
+```text
+Downstream elevation:       155 ft
+Target pressure:             50 psi
+Equivalent pressure head:   115.4 ft
+Target HGL:                 270.4 ft
+EPANET PRV setting:          50 psi
+```
+
+Add a test confirming the INP receives the pressure setting—not the target HGL.
+
+### Pump curves
+
+Change statements such as:
+
+> “EPANET requires at least three pump-curve points.”
+
+to:
+
+> “EPANET accepts a single design point and derives an assumed curve, but three or more manufacturer or field-test points are recommended for defensible modeling.”
+
+### Supply capacity
+
+Reservoirs are fixed-head boundaries; they do not inherently possess a finite capacity in EPANET.
+
+Rename:
+
+> “Supply capacity”
+
+to:
+
+> “Generator-estimated source capacity”
+
+After simulation, separately show:
+
+- Actual peak source flow
+- Source head
+- Critical pressure
+- Pump operating points
+- Storage contribution
+- User-defined source capacity limits
+
+### Pressure zones
+
+Avoid automatically presenting elevation range alone as proof that a pressure zone is required. Instead say:
+
+> “The 97-ft elevation range triggered the generator’s pressure-zone heuristic.”
+
+Then confirm whether simulated pressures actually justify the PRV.
+
+### Calibration-ready
+
+Use:
+
+> “Includes synthetic calibration features”
+
+instead of:
+
+> “Calibration-ready”
+
+unless the model includes:
+
+- A solver-passed truth run
+- Observation locations
+- Synthetic measurements
+- Noise assumptions
+- A calibration dataset
+- Parameter bounds
+- Scoring criteria
+- Separate validation data
+
+## Create one canonical fact library
+
+The app currently contains repeated educational material. Store technical facts once and generate documentation and tooltips from the same source.
+
+```json
+{
+  "prv": {
+    "epanetSetting": "downstream pressure",
+    "usUnit": "psi",
+    "siUnit": "m"
+  },
+  "pumpCurve": {
+    "engineMinimumPoints": 1,
+    "recommendedPoints": 3,
+    "recommendationReason": "Avoid relying on an assumed curve"
+  }
+}
+```
+
+This prevents different sections from contradicting one another.
+
+## Label every statement by type
+
+Use small labels:
+
+- **Engine behavior**
+- **Generator heuristic**
+- **Typical value**
+- **Engineering recommendation**
+- **Regulatory—verify locally**
+
+For example:
+
+> **Generator heuristic:** Create a pressure-zone candidate when terrain relief exceeds 80 ft.
+
+This is much more credible than presenting the 80-ft threshold as a universal requirement.
+
+### Grade effect
+
+A documented technical audit and correction pass could add approximately **1–1.5 points**.
+
+---
+
+# 3. Redesign the interface around user goals
+
+The app’s feature count is a strength, but the initial experience feels like an expert control panel rather than a guided modeling application.
+
+## Create six starting workflows
+
+On launch, ask:
+
+> **What do you want to create?**
+
+### EPANET workflows
+
+1. **Teaching network**
+2. **Planning model**
+3. **Calibration exercise**
+4. **Solver benchmark**
+
+### SWMM workflows
+
+5. **Stormwater drainage model**
+6. **Sanitary/RDII model**
+7. **LID demonstration**
+8. **Custom expert model**
+
+Each workflow should expose only the controls necessary for that purpose.
+
+## Example: EPANET teaching workflow
+
+### Step 1 — Size
+
+- 50
+- 150
+- 750 nodes
+
+### Step 2 — Terrain
+
+- Flat
+- Rolling
+- Valley
+- Ridge
+
+### Step 3 — System
+
+- Number of reservoirs
+- Number of tanks
+- Demand level
+- Simulation duration
+
+### Step 4 — Generate and validate
+
+Everything else uses documented defaults.
+
+## Make Simple mode genuinely simple
+
+Simple mode should contain no more than approximately ten controls:
+
+- EPANET or SWMM
+- Units
+- Model size
+- Terrain
+- Demand or rainfall intensity
+- Number of sources/outfalls
+- Simulation duration
+- City/map style
+- Seed
+- Generate button
+
+Advanced mode can expose engineering parameters. Expert mode can expose every input.
+
+## Use a clear four-stage header
+
+```text
+1. CONFIGURE  →  2. GENERATE  →  3. VALIDATE  →  4. EXPORT
+```
+
+At each stage, provide one visually dominant action.
+
+### Configure
+
+> Generate model
+
+### Generated
+
+> Run full validation
+
+### Validated
+
+> Review warnings
+
+### Reviewed
+
+> Export package
+
+## Add settings search
+
+Expert users should be able to type:
+
+-`RDII`
+-`roughness`
+-`tank diameter`
+-`report step`
+-`chlorine`
+-`Manning`
+-`pressure zone`
+
+and jump directly to the setting.
+
+## Explain dependencies
+
+When a user changes a parameter, say what it affects:
+
+> “Changing reservoir head requires regeneration of source checks, pump sizing, pressure-zone analysis, and the INP file.”
+
+## Separate the textbook from the workspace
+
+Keep short tooltips and contextual help inside the generator. Move the long reference material to dedicated pages:
+
+- Learn EPANET
+- Learn SWMM
+- Generator methodology
+- Validation methodology
+- INP reference
+- Tutorials
+
+This would make the application feel faster, cleaner, and more professional without removing any content.
+
+### Grade effect
+
+A successful workflow redesign could add **1–2 points**, especially in usability and product maturity.
+
+---
+
+# 4. Publish evidence that the generator works
+
+An A-level engineering application needs more than internal checks. It needs reproducible validation evidence.
+
+## Native-versus-WASM regression suite
+
+For fixed configurations and seeds:
+
+1. Generate the INP in the application.
+2. Run it with the bundled WASM engine.
+3. Run it with the corresponding official native engine.
+4. Compare results.
+5. Publish the tolerances and pass/fail results.
+
+## Minimum validation matrix
+
+| Model | US | SI | Native comparison |
+|---|---:|---:|---:|
+| EPANET steady-state DDA | ✅ | ✅ | ✅ |
+| EPANET EPS with tanks | ✅ | ✅ | ✅ |
+| EPANET PDA | ✅ | ✅ | ✅ |
+| EPANET pumps and valves | ✅ | ✅ | ✅ |
+| EPANET chlorine | ✅ | ✅ | ✅ |
+| SWMM dynamic wave | ✅ | ✅ | ✅ |
+| SWMM infiltration methods | ✅ | ✅ | ✅ |
+| SWMM DWF and RDII | ✅ | ✅ | ✅ |
+| SWMM pollutants | ✅ | ✅ | ✅ |
+| SWMM groundwater | ✅ | ✅ | ✅ |
+| SWMM LID | ✅ | ✅ | ✅ |
+| SWMM snowmelt | ✅ | ✅ | ✅ |
+
+## Test invariants
+
+Every generated model should satisfy automated properties such as:
+
+### Common
+
+- All IDs are unique.
+- Every referenced object exists.
+- Numeric values are finite.
+- Same seed and configuration produce identical output.
+- US-to-SI conversion preserves physical values within tolerance.
+- Exported configuration regenerates the same model.
+
+### EPANET
+
+- Every junction is connected to a source.
+- No pipe connects a node to itself.
+- Pump curves are legal and monotonically decreasing.
+- Tank levels satisfy`minimum ≤ initial ≤ maximum`.
+- Valve connections follow engine placement rules.
+- Every demand pattern exists.
+- Every pump curve reference exists.
+
+### SWMM
+
+- Every subcatchment outlet exists.
+- Every conduit has valid end nodes.
+- Cross-section parameters are legal.
+- Subcatchment area and width are positive.
+- Aquifer and groundwater references exist.
+- RDII nodes reference valid hydrographs.
+- LID usage references valid controls.
+
+## Publish a validation page
+
+Add a public page containing:
+
+```text
+Generator version: 4.1.0
+EPANET engine: OWA-EPANET 2.3.x
+SWMM engine: EPA SWMM 5.2.4
+Automated tests: 1,842 passed
+Golden models: 64 passed
+Native/WASM comparisons: 64 passed
+Unit conversion tests: 320 passed
+Last validation date: July 16, 2026
+```
+
+A downloadable test report would substantially improve credibility.
+
+## Add a manifest to every export
+
+Each ZIP should include`manifest.json`:
+
+```json
+{
+  "generatorVersion": "4.1.0",
+  "mode": "EPANET",
+  "seed": 42,
+  "units": "GPM",
+  "engine": {
+    "name": "OWA-EPANET",
+    "version": "2.3.x",
+    "sourceCommit": "exact-commit-here"
+  },
+  "configHash": "sha256:...",
+  "topologyHash": "sha256:...",
+  "validation": {
+    "syntax": "pass",
+    "connectivity": "pass",
+    "solver": "pass",
+    "qaProfile": "warning"
+  }
+}
+```
+
+### Grade effect
+
+This is the difference between “impressive generator” and “defensible engineering software.” It could add **1–2 points**.
+
+---
+
+# 5. Improve results inspection
+
+Generating the model is only half the user experience. Users need to understand why it passed or failed.
+
+## Add an object inspector
+
+Clicking any object should show:
+
+### Input
+
+- ID
+- Type
+- Coordinates
+- Elevation/invert
+- Demand/area
+- Diameter
+- Roughness
+- Status
+
+### Generation rationale
+
+- Why it received this diameter
+- Why it belongs to this demand zone
+- Why this pump or valve was inserted
+- Which heuristic produced its value
+
+### Results
+
+- Pressure/head/depth
+- Flow and velocity
+- Headloss or capacity ratio
+- Time-series chart
+- Minimum, maximum, and timestamp
+- Warnings
+
+### File connection
+
+- INP section
+- Copy relevant INP lines
+- Find in full INP
+- Export object as JSON
+
+## Add engineering query buttons
+
+### EPANET
+
+- Show pressure below 20 psi
+- Show pressure above 80 psi
+- Show velocity above 5 ft/s
+- Show headloss above selected limit
+- Show pumps outside curve
+- Show empty/full tanks
+- Show active PRVs
+- Show disconnected or closed zones
+
+### SWMM
+
+- Show flooded nodes
+- Show surcharged nodes
+- Show conduits above capacity
+- Show high continuity-error contributors
+- Show outfall hydrographs
+- Show LID performance
+- Show RDII contribution
+- Show pollutant loading hotspots
+
+## Improve legends
+
+Every result map should show:
+
+- Variable
+- Unit
+- Simulation time
+- Minimum and maximum
+- Color classification
+- Warning thresholds
+- Missing value symbol
+
+This is necessary for screenshots and exported reports to stand on their own.
+
+---
+
+# 6. Reach WCAG-level accessibility
+
+Accessibility is one of the clearest differences between a technically impressive prototype and an A-grade public application.
+
+## Required improvements
+
+- Every icon and emoji button must have a text label or accessible name.
+- Do not use green/red as the only pass/fail indicator.
+- Add symbols: ✅, ⚠, ❌ with text.
+- Make every function keyboard accessible.
+- Add visible focus styles.
+- Associate labels with form controls.
+- Announce generation progress through an ARIA live region.
+- Provide tables as alternatives to canvas-only visualization.
+- Add a high-contrast theme.
+- Support 200% and 400% zoom.
+- Respect reduced-motion settings.
+- Use colorblind-safe palettes.
+- Make charts navigable and downloadable as tables.
+- Test on desktop and mobile screen readers.
+
+## Add accessibility settings
+
+```text
+Accessibility
+☑ High contrast
+☑ Colorblind-safe result palette
+☑ Reduce animation
+☑ Always show text with icons
+☑ Increase control size
+```
+
+Completing a documented WCAG 2.2 AA review would materially improve the grade.
+
+---
+
+# 7. Strengthen provenance and product trust
+
+## Show exact engine information
+
+Instead of simply:
+
+> EPANET 2.3
+
+display:
+
+```text
+Hydraulic engine: OWA-EPANET 2.3.x
+Source tag: ...
+Source commit: ...
+WASM build: ...
+Compiled with: Emscripten ...
+```
+
+Do the same for SWMM.
+
+## Add an “About this model” card
+
+Every generated model should show:
+
+- Generator version
+- Engine version
+- Generation timestamp
+- Seed
+- Configuration hash
+- Unit system
+- Validation profile
+- Validation result
+- Known limitations
+
+## Clarify themes and affiliations
+
+Because the app includes visual themes named after EPA, universities, and companies, add:
+
+> “Theme names identify visual color presets only. This application is not affiliated with or endorsed by the named organizations.”
+
+## Clarify AI behavior
+
+Before an AI request, show:
+
+- Payload preview
+- Provider/model
+- Estimated credit cost
+- Data retention statement
+- Whether coordinates or model names are transmitted
+- Explicit consent
+
+---
+
+# 8. Improve large-model performance
+
+The 50,000- and 100,000-node features are compelling, but they should have professional safeguards.
+
+## Move heavy work to Web Workers
+
+Run these outside the main UI thread:
+
+- Network generation
+- Solver execution
+- DEM interpolation
+- GeoJSON generation
+- ZIP creation
+- Ensemble generation
+- Large text processing
+
+## Add resource estimation
+
+Before generation:
+
+```text
+Estimated objects:       201,000
+Estimated memory:        1.8–2.6 GB
+Estimated generation:    22–40 seconds
+Map complexity:          High
+Recommended options:
+☑ Disable building footprints
+☑ Disable Voronoi
+☑ Do not render full INP preview
+```
+
+## Add cancellation and recovery
+
+Every long-running operation should support:
+
+- Cancel
+- Progress by stage
+- Worker timeout
+- Error recovery
+- Partial log export
+
+## Virtualize large outputs
+
+For giant files:
+
+- Do not render the entire INP into the DOM.
+- Show sections on demand.
+- Search in a worker.
+- Use virtual scrolling.
+- Offer download-only mode.
+
+---
+
+# Recommended implementation plan
+
+## Phase 1 — Reach **A−**
+
+### Release 4.1: Technical credibility
+
+1. Add tiered validation badges.
+2. Auto-run the solver for manageable models.
+3. Add full EPS and SWMM QA checks.
+4. Audit PRV units.
+5. Correct pump-curve documentation.
+6. Rename heuristic supply capacity.
+7. Display exact engine version and source commit.
+8. Add validation results to exports.
+
+**Exit criteria:**
+
+- No model is labeled hydraulically valid before solver completion.
+- All generated INPs pass syntax/reference validation.
+- Full simulation warnings are surfaced.
+- Technical documentation has no known contradictions.
+- Engine build is reproducible and identifiable.
+
+### Release 4.2: UX cleanup
+
+1. Add task-based startup workflows.
+2. Reduce Simple mode to approximately ten controls.
+3. Add Configure → Generate → Validate → Export stages.
+4. Add settings search.
+5. Move long-form documentation out of the workspace.
+6. Add an object inspector and result legends.
+
+**Expected result:** **A−, approximately 91–92/100.**
+
+---
+
+## Phase 2 — Reach **A**
+
+### Release 4.3: Validation evidence
+
+1. Build native-versus-WASM regression tests.
+2. Add golden models.
+3. Add property-based tests.
+4. Add comprehensive unit-conversion tests.
+5. Publish the validation matrix.
+6. Add manifests and hashes to exports.
+7. Establish a release changelog and documented QA process.
+
+### Release 4.4: Accessibility and production polish
+
+1. Complete WCAG 2.2 AA review.
+2. Add keyboard and screen-reader support.
+3. Add accessible tables for all canvas results.
+4. Move heavy processing to Web Workers.
+5. Add large-model memory estimates and cancellation.
+6. Add AI privacy and cost disclosure.
+7. Clarify branding, affiliation, and engineering limitations.
+
+**Expected result:** **A, approximately 94–95/100.**
+
+---
+
+# Definition of done for an A-grade app
+
+I would give the application an **A** when all of the following are true:
+
+- [ ] Exact official engine version and source commit are displayed.
+- [ ] A solver run—not a heuristic—controls the main validity badge.
+- [ ] EPANET and SWMM simulations are checked across their full durations.
+- [ ] Generated warnings link directly to affected objects.
+- [ ] Native and WASM results are regression-tested.
+- [ ] US/SI conversions have automated round-trip tests.
+- [ ] Every export contains reproducibility and validation metadata.
+- [ ] Technical claims distinguish engine facts from heuristics.
+- [ ] Simple mode is understandable without hydraulic-modeling expertise.
+- [ ] Expert settings remain searchable and fully available.
+- [ ] Maps have units, legends, timestamps, and accessible alternatives.
+- [ ] The application meets documented accessibility criteria.
+- [ ] Large models do not freeze the interface.
+- [ ] AI data transfer and cost are clearly disclosed.
+- [ ] No branding suggests unauthorized organizational endorsement.
+- [ ] Limitations are presented prominently and professionally.
+
+## Bottom line
+
+The shortest route to **A−** is:
+
+> **Solver-gated validation + technical audit + task-oriented UX**
+
+The route from **A− to A** is:
+
+> **Published regression evidence + accessibility + reproducible builds + production-level polish**
+
+The app should prioritize **proof and usability over additional features**. It already has enough capabilities for an A; it now needs the quality system and interface discipline to support them.
