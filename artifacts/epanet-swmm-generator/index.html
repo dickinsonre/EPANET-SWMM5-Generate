@@ -1743,6 +1743,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <button class="tab-btn" onclick="switchTab('inp',this)">INP</button>
       <button class="tab-btn" onclick="switchTab('docs',this)">Docs</button>
       <button class="tab-btn" onclick="switchTab('hgl',this)">HGL</button>
+      <button class="tab-btn" onclick="switchTab('view3d',this)">3D</button>
       <button class="tab-btn" onclick="switchTab('log',this)" id="logTabBtn" style="display:none;">Log</button>
       <button class="tab-btn" onclick="switchTab('rpt',this)" id="rptTabBtn">RPT</button>
       <button class="tab-btn" onclick="switchTab('results',this)" id="resultsTabBtn">Results</button>
@@ -3096,6 +3097,31 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
     </div>
   </div>
 
+  <!-- 3D Tab (terrain + network) -->
+  <div id="tab-view3d" style="display:none;">
+    <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
+      <button type="button" class="download-btn" onclick="rebuild3D(true)" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--accent-cyan);color:var(--accent-cyan);">↻ Rebuild</button>
+      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">Vert. exag.:
+        <select id="exag3d" onchange="rebuild3D(true)" style="background:var(--surface);color:var(--text-secondary);border:1px solid rgba(255,255,255,0.1);border-radius:3px;font-size:11px;padding:2px 3px;">
+          <option value="1">1×</option><option value="3">3×</option><option value="6" selected>6×</option><option value="12">12×</option>
+        </select>
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">Nodes:
+        <select id="color3d" onchange="rebuild3D(true)" style="background:var(--surface);color:var(--text-secondary);border:1px solid rgba(255,255,255,0.1);border-radius:3px;font-size:11px;padding:2px 3px;">
+          <option value="elev" selected>Elevation</option>
+          <option value="result">Pressure / Depth (needs solver run)</option>
+        </select>
+      </span>
+      <span style="font-size:11px;color:var(--text-dim);">Drag = rotate · Scroll = zoom · Right-drag = pan</span>
+    </div>
+    <div class="canvas-container" id="threeWrap" style="min-height:440px;position:relative;overflow:hidden;">
+      <div id="threeMsg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:13px;text-align:center;padding:20px;">Generate a network first — the 3D view shows the terrain surface with pipes and nodes draped over it.</div>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">
+      Terrain surface interpolated from node ground elevations. Node spheres sit at ground level; color by elevation or by solver pressure (EPANET) / depth (SWMM) after a run. Green cones = reservoirs/outfalls, amber = tanks.
+    </div>
+  </div>
+
   <!-- RPT Tab (text report) -->
   <div id="tab-rpt" style="display:none;">
     <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
@@ -3218,8 +3244,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v4.4', date: '2026-07-17' };
-const CHANGELOG_TOP = { version: 'v4.4', date: '2026-07-17' };
+const GEN_BUILD = { version: 'v4.5', date: '2026-07-17' };
+const CHANGELOG_TOP = { version: 'v4.5', date: '2026-07-17' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -3321,7 +3347,7 @@ function switchTab(tab, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const flexTabs = ['map','stats'];
-  ['map','stats','inp','docs','hgl','log','rpt','results','ai'].forEach(t => {
+  ['map','stats','inp','docs','hgl','view3d','log','rpt','results','ai'].forEach(t => {
     const el = document.getElementById('tab-'+t);
     if (t === tab) {
       el.style.display = flexTabs.includes(t) ? 'flex' : 'block';
@@ -3333,6 +3359,7 @@ function switchTab(tab, btn) {
   });
   if (tab === 'map') setTimeout(renderAll, 50);
   if (tab === 'hgl' && networkData) setTimeout(renderHGL, 50);
+  if (tab === 'view3d') setTimeout(init3DView, 50); else stop3DLoop();
 }
 
 function toggleDrawer() {
@@ -6425,6 +6452,310 @@ function stageAction(i) {
       showToast('Download buttons appear below the Generate button after a run', 'info');
     }
   }
+}
+
+// ═══════ 3D VIEW (Three.js terrain + network) ═══════
+let _threeMod = null;
+const _t3 = { renderer:null, scene:null, camera:null, raf:0, builtKey:'', target:null, sph:null, wrapListeners:false };
+
+async function _loadThree() {
+  if (_threeMod) return _threeMod;
+  _threeMod = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
+  return _threeMod;
+}
+
+function stop3DLoop() {
+  if (_t3.raf) { cancelAnimationFrame(_t3.raf); _t3.raf = 0; }
+}
+
+function _3dKey() {
+  const exag = (document.getElementById('exag3d') || {}).value || '6';
+  const cmode = (document.getElementById('color3d') || {}).value || 'elev';
+  if (networkData && !networkData._genStamp) networkData._genStamp = Date.now() + ':' + Math.random().toString(36).slice(2, 7);
+  const genId = networkData ? networkData._genStamp : 'none';
+  const hasRes = solverResults && solverResults.nodeResults && Object.keys(solverResults.nodeResults).length ? '1' : '0';
+  return `${genId}|${exag}|${cmode}|${hasRes}|${currentTimestep || 0}`;
+}
+
+function rebuild3D(force) {
+  if (force) _t3.builtKey = '';
+  init3DView();
+}
+
+async function init3DView() {
+  const wrap = document.getElementById('threeWrap');
+  const msg = document.getElementById('threeMsg');
+  if (!wrap) return;
+  if (!networkData) {
+    stop3DLoop();
+    if (_t3.renderer) _t3.renderer.domElement.style.display = 'none';
+    msg.style.display = 'flex';
+    msg.textContent = 'Generate a network first — the 3D view shows the terrain surface with pipes and nodes draped over it.';
+    return;
+  }
+  msg.style.display = 'flex';
+  msg.textContent = 'Loading 3D view…';
+  let THREE;
+  try { THREE = await _loadThree(); }
+  catch (e) {
+    msg.textContent = '3D library failed to load (network/CDN issue). Check your connection and click ↻ Rebuild.';
+    return;
+  }
+  try { _build3DScene(THREE); }
+  catch (e) {
+    console.error('3D build failed', e);
+    msg.style.display = 'flex';
+    msg.textContent = '3D view failed to build: ' + (e && e.message ? e.message : e);
+    return;
+  }
+  _start3DLoop();
+}
+
+function _build3DScene(THREE) {
+  const wrap = document.getElementById('threeWrap');
+  const msg = document.getElementById('threeMsg');
+  const key = _3dKey();
+  const W = Math.max(320, wrap.clientWidth || 800);
+  const H = Math.max(440, Math.round(window.innerHeight * 0.55));
+
+  if (!_t3.renderer) {
+    try {
+      _t3.renderer = new THREE.WebGLRenderer({ antialias: true });
+    } catch (e1) {
+      try {
+        _t3.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'low-power' });
+      } catch (e2) {
+        throw new Error('WebGL is not available in this browser (hardware acceleration may be disabled). The 3D view needs WebGL — try enabling hardware acceleration or a different browser.');
+      }
+    }
+    _t3.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    _t3.renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;border-radius:inherit;';
+    wrap.appendChild(_t3.renderer.domElement);
+  }
+  _t3.renderer.setSize(W, H, false);
+  wrap.style.height = H + 'px';
+  _t3.renderer.domElement.style.display = 'block';
+
+  if (_t3.builtKey === key && _t3.scene) { msg.style.display = 'none'; return; }
+  _t3.builtKey = key;
+
+  const nd = networkData;
+  const exag = parseFloat((document.getElementById('exag3d') || {}).value || '6');
+  const cmode = (document.getElementById('color3d') || {}).value || 'elev';
+  const t = currentTimestep || 0;
+  const isSWMM = currentMode === 'swmm';
+
+  // ---- gather nodes & bounds ----
+  const nodes = nd.nodes || [];
+  const getElev = n => (n.groundElev != null ? n.groundElev : n.elev) || 0;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minE = Infinity, maxE = -Infinity;
+  nodes.forEach(n => {
+    if (n.x < minX) minX = n.x; if (n.x > maxX) maxX = n.x;
+    if (n.y < minY) minY = n.y; if (n.y > maxY) maxY = n.y;
+    const e = getElev(n); if (e < minE) minE = e; if (e > maxE) maxE = e;
+  });
+  if (!isFinite(minX) || maxX - minX < 1) throw new Error('no node extents');
+  if (maxE - minE < 0.5) maxE = minE + 0.5;
+  const span = Math.max(maxX - minX, maxY - minY);
+  const SZ = 100; // world size of the long side
+  const s = SZ / span;                      // horizontal scale
+  const vs = s * exag;                      // vertical scale
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, ce = minE;
+  const toWorld = (x, y, e) => [ (x - cx) * s, (e - ce) * vs, (y - cy) * s ];
+
+  // ---- heightfield from node elevations (bucket average + hole fill) ----
+  const G = 96;
+  const hSum = new Float32Array(G * G), hCnt = new Float32Array(G * G);
+  const gx = x => Math.min(G - 1, Math.max(0, Math.round((x - minX) / (maxX - minX) * (G - 1))));
+  const gy = y => Math.min(G - 1, Math.max(0, Math.round((y - minY) / (maxY - minY) * (G - 1))));
+  nodes.forEach(n => { const i = gy(n.y) * G + gx(n.x); hSum[i] += getElev(n); hCnt[i]++; });
+  const hf = new Float32Array(G * G); const known = new Uint8Array(G * G);
+  for (let i = 0; i < G * G; i++) if (hCnt[i]) { hf[i] = hSum[i] / hCnt[i]; known[i] = 1; }
+  // iterative neighbor fill for empty cells
+  for (let pass = 0; pass < G; pass++) {
+    let holes = 0;
+    for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) {
+      const i = r * G + c; if (known[i]) continue;
+      let sum = 0, cnt = 0;
+      if (r > 0 && known[i - G]) { sum += hf[i - G]; cnt++; }
+      if (r < G - 1 && known[i + G]) { sum += hf[i + G]; cnt++; }
+      if (c > 0 && known[i - 1]) { sum += hf[i - 1]; cnt++; }
+      if (c < G - 1 && known[i + 1]) { sum += hf[i + 1]; cnt++; }
+      if (cnt) { hf[i] = sum / cnt; known[i] = 2; } else holes++;
+    }
+    for (let i = 0; i < G * G; i++) if (known[i] === 2) known[i] = 1;
+    if (!holes) break;
+  }
+  // light smoothing pass
+  const hs = new Float32Array(hf);
+  for (let r = 1; r < G - 1; r++) for (let c = 1; c < G - 1; c++) {
+    const i = r * G + c;
+    hs[i] = (hf[i] * 4 + hf[i - 1] + hf[i + 1] + hf[i - G] + hf[i + G]) / 8;
+  }
+  const sampleH = (x, y) => hs[gy(y) * G + gx(x)];
+
+  // ---- scene ----
+  if (_t3.scene) { _t3.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose()); } }); }
+  const scene = new THREE.Scene();
+  _t3.scene = scene;
+  scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--bg-main').trim() || '#050d1a');
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+  sun.position.set(60, 90, 40); scene.add(sun);
+
+  // terrain mesh
+  const sx = (maxX - minX) * s, sy = (maxY - minY) * s;
+  const geo = new THREE.PlaneGeometry(sx, sy, G - 1, G - 1);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  const cols = new Float32Array(pos.count * 3);
+  const tc = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const r = Math.floor(i / G), c = i % G;
+    // PlaneGeometry row 0 sits at y=+h/2, which rotateX(-PI/2) maps to z=-h/2 = model minY = grid row 0
+    const e = hs[r * G + c];
+    pos.setY(i, (e - ce) * vs);
+    const f = (e - minE) / (maxE - minE);
+    tc.setHSL(0.32 - 0.22 * f, 0.42, 0.16 + 0.30 * f); // dark green → tan/brown
+    cols[i * 3] = tc.r; cols[i * 3 + 1] = tc.g; cols[i * 3 + 2] = tc.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  geo.computeVertexNormals();
+  scene.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })));
+
+  // ---- node lookup & result values ----
+  const nm = {};
+  nodes.forEach(n => nm[n.id] = n);
+  (nd.reservoirs || []).forEach(r => nm[r.id] = r);
+  (nd.tanks || []).forEach(tk => nm[tk.id] = tk);
+  const hasRes = solverResults && solverResults.nodeResults && Object.keys(solverResults.nodeResults).length > 0;
+  const resVal = n => {
+    const r = hasRes ? (solverResults.nodeResults[n.id] || [])[t] : null;
+    if (!r) return undefined;
+    return isSWMM ? r.depth : r.pressure;
+  };
+  let rMin = Infinity, rMax = -Infinity;
+  if (cmode === 'result' && hasRes) {
+    nodes.forEach(n => { const v = resVal(n); if (v !== undefined) { if (v < rMin) rMin = v; if (v > rMax) rMax = v; } });
+    if (!isFinite(rMin) || rMax - rMin < 1e-6) { rMin = 0; rMax = 1; }
+  }
+
+  // node points
+  const NP = nodes.length;
+  const npos = new Float32Array(NP * 3), ncol = new Float32Array(NP * 3);
+  const nodeY = n => (getElev(n) - ce) * vs + 0.35;
+  nodes.forEach((n, i) => {
+    const [wx, , wz] = toWorld(n.x, n.y, 0);
+    npos[i * 3] = wx; npos[i * 3 + 1] = nodeY(n); npos[i * 3 + 2] = wz;
+    if (cmode === 'result' && hasRes) {
+      const v = resVal(n);
+      if (v === undefined) tc.set('#5a7a9e');
+      else tc.setHSL(0.66 - 0.66 * ((v - rMin) / (rMax - rMin)), 0.85, 0.55); // blue → red
+    } else {
+      const f = (getElev(n) - minE) / (maxE - minE);
+      tc.setHSL(0.55 - 0.35 * f, 0.9, 0.55 + 0.15 * f); // cyan → warm
+    }
+    ncol[i * 3] = tc.r; ncol[i * 3 + 1] = tc.g; ncol[i * 3 + 2] = tc.b;
+  });
+  const pgeo = new THREE.BufferGeometry();
+  pgeo.setAttribute('position', new THREE.BufferAttribute(npos, 3));
+  pgeo.setAttribute('color', new THREE.BufferAttribute(ncol, 3));
+  const psize = NP > 20000 ? 0.55 : NP > 3000 ? 0.9 : 1.4;
+  scene.add(new THREE.Points(pgeo, new THREE.PointsMaterial({ size: psize, vertexColors: true, sizeAttenuation: true })));
+
+  // pipes as line segments
+  const links = [].concat(nd.pipes || [], nd.pumps || [], nd.valves || []);
+  const lpos = [];
+  const endY = id => { const n = nm[id]; if (!n) return null; const e = n.groundElev != null ? n.groundElev : (n.elev != null ? n.elev : (n.head != null ? sampleH(n.x, n.y) : sampleH(n.x, n.y))); return (e - ce) * vs + 0.15; };
+  links.forEach(p => {
+    const a = nm[p.node1], b = nm[p.node2];
+    if (!a || !b) return;
+    const [ax, , az] = toWorld(a.x, a.y, 0);
+    const [bx, , bz] = toWorld(b.x, b.y, 0);
+    lpos.push(ax, endY(p.node1), az, bx, endY(p.node2), bz);
+  });
+  if (lpos.length) {
+    const lgeo = new THREE.BufferGeometry();
+    lgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lpos), 3));
+    const accent = isSWMM ? '#2dd4bf' : '#38bdf8';
+    scene.add(new THREE.LineSegments(lgeo, new THREE.LineBasicMaterial({ color: accent, transparent: true, opacity: 0.75 })));
+  }
+
+  // reservoirs (green cones) & tanks (amber cylinders)
+  const mk = (obj, color, geoObj) => {
+    const e = sampleH(obj.x, obj.y);
+    const m = new THREE.Mesh(geoObj, new THREE.MeshLambertMaterial({ color }));
+    const [wx, , wz] = toWorld(obj.x, obj.y, 0);
+    m.position.set(wx, (e - ce) * vs + 1.2, wz);
+    scene.add(m);
+  };
+  (nd.reservoirs || []).forEach(r => mk(r, '#22c55e', new THREE.ConeGeometry(1.3, 2.6, 12)));
+  (nd.tanks || []).forEach(tk => mk(tk, '#f59e0b', new THREE.CylinderGeometry(1.1, 1.1, 2.2, 14)));
+
+  // ---- camera & controls ----
+  const midY = ((minE + maxE) / 2 - ce) * vs;
+  if (!_t3.camera) _t3.camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 2000);
+  _t3.camera.aspect = W / H; _t3.camera.updateProjectionMatrix();
+  if (!_t3.sph) _t3.sph = { theta: Math.PI / 4, phi: 1.05, radius: SZ * 1.35 };
+  _t3.target = new THREE.Vector3(0, midY, 0);
+  _t3._THREE = THREE;
+  _apply3DCamera();
+
+  if (!_t3.wrapListeners) {
+    _t3.wrapListeners = true;
+    const el = _t3.renderer.domElement;
+    let drag = null;
+    el.addEventListener('contextmenu', e => e.preventDefault());
+    el.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, btn: e.button }; el.setPointerCapture(e.pointerId); });
+    const endDrag = () => { drag = null; };
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+    el.addEventListener('lostpointercapture', endDrag);
+    el.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      drag.x = e.clientX; drag.y = e.clientY;
+      if (drag.btn === 2) { // pan
+        const T = _t3._THREE, cam = _t3.camera;
+        const right = new T.Vector3().setFromMatrixColumn(cam.matrix, 0);
+        const up = new T.Vector3().setFromMatrixColumn(cam.matrix, 1);
+        const k = _t3.sph.radius * 0.0016;
+        _t3.target.addScaledVector(right, -dx * k).addScaledVector(up, dy * k);
+      } else { // rotate
+        _t3.sph.theta -= dx * 0.005;
+        _t3.sph.phi = Math.min(1.52, Math.max(0.08, _t3.sph.phi - dy * 0.005));
+      }
+      _apply3DCamera();
+    });
+    el.addEventListener('wheel', e => {
+      e.preventDefault();
+      _t3.sph.radius = Math.min(600, Math.max(8, _t3.sph.radius * (e.deltaY > 0 ? 1.1 : 0.9)));
+      _apply3DCamera();
+    }, { passive: false });
+  }
+  msg.style.display = 'none';
+}
+
+function _apply3DCamera() {
+  if (!_t3.camera || !_t3.target) return;
+  const { theta, phi, radius } = _t3.sph;
+  _t3.camera.position.set(
+    _t3.target.x + radius * Math.sin(phi) * Math.cos(theta),
+    _t3.target.y + radius * Math.cos(phi),
+    _t3.target.z + radius * Math.sin(phi) * Math.sin(theta)
+  );
+  _t3.camera.lookAt(_t3.target);
+}
+
+function _start3DLoop() {
+  stop3DLoop();
+  const tick = () => {
+    const tabEl = document.getElementById('tab-view3d');
+    if (!tabEl || tabEl.style.display === 'none') { _t3.raf = 0; return; }
+    if (_t3.renderer && _t3.scene && _t3.camera) _t3.renderer.render(_t3.scene, _t3.camera);
+    _t3.raf = requestAnimationFrame(tick);
+  };
+  _t3.raf = requestAnimationFrame(tick);
 }
 
 // ═══════ SETTINGS SEARCH ═══════

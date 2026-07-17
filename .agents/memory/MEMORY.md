@@ -1,0 +1,1 @@
+- [WebGL unavailable in e2e test browser](webgl-testing.md) — headless test browser has no WebGL; verify fallback paths, not visuals, for Three.js features.

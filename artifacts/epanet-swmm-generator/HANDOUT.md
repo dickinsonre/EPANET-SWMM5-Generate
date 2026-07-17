@@ -93,7 +93,7 @@ whether the solver has verified it hydraulically. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.4 · 2026-07-17**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.5 · 2026-07-17**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -250,7 +250,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.4`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.5`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -480,7 +480,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v4.4",
+    "generator": "EPANET-SWMM Generator v4.5",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -650,6 +650,15 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v4.5 — 2026-07-17**
+- **3D view (new tab):** interactive 3D terrain + network visualization. The terrain surface
+  is interpolated from node ground elevations and shaded by height; pipes, pumps, and valves
+  are drawn as lines draped over the surface, junctions as color-coded points, reservoirs/
+  outfalls as green cones, and tanks as amber cylinders. Drag to rotate, scroll to zoom,
+  right-drag to pan. Controls: vertical exaggeration (1–12×) and node coloring by elevation
+  or, after a solver run, by pressure (EPANET) / depth (SWMM). The 3D engine (Three.js)
+  loads on demand from a CDN the first time you open the tab.
 
 **v4.4 — 2026-07-17**
 - **Clickable workflow stepper:** the Configure › Generate › Validate › Export strip is now
