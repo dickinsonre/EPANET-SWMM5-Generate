@@ -1,0 +1,44 @@
+I'll take a look at the app and grade it.
+Same pattern — the AI panel also renders in the sidebar while the main pane stays empty. Let me check the INP and Results tabs to see if the bug is systematic.
+I've gone through the app in both EPANET and SWMM modes and exercised every Preview tab. Here's the grade.
+
+# Grade: B− (78/100)
+
+| Category | Score | Notes |
+|---|---|---|
+| Concept & ambition | A | Dual-engine generator, validation pipeline, city backdrop, AI assistant — genuinely useful |
+| Visual design | A− | Clean dark theme, good status bar, professional typography |
+| Core workflow | B+ | Generate → validate → export flow is logical and fast |
+| Layout correctness | **D** | One severe rendering bug (below) hurts everything |
+| Mode consistency | C+ | SWMM mode carries EPANET leftovers |
+| Empty/error states | B | Sensible defaults, network pre-generated on load |
+
+## Critical bugs (fix first)
+
+**1. Preview tabs render into the sidebar — main pane goes black.** Stats, INP, Docs, AI (and likely HGL/Log/RPT/Results) all render inside the ~400px left sidebar while the entire main area sits empty and black. A 1,484 KB INP file squeezed into a narrow column is effectively unreadable, and the Stats cards get crushed into a 3-column mini-grid with a clipped "TOPOLOGY" heading. Only the Map tab uses the main pane. This is the single highest-impact fix — content must render in the main preview container, with the sidebar reserved for settings.
+
+**2. SWMM mode keeps the EPANET legend and layer toggles.** In SWMM mode the map legend still lists Junction / Reservoir / Tank / Pump / Valve / Emitter, and the layer toggles offer Res / Tank / Emit — none of which exist in SWMM. Swap in SWMM vocabulary: Junction, Outfall, Storage, Pump, Weir, Orifice; conduits instead of "Links (Diameter)". The Stats tab gets this right (outfalls, subcatchments, force mains), so the map legend just needs the same treatment.
+
+**3. SWMM validation pipeline stalls silently.** EPANET shows all five stages green (Generated → Syntax → Topology → Solver → QA); SWMM stops at Topology with Solver and QA grayed out — with no explanation. If the SWMM solver isn't wired up, say so in a tooltip ("Solver run: EPANET only") rather than leaving users wondering if their model failed.
+
+**4. Stuck "Exporting… 0%" indicator in the DOM.** There's a persistent export-progress element reading "Exporting… 0%". If it's ever visible outside an actual export, it reads as a frozen job. Hide it until an export starts.
+
+## UX improvements (priority order)
+
+1. **Make the map legend collapsible** — it permanently covers the top-left quadrant of the network. Add a collapse chevron and remember the state.
+2. **Fit map to bounds on generate** — the EPANET view opens zoomed in too far (giant cropped pipes). Auto-fit after each generation, and add a "zoom to fit" button.
+3. **Fix the workflow stepper semantics** — Configure ✓ / Generate ✓ / Validate ● / Export ● all look "active or done" simultaneously. Use numbered steps with three distinct states (done / current / locked) and make them clickable shortcuts.
+4. **Explain Simple / Advanced / Expert** — there's no hint of what each tier unlocks. A one-line tooltip ("Advanced: + RDII, groundwater, water quality") or a diff badge on newly revealed settings would help.
+5. **Warn on big presets** — nine presets is fine, but Giant (50K) and City (100K) should show an estimated generation time and a confirm step. Consider a slider + numeric input instead of 9 buttons.
+6. **Style the map layer toggles as toggles** — "City / Network / Labels / Voronoi" reads as plain text; render as chips with on/off states.
+7. **Humanize the timestamp** — "Generated 02:46:41" is ambiguous (which timezone?). Use "2 min ago" or local time with zone.
+8. **Move the AI panel into the main pane with chat history** — once bug #1 is fixed, give the AI assistant a proper conversation view with suggested follow-up questions, not just one prompt.
+
+## What's genuinely good
+
+- Units toggle, engine toggle, and settings search — all exactly where a modeler expects them
+- The status breadcrumb (engine · units · junctions · pipes · timestamp) is excellent
+- Stats content itself is well-chosen (S/D ratio, connectivity %, zone breakdown, INP size)
+- The seed shown in the INP header — reproducibility is a pro touch
+
+Bottom line: the bones are strong, but fix the sidebar-rendering bug first — it currently makes 8 of 9 preview tabs unusable at desktop width — then reconcile the SWMM-mode legend. Those two fixes alone would take this from B− to A−. Want me to spec the corrected layout in more detail, or mock up the fixed preview pane?
