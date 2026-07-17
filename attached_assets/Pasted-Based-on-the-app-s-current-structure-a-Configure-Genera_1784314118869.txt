@@ -1,0 +1,33 @@
+Based on the app's current structure — a Configure → Generate → Validate → Export pipeline with tabbed panels (Network, Hydraulics, Environment, Map & Export), complexity-mode toggle (Simple/Advanced/Expert), and a live map/stats preview — here are targeted UX improvements grounded in current best practices for data-heavy engineering tools.
+
+## Strengthen the Progress Tracker
+
+Your Configure → Generate → Validate → Export stepper is a great foundation, but progress trackers work best when they clearly show completed, current, and upcoming states through color, icons, and connecting lines, plus always offer a back/save option. Since Validate and QA currently show open circles ("○ Solver → ○ QA"), consider using empty circles for "not started," a spinner for "in progress," and a checkmark for "done" so users always know exactly where the pipeline stands without opening the Preview tab. Adding inline text like "Solver: running (est. 15s)" during long operations keeps users engaged rather than staring at a static bar. [uxpin](https://www.uxpin.com/studio/blog/design-progress-trackers/)
+
+## Improve Progressive Disclosure Across Modes
+
+Since you already offer Simple/Advanced/Expert complexity toggles, lean further into progressive disclosure: reveal only the parameters relevant to a chosen mode and let advanced settings expand contextually rather than crowding the sidebar with Network/Hydraulics/Environment/Map controls all at once. This reduces cognitive load for first-time users while still giving expert modelers (like yourself) full access when needed. [creative27](https://creative27.com/designing-for-clarity-ux-ui-best-practices-for-data-heavy-saas/)
+
+## Add Contextual Help and Tooltips
+
+For a domain-specific tool with dense parameters (RDII, LID, GW, WQ), contextual tooltips explaining each acronym or setting on hover would significantly shorten the learning curve for less-experienced users without cluttering the UI for experts. Step-by-step onboarding for first-time visitors — even a lightweight walkthrough of the Configure → Export flow — helps new users build confidence before diving into 10K+ junction networks. [creative27](https://creative27.com/designing-for-clarity-ux-ui-best-practices-for-data-heavy-saas/)
+
+## Optimize the Data-Heavy Preview and Map
+
+For the Map/Stats/INP/Docs/HGL/RPT preview tabs, apply data-heavy UX patterns: color-code key stats (like "100% connected"), use zebra striping or fixed headers in any tabular views (e.g., INP/RPT), and let users filter or search large result sets rather than scrolling through thousands of junctions and conduits. Given you're already rendering elevation/diameter overlays on the map, adding a legend and toggleable layers (which appears partially present) further helps users parse dense spatial data at a glance. [uxmatters](https://www.uxmatters.com/mt/archives/2022/08/5-emerging-design-trends-for-data-heavy-user-experiences-in-2022.php)
+
+## Clarify Navigation and Hierarchy
+
+Establish clearer visual hierarchy so users always know where to start and what to do next — for instance, making the active tab and current wizard step visually louder than inactive ones, and using consistent spacing/dividers between the Network/Hydraulics/Environment/Map & Export sections. Since real users are the best source of insight, consider brief usability sessions or even screen recordings with a few colleagues generating networks, to catch friction points (e.g., in preset selection or unit toggling) that aren't obvious from design alone. [reddit](https://www.reddit.com/r/userexperience/comments/dl7pw0/ux_principles_for_data_intensive_enterpriselevel/)
+
+## Quick Wins Summary
+
+| Area | Current State | Suggested Improvement |
+|---|---|---|
+| Progress tracker | Text-based steps with dots | Color + icon + animated fill between steps  [uxpin](https://www.uxpin.com/studio/blog/design-progress-trackers/) |
+| Parameter panels | All sections visible at once | Progressive disclosure by complexity mode  [reddit](https://www.reddit.com/r/UXDesign/comments/1ci084x/designing_for_interfaces_with_high_information/) |
+| Help system | No visible tooltips | Contextual hover tooltips for technical terms  [creative27](https://creative27.com/designing-for-clarity-ux-ui-best-practices-for-data-heavy-saas/) |
+| Data tables (INP/RPT) | Plain preview | Zebra striping, fixed headers, filtering/search  [uxmatters](https://www.uxmatters.com/mt/archives/2022/08/5-emerging-design-trends-for-data-heavy-user-experiences-in-2022.php) |
+| Long operations (Solver/QA) | Static "○" placeholder | Live status text + progress %  [uxplanet](https://uxplanet.org/progress-bar-design-best-practices-526f4d0a3c30) |
+
+Would you like me to help draft actual code changes (e.g., a React/CSS component for an improved progress stepper) for this Replit app?

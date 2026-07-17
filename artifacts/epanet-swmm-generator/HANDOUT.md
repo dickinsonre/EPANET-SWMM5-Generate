@@ -93,7 +93,7 @@ whether the solver has verified it hydraulically. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.1 · 2026-07-16**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.2 · 2026-07-17**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -250,7 +250,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.1`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.2`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -480,7 +480,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v4.1",
+    "generator": "EPANET-SWMM Generator v4.2",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -650,6 +650,22 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v4.2 — 2026-07-17**
+- **Richer progress tracker:** the Configure › Generate › Validate › Export stage strip now
+  uses distinct icons per state — checkmark for done, animated spinner while the solver is
+  validating, filled dot for the current step — with green connector lines filling in as
+  steps complete, and the current step highlighted with a bold tinted chip. Tier badges
+  (Solver/QA) also show an animated spinner while a solve is in flight.
+- **First-visit walkthrough:** a lightweight 5-step guided tour (workflow strip → Generate →
+  validation badges → settings search → preview/export tabs) appears once for new visitors
+  and never again after finishing or skipping (stored in the browser).
+- **INP & RPT line filtering:** both the INP preview and the solver report tab gained a
+  filter box — type e.g. `[PUMPS]`, a node ID, or `WARNING` to see only matching lines with
+  a match count; clearing the box restores the full view. Filtering the INP also bypasses
+  the usual 300-line preview truncation (up to 2,000 matches shown).
+- **Louder active states:** the active preview tab now carries a glow and heavier weight so
+  it is always obvious which view you are on.
 
 **v4.1 — 2026-07-16**
 - **Solver-gated validation with tier badges:** a new badge strip above the preview shows an

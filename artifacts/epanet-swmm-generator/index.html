@@ -872,6 +872,19 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   .main-layout { grid-template-columns: 400px 1fr; }
   .download-btn { min-width: 80px; }
 }
+/* ── UX polish (v4.2): progress spinners, louder active states, tour ── */
+@keyframes tierspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.tier-spin { display: inline-block; animation: tierspin 1s linear infinite; }
+.tab-btn.active { box-shadow: 0 0 0 1px var(--accent-cyan), 0 2px 8px color-mix(in srgb, var(--accent-blue) 45%, transparent); font-weight: 700; }
+.preview-filter { width: 100%; max-width: 320px; padding: 6px 10px; font-size: 12px; font-family: 'JetBrains Mono', monospace; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); }
+.preview-filter:focus { outline: none; border-color: var(--accent-cyan); }
+.tour-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 9000; }
+.tour-pop { position: fixed; z-index: 9001; max-width: 300px; background: var(--bg-panel, #131a2a); border: 1px solid var(--accent-cyan); border-radius: 10px; padding: 14px 16px; font-size: 13px; line-height: 1.55; color: var(--text-primary, #e2e8f0); box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+.tour-pop h4 { margin: 0 0 6px; font-size: 13px; color: var(--accent-cyan); }
+.tour-pop .tour-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.tour-pop button { font-size: 11px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer; }
+.tour-pop button.tour-next { border-color: var(--accent-cyan); color: var(--accent-cyan); font-weight: 600; }
+.tour-highlight { position: relative; z-index: 9002 !important; outline: 2px solid var(--accent-cyan); outline-offset: 3px; border-radius: 6px; }
 </style>
 </head>
 <body>
@@ -1787,7 +1800,9 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       <button class="download-btn" onclick="copyINP()" id="copyBtn2" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--accent-cyan);color:var(--accent-cyan);">📋 Copy All</button>
       <button class="download-btn" onclick="selectAllINP()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--text-dim);color:var(--text-dim);">☰ Select All</button>
       <button class="download-btn" onclick="validateINP()" id="validateBtn" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--accent-green);color:var(--accent-green);">✓ Validate</button>
+      <input type="text" id="inpFilter" class="preview-filter" placeholder="🔍 Filter lines… (e.g. [PUMPS], J104)" oninput="filterINPView(this.value)" aria-label="Filter INP lines">
     </div>
+    <div id="inpFilterNote" style="display:none;font-size:11px;color:var(--text-dim);margin-bottom:6px;"></div>
     <div id="validateResult" style="display:none;margin-bottom:8px;padding:8px 12px;border-radius:6px;font-size:12px;line-height:1.5;border:1px solid var(--border);"></div>
     <div class="inp-preview" id="inpPreview" style="user-select:text;-webkit-user-select:text;"><span class="comment">; Tap "Generate" to create network</span></div>
   </div>
@@ -3079,7 +3094,9 @@ AND  PIPE 330 STATUS IS CLOSED</pre>
     <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
       <button class="download-btn" onclick="downloadRPT()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;">↓ Download .rpt</button>
       <button class="download-btn" onclick="copyRPT()" style="flex:none;padding:8px 14px;font-size:11px;min-height:36px;border-color:var(--accent-cyan);color:var(--accent-cyan);">📋 Copy</button>
+      <input type="text" id="rptFilter" class="preview-filter" placeholder="🔍 Filter report lines… (e.g. WARNING, Node)" oninput="filterRPTView(this.value)" aria-label="Filter report lines">
     </div>
+    <div id="rptFilterNote" style="display:none;font-size:11px;color:var(--text-dim);margin-bottom:6px;"></div>
     <div class="inp-preview" id="rptPreview" style="user-select:text;-webkit-user-select:text;max-height:calc(100vh - 200px);overflow:auto;font-size:12px;min-width:700px;">
       <span class="comment">; Run solver to generate report</span>
     </div>
@@ -3194,8 +3211,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v4.1', date: '2026-07-16' };
-const CHANGELOG_TOP = { version: 'v4.1', date: '2026-07-16' };
+const GEN_BUILD = { version: 'v4.2', date: '2026-07-17' };
+const CHANGELOG_TOP = { version: 'v4.2', date: '2026-07-17' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -4928,10 +4945,34 @@ function aiAsk(){
   aiRequest(q);
 }
 
+function _colorINPLine(l){return l.startsWith('[')?`<span class="section-tag">${esc(l)}</span>`:l.startsWith(';')?`<span class="comment">${esc(l)}</span>`:esc(l);}
+// Cache the split lines per INP string so filtering doesn't re-split on every keystroke.
+let _inpLinesCache = { src: null, lines: null };
+function _inpLines(inp){
+  if (_inpLinesCache.src !== inp) _inpLinesCache = { src: inp, lines: inp.split('\n') };
+  return _inpLinesCache.lines;
+}
 function renderINPPreview(inp){
-  const el=document.getElementById('inpPreview'),lines=inp.split('\n');
+  const el=document.getElementById('inpPreview'),lines=_inpLines(inp);
+  const fEl=document.getElementById('inpFilter');
+  const q=fEl?(fEl.value||'').trim().toLowerCase():'';
+  const note=document.getElementById('inpFilterNote');
+  if(q){
+    const MAX=2000;
+    const hits=lines.filter(l=>l.toLowerCase().includes(q));
+    el.innerHTML=hits.length?hits.slice(0,MAX).map(_colorINPLine).join('\n'):`<span class="comment">; No lines match "${esc(q)}"</span>`;
+    if(note){note.style.display='block';note.textContent=`${hits.length.toLocaleString()} of ${lines.length.toLocaleString()} lines match${hits.length>MAX?` (showing first ${MAX.toLocaleString()})`:''} — clear the filter to restore the preview.`;}
+    return;
+  }
+  if(note)note.style.display='none';
   let dl=lines.length>300?[...lines.slice(0,150),'',`; ... (${lines.length-200} lines omitted) ...`,'',...lines.slice(-50)]:lines;
-  el.innerHTML=dl.map(l=>l.startsWith('[')?`<span class="section-tag">${esc(l)}</span>`:l.startsWith(';')?`<span class="comment">${esc(l)}</span>`:esc(l)).join('\n');
+  el.innerHTML=dl.map(_colorINPLine).join('\n');
+}
+let _inpFilterTimer=null;
+function filterINPView(){
+  if(!generatedINP){const note=document.getElementById('inpFilterNote');if(note)note.style.display='none';return;}
+  clearTimeout(_inpFilterTimer);
+  _inpFilterTimer=setTimeout(()=>renderINPPreview(generatedINP),180); // debounce keystrokes on large files
 }
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
@@ -6276,12 +6317,15 @@ function renderStageIndicator() {
     { label: 'Export', state: hasNet && validated ? 'done' : hasNet ? 'active' : 'todo',
       hint: hasNet ? 'Download .inp / DEM / GeoJSON below' : 'Available after generation' }
   ];
-  const col = s => s === 'done' ? 'var(--accent-green)' : s === 'fail' ? 'var(--accent-red)' : s === 'active' ? 'var(--accent-cyan)' : 'var(--text-dim)';
-  const ic = s => s === 'done' ? '✓' : s === 'fail' ? '✗' : s === 'active' ? '●' : '○';
-  el.innerHTML = stages.map((st, i) =>
-    (i ? '<span style="opacity:.35;">›</span>' : '') +
-    `<span title="${esc(st.hint)}" style="display:inline-flex;align-items:center;gap:3px;color:${col(st.state)};border:1px solid ${st.state === 'todo' ? 'var(--border)' : col(st.state)};border-radius:9px;padding:2px 8px;white-space:nowrap;cursor:default;">${ic(st.state)} ${st.label}</span>`
-  ).join('');
+  if (validating) stages[2].state = 'running';
+  const col = s => s === 'done' ? 'var(--accent-green)' : s === 'fail' ? 'var(--accent-red)' : (s === 'active' || s === 'running') ? 'var(--accent-cyan)' : 'var(--text-dim)';
+  const ic = s => s === 'done' ? '✓' : s === 'fail' ? '✗' : s === 'running' ? '<span class="tier-spin">⟳</span>' : s === 'active' ? '●' : '○';
+  el.innerHTML = stages.map((st, i) => {
+    // connector between steps fills green once the previous step is done
+    const connCol = stages[i - 1] && stages[i - 1].state === 'done' ? 'var(--accent-green)' : 'var(--border)';
+    return (i ? `<span style="width:14px;height:2px;background:${connCol};border-radius:1px;flex:none;"></span>` : '') +
+      `<span title="${esc(st.hint)}" style="display:inline-flex;align-items:center;gap:3px;color:${col(st.state)};border:1px solid ${st.state === 'todo' ? 'var(--border)' : col(st.state)};border-radius:9px;padding:2px 8px;white-space:nowrap;cursor:default;${st.state === 'active' || st.state === 'running' ? 'font-weight:700;background:color-mix(in srgb, var(--accent-cyan) 12%, transparent);' : ''}">${ic(st.state)} ${st.label}</span>`;
+  }).join('');
 }
 
 // ═══════ SETTINGS SEARCH ═══════
@@ -6480,8 +6524,8 @@ function renderTierBadges() {
   if (typeof renderStageIndicator === 'function') renderStageIndicator();
   if (!tierState) { el.style.display = 'none'; el.innerHTML = ''; return; }
   const defs = [['generated','Generated'],['syntax','Syntax'],['topology','Topology'],['solver','Solver'],['qa','QA']];
-  const icon = s => s==='pass'?'✅':s==='warn'?'⚠':s==='fail'?'❌':s==='running'?'⏳':'○';
-  const color = s => s==='pass'?'var(--accent-green)':s==='warn'?'var(--accent-amber)':s==='fail'?'var(--accent-red)':'var(--text-dim)';
+  const icon = s => s==='pass'?'✅':s==='warn'?'⚠':s==='fail'?'❌':s==='running'?'<span class="tier-spin">⟳</span>':'○';
+  const color = s => s==='pass'?'var(--accent-green)':s==='warn'?'var(--accent-amber)':s==='fail'?'var(--accent-red)':s==='running'?'var(--accent-cyan)':'var(--text-dim)';
   el.style.display = 'flex';
   el.innerHTML = defs.map(([k, label], i) => {
     const t = tierState[k] || { s: 'pending', d: 'Not checked yet' };
@@ -9558,15 +9602,40 @@ function generateRPT() {
 
   generatedRPT = L.join('\n');
 
+  renderRPTPreview();
+}
+
+function _colorRPTLine(l){
+  return l.includes('====') || l.includes('----') || l.includes('***') ? `<span style="color:var(--accent-cyan)">${esc(l)}</span>` :
+    /^\s+(Node|Link)\s/.test(l) ? `<span style="color:var(--accent-amber)">${esc(l)}</span>` :
+    /^\s+(Minimum|Maximum|Average|Nodes <|Total Demand)/.test(l) ? `<span style="color:#4ade80">${esc(l)}</span>` :
+    esc(l);
+}
+// Cache the split lines per RPT string so filtering doesn't re-split on every keystroke.
+let _rptLinesCache = { src: null, lines: null };
+function renderRPTPreview(){
   const el = document.getElementById('rptPreview');
-  if (el) {
-    el.innerHTML = generatedRPT.split('\n').map(l =>
-      l.includes('====') || l.includes('----') || l.includes('***') ? `<span style="color:var(--accent-cyan)">${esc(l)}</span>` :
-      /^\s+(Node|Link)\s/.test(l) ? `<span style="color:var(--accent-amber)">${esc(l)}</span>` :
-      /^\s+(Minimum|Maximum|Average|Nodes <|Total Demand)/.test(l) ? `<span style="color:#4ade80">${esc(l)}</span>` :
-      esc(l)
-    ).join('\n');
+  if (!el || !generatedRPT) return;
+  if (_rptLinesCache.src !== generatedRPT) _rptLinesCache = { src: generatedRPT, lines: generatedRPT.split('\n') };
+  const lines = _rptLinesCache.lines;
+  const fEl = document.getElementById('rptFilter');
+  const q = fEl ? (fEl.value || '').trim().toLowerCase() : '';
+  const note = document.getElementById('rptFilterNote');
+  if (q) {
+    const MAX = 2000;
+    const hits = lines.filter(l => l.toLowerCase().includes(q));
+    el.innerHTML = hits.length ? hits.slice(0, MAX).map(_colorRPTLine).join('\n') : `<span class="comment">; No report lines match "${esc(q)}"</span>`;
+    if (note) { note.style.display = 'block'; note.textContent = `${hits.length.toLocaleString()} of ${lines.length.toLocaleString()} lines match${hits.length > MAX ? ` (showing first ${MAX.toLocaleString()})` : ''} — clear the filter to restore the report.`; }
+    return;
   }
+  if (note) note.style.display = 'none';
+  el.innerHTML = lines.map(_colorRPTLine).join('\n');
+}
+let _rptFilterTimer = null;
+function filterRPTView(){
+  if (!generatedRPT) { const note = document.getElementById('rptFilterNote'); if (note) note.style.display = 'none'; return; }
+  clearTimeout(_rptFilterTimer);
+  _rptFilterTimer = setTimeout(()=>renderRPTPreview(), 180); // debounce keystrokes on large reports
 }
 
 function downloadRPT() {
@@ -10978,7 +11047,70 @@ window.addEventListener('load',()=>{
   document.documentElement.setAttribute('data-engine', currentMode);
   renderStatusBar();
   setTimeout(()=>generateNetwork(),250);
+  // First-visit walkthrough (skipped once completed/dismissed — localStorage flag)
+  try { if (!localStorage.getItem('epswTourSeen')) setTimeout(()=>startTour(), 1200); } catch(e) {}
 });
+
+// ═══════ FIRST-VISIT WALKTHROUGH ═══════
+// Lightweight 5-step tour of the Configure → Generate → Validate → Export flow.
+// Highlights one element per step with a popover; Skip or finish sets a
+// localStorage flag so returning users never see it again.
+const TOUR_STEPS = [
+  { sel: '#stageStrip', title: '1 · Your workflow at a glance', body: 'This strip tracks the four stages: Configure › Generate › Validate › Export. Green = done, a spinner = in progress.' },
+  { sel: '#genBtn', title: '2 · Generate', body: 'Pick a Quick Preset (or tune settings), then press Generate — or hit Ctrl+G. A model builds in seconds.' },
+  { sel: '#tierStrip', title: '3 · Honest validation badges', body: 'After generation, these badges show how far the model has been verified: Generated → Syntax → Topology → Solver → QA. Green "Solver" means the real WASM engine converged.' },
+  { sel: '#settingsSearch', title: '4 · Find any setting fast', body: 'Type here to search every settings section across all tabs — e.g. "demand", "rainfall", "seed".' },
+  { sel: '#tab-inp', selFallback: '.tab-row', title: '5 · Export & inspect', body: 'Use the preview tabs (Map, Stats, INP, RPT…) to inspect results, then download the .inp, DEM, GeoJSON, or a batch ZIP. Enjoy!' }
+];
+let _tourIdx = -1, _tourEls = null;
+function _tourCleanupStep() {
+  document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
+}
+function endTour() {
+  _tourCleanupStep();
+  if (_tourEls) { _tourEls.overlay.remove(); _tourEls.pop.remove(); _tourEls = null; }
+  _tourIdx = -1;
+  try { localStorage.setItem('epswTourSeen', '1'); } catch(e) {}
+}
+function startTour() {
+  if (_tourEls) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'tour-overlay';
+  overlay.addEventListener('click', endTour);
+  const pop = document.createElement('div');
+  pop.className = 'tour-pop';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'App walkthrough');
+  document.body.appendChild(overlay);
+  document.body.appendChild(pop);
+  _tourEls = { overlay, pop };
+  _tourIdx = -1;
+  tourNext();
+}
+function tourNext() {
+  if (!_tourEls) return;
+  _tourCleanupStep();
+  _tourIdx++;
+  if (_tourIdx >= TOUR_STEPS.length) { endTour(); return; }
+  const step = TOUR_STEPS[_tourIdx];
+  let target = document.querySelector(step.sel);
+  if ((!target || target.offsetParent === null) && step.selFallback) target = document.querySelector(step.selFallback);
+  if (!target || (target.offsetParent === null && target.id !== 'tierStrip')) { tourNext(); return; }
+  target.classList.add('tour-highlight');
+  const last = _tourIdx === TOUR_STEPS.length - 1;
+  _tourEls.pop.innerHTML =
+    `<h4>${esc(step.title)}</h4><div>${esc(step.body)}</div>` +
+    `<div class="tour-btns"><button onclick="endTour()">Skip tour</button><button class="tour-next" onclick="tourNext()">${last ? 'Done ✓' : 'Next →'}</button></div>`;
+  // Position the popover near the target, clamped to the viewport
+  const r = target.getBoundingClientRect();
+  const pw = 300, ph = _tourEls.pop.offsetHeight || 150;
+  let top = r.bottom + 10, left = r.left;
+  if (top + ph > window.innerHeight - 10) top = Math.max(10, r.top - ph - 10);
+  if (left + pw > window.innerWidth - 10) left = Math.max(10, window.innerWidth - pw - 20);
+  _tourEls.pop.style.top = top + 'px';
+  _tourEls.pop.style.left = left + 'px';
+  try { target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch(e) {}
+}
 </script>
 <script type="module" src="/src/solver-init.ts"></script>
 </body>
