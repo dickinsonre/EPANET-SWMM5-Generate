@@ -93,7 +93,7 @@ whether the solver has verified it hydraulically. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.3 · 2026-07-17**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.4 · 2026-07-17**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -250,7 +250,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.3`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.4`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -480,7 +480,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v4.3",
+    "generator": "EPANET-SWMM Generator v4.4",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -650,6 +650,19 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v4.4 — 2026-07-17**
+- **Clickable workflow stepper:** the Configure › Generate › Validate › Export strip is now
+  interactive — each numbered step is a button. Configure jumps to the settings search,
+  Generate builds (or rebuilds) the model, Validate re-runs the solver-gated checks, and
+  Export scrolls to the download buttons. Steps that aren't available yet appear locked
+  with a tooltip explaining what unlocks them.
+- **Complexity-mode tooltips:** hovering 🟢 Simple / 🔵 Advanced / 🟣 Expert now lists exactly
+  which setting groups each mode unlocks.
+- **Large-preset confirmation:** choosing Giant (50K) or City (100K) now shows an estimated
+  generation time and a confirm dialog before building, instead of silently starting a long run.
+- **Map toggle chips:** the City / Network / Labels / Voronoi map toggles are restyled as
+  modern pill chips that light up when active.
 
 **v4.3 — 2026-07-17**
 - **Layout fix — preview tabs render in the main pane again:** a stray closing tag made every

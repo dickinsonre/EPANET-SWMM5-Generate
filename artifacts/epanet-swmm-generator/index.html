@@ -423,13 +423,20 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
 }
 
 .map-toggle {
-  display: flex; align-items: center;
-  gap: 6px; font-size: 12px;
+  display: inline-flex; align-items: center;
+  gap: 5px; font-size: 11px; font-weight: 600;
   color: var(--text-dim); cursor: pointer;
-  min-height: 36px; padding: 4px 0;
+  min-height: 28px; padding: 3px 11px;
+  border: 1px solid var(--border); border-radius: 20px;
+  background: var(--bg-input); transition: all .15s;
+  user-select: none;
 }
-
-.map-toggle input { accent-color: var(--accent-blue); width: 18px; height: 18px; }
+.map-toggle:hover { filter: brightness(1.25); }
+.map-toggle:has(input:checked) {
+  border-color: var(--accent-blue); color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-blue) 16%, transparent);
+}
+.map-toggle input { accent-color: var(--accent-blue); width: 13px; height: 13px; }
 
 .legend-row {
   display: flex; gap: 10px; flex-wrap: wrap;
@@ -967,10 +974,10 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
       </select>
       <div style="font-size:9px;color:var(--text-dim);margin-top:3px;line-height:1.3;">Themes are cosmetic color palettes only — no affiliation with or endorsement by any organization is implied.</div>
     </div>
-    <div class="tab-row" id="uiModeRow" style="width:100%;margin-top:6px;" title="Controls how many settings are shown. Simple hides advanced parameters for new users.">
-      <button class="tab-btn active" id="uimodeSimple" onclick="setUIMode('simple')" style="flex:1;text-align:center;font-size:11px;min-height:32px;">🟢 Simple</button>
-      <button class="tab-btn" id="uimodeAdvanced" onclick="setUIMode('advanced')" style="flex:1;text-align:center;font-size:11px;min-height:32px;">🔵 Advanced</button>
-      <button class="tab-btn" id="uimodeExpert" onclick="setUIMode('expert')" style="flex:1;text-align:center;font-size:11px;min-height:32px;">🟣 Expert</button>
+    <div class="tab-row" id="uiModeRow" style="width:100%;margin-top:6px;">
+      <button class="tab-btn active" id="uimodeSimple" onclick="setUIMode('simple')" title="Core settings only — grid size, terrain, presets. Fastest path to a working model." style="flex:1;text-align:center;font-size:11px;min-height:32px;">🟢 Simple</button>
+      <button class="tab-btn" id="uimodeAdvanced" onclick="setUIMode('advanced')" title="Unlocks: pipes & valves, demand zones, pumps & force mains, rainfall & infiltration, SWMM simulation options." style="flex:1;text-align:center;font-size:11px;min-height:32px;">🔵 Advanced</button>
+      <button class="tab-btn" id="uimodeExpert" onclick="setUIMode('expert')" title="Unlocks everything: design mode, calibration, water quality, groundwater, RDII, LID controls, snowmelt, shapes & culverts." style="flex:1;text-align:center;font-size:11px;min-height:32px;">🟣 Expert</button>
     </div>
   </div>
 
@@ -3211,8 +3218,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v4.3', date: '2026-07-17' };
-const CHANGELOG_TOP = { version: 'v4.3', date: '2026-07-17' };
+const GEN_BUILD = { version: 'v4.4', date: '2026-07-17' };
+const CHANGELOG_TOP = { version: 'v4.4', date: '2026-07-17' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -3729,7 +3736,35 @@ const presets = {
   city:   { rows:316,cols:316,spacing:200, res:20,tanks:40,pumps:60, prvs:25,fcvs:10, closed:120, emitters:600,deadEnds:150, hillCount:10, parks:40, lakes:8 }
 };
 
+// Big presets (Giant 50K / City 100K) can take a while and briefly tie up the tab —
+// confirm with an estimated time before generating (mockup fix ⑧).
+const BIG_PRESETS = { giant: { nodes: '~50,000', time: '20–60 seconds' }, city: { nodes: '~100,000', time: '1–3 minutes' } };
+function confirmBigPreset(key, onGo) {
+  const info = BIG_PRESETS[key];
+  let ov = document.getElementById('bigPresetModal');
+  if (ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'bigPresetModal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,8,18,.7);z-index:2500;display:grid;place-items:center;';
+  ov.innerHTML = `<div role="dialog" aria-modal="true" style="background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:22px;width:min(380px,90vw);">
+    <h3 style="font-size:15px;margin:0 0 8px;color:var(--text-primary);">Large network</h3>
+    <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.55;margin:0 0 16px;">This preset builds <b>${info.nodes} nodes</b>. Generation typically takes <b>${info.time}</b> and the map may respond slowly while it runs. Solver validation is skipped at this size.</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button id="bigPresetCancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-weight:600;font-size:12.5px;cursor:pointer;">Cancel</button>
+      <button id="bigPresetGo" style="padding:8px 16px;border-radius:8px;border:1px solid var(--accent-amber, #f59e0b);background:var(--accent-amber, #f59e0b);color:#1a1200;font-weight:700;font-size:12.5px;cursor:pointer;">Generate anyway</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  document.getElementById('bigPresetCancel').onclick = close;
+  document.getElementById('bigPresetGo').onclick = () => { close(); onGo(); };
+}
+
 function applyPreset(key, btnEl) {
+  if (BIG_PRESETS[key] && !applyPreset._confirmed) {
+    confirmBigPreset(key, () => { applyPreset._confirmed = true; try { applyPreset(key, btnEl); } finally { applyPreset._confirmed = false; } });
+    return;
+  }
   const p = presets[key];
   const s = (id, v) => document.getElementById(id).value = v;
   s('gridRows',p.rows); s('gridCols',p.cols); s('nodeSpacing',p.spacing);
@@ -6344,12 +6379,12 @@ function renderStageIndicator() {
   const validated = solverT === 'pass' && (qaT === 'pass' || qaT === 'warn');
   const validating = solverT === 'running';
   const stages = [
-    { label: 'Configure', state: 'done', hint: 'Pick a preset or adjust settings' },
-    { label: 'Generate', state: hasNet ? 'done' : 'active', hint: hasNet ? 'Network generated' : 'Click Generate to build the model' },
+    { label: 'Configure', state: 'done', hint: 'Click to jump to settings (search box)' },
+    { label: 'Generate', state: hasNet ? 'done' : 'active', hint: hasNet ? 'Network generated — click to regenerate' : 'Click to build the model' },
     { label: 'Validate', state: !hasNet ? 'todo' : validated ? 'done' : validating ? 'active' : solverT === 'fail' || qaT === 'fail' ? 'fail' : 'active',
-      hint: !hasNet ? 'Available after generation' : 'Solver-gated checks — see the tier badges above the preview' },
+      hint: !hasNet ? 'Locked until a network is generated' : validating ? 'Validation running…' : 'Click to re-run solver-gated validation' },
     { label: 'Export', state: hasNet && validated ? 'done' : hasNet ? 'active' : 'todo',
-      hint: hasNet ? 'Download .inp / DEM / GeoJSON below' : 'Available after generation' }
+      hint: hasNet ? 'Click to jump to the download buttons' : 'Locked until a network is generated' }
   ];
   if (validating) stages[2].state = 'running';
   const col = s => s === 'done' ? 'var(--accent-green)' : s === 'fail' ? 'var(--accent-red)' : (s === 'active' || s === 'running') ? 'var(--accent-cyan)' : 'var(--text-dim)';
@@ -6357,9 +6392,39 @@ function renderStageIndicator() {
   el.innerHTML = stages.map((st, i) => {
     // connector between steps fills green once the previous step is done
     const connCol = stages[i - 1] && stages[i - 1].state === 'done' ? 'var(--accent-green)' : 'var(--border)';
+    const locked = st.state === 'todo';
+    const num = `<span style="display:inline-grid;place-items:center;width:13px;height:13px;border-radius:50%;font-size:8px;background:${locked ? 'var(--border)' : col(st.state)};color:var(--bg-main);flex:none;">${st.state === 'done' ? '✓' : i + 1}</span>`;
     return (i ? `<span style="width:14px;height:2px;background:${connCol};border-radius:1px;flex:none;"></span>` : '') +
-      `<span title="${esc(st.hint)}" style="display:inline-flex;align-items:center;gap:3px;color:${col(st.state)};border:1px solid ${st.state === 'todo' ? 'var(--border)' : col(st.state)};border-radius:9px;padding:2px 8px;white-space:nowrap;cursor:default;${st.state === 'active' || st.state === 'running' ? 'font-weight:700;background:color-mix(in srgb, var(--accent-cyan) 12%, transparent);' : ''}">${ic(st.state)} ${st.label}</span>`;
+      `<button type="button" onclick="stageAction(${i})" title="${esc(st.hint)}" ${locked ? 'aria-disabled="true"' : ''} style="display:inline-flex;align-items:center;gap:4px;font:inherit;color:${col(st.state)};background:${st.state === 'active' || st.state === 'running' ? 'color-mix(in srgb, var(--accent-cyan) 12%, transparent)' : 'transparent'};border:1px solid ${locked ? 'var(--border)' : col(st.state)};border-radius:9px;padding:2px 8px;white-space:nowrap;cursor:${locked ? 'not-allowed' : 'pointer'};opacity:${locked ? '.55' : '1'};${st.state === 'active' || st.state === 'running' ? 'font-weight:700;' : ''}">${num} ${ic(st.state)} ${st.label}</button>`;
   }).join('');
+}
+
+// Clickable workflow stepper — each stage jumps to (or triggers) its part of the flow.
+function stageAction(i) {
+  if (i === 0) {
+    const s = document.getElementById('settingsSearch');
+    if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'center' }); s.focus({ preventScroll: true }); }
+  } else if (i === 1) {
+    generateNetwork();
+  } else if (i === 2) {
+    if (!networkData) { showToast('Generate a network first', 'warning'); return; }
+    if (_solverBusy) { showToast('A solve is already running — please wait', 'warning'); return; }
+    showToast('Re-running validation…', 'info');
+    runTieredValidation();
+  } else if (i === 3) {
+    if (!networkData) { showToast('Generate a network first — Export unlocks after generation', 'warning'); return; }
+    // Prefer the sidebar download row (make sure it's shown), else any visible download button.
+    const row = document.getElementById('dlRow');
+    if (row && row.style.display === 'none') row.style.display = '';
+    const dl = Array.from(document.querySelectorAll('.download-btn')).find(b => b.offsetParent !== null);
+    if (dl) {
+      dl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      dl.style.outline = '2px solid var(--accent-cyan)'; dl.style.outlineOffset = '2px';
+      setTimeout(() => { dl.style.outline = ''; dl.style.outlineOffset = ''; }, 1600);
+    } else {
+      showToast('Download buttons appear below the Generate button after a run', 'info');
+    }
+  }
 }
 
 // ═══════ SETTINGS SEARCH ═══════
