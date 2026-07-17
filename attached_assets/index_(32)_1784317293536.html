@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preview Pane Fix — UX Mockup · EPANET/SWMM Generator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a1120; --panel:#0e1830; --panel2:#111d38; --line:#1d2b4d;
+  --txt:#dbe4f5; --mut:#7d8cab; --mut2:#54637f;
+  --acc:#3b82f6; --acc2:#14b8a6; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+  --rad:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;font-size:14px;overflow:hidden}
+button{font-family:inherit;cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#24355c;border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- header ---------- */
+header{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#0ea5e9,#3b82f6);display:grid;place-items:center;font-size:15px}
+header h1{font-size:15px;font-weight:700;white-space:nowrap}
+header h1 small{color:var(--mut);font-weight:500;font-size:11.5px;margin-left:8px}
+.hspace{flex:1}
+.mode-switch{display:flex;background:#0a1326;border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.mode-switch button{border:0;background:transparent;color:var(--mut);font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;transition:.15s}
+.mode-switch button.on{background:var(--acc);color:#fff}
+.mode-switch button.on.fix{background:linear-gradient(90deg,#0ea5e9,#14b8a6)}
+.verpill{font-size:10.5px;color:var(--mut);border:1px solid var(--line);border-radius:20px;padding:4px 10px;white-space:nowrap}
+
+/* ---------- fix banner ---------- */
+#fixbar{display:flex;align-items:center;gap:10px;padding:8px 16px;font-size:12px;background:linear-gradient(90deg,rgba(14,165,233,.14),rgba(20,184,166,.14));border-bottom:1px solid #164e63;color:#a5f3fc}
+#fixbar .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+#fixbar .fx{background:rgba(20,184,166,.16);border:1px solid rgba(20,184,166,.4);color:#99f6e4;border-radius:20px;padding:2px 9px;font-size:10.5px;font-weight:600;white-space:nowrap}
+#fixbar button{background:none;border:0;color:#67e8f9;font-size:14px}
+body.legacy #fixbar{display:none}
+
+/* ---------- layout ---------- */
+#app{display:flex;height:calc(100% - 52px - 37px)}
+body.legacy #app{height:calc(100% - 52px)}
+aside{width:344px;min-width:344px;background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:12px}
+main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+
+/* ---------- sidebar blocks ---------- */
+.eng-toggle,.unit-toggle{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.eng-toggle button,.unit-toggle button{padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--mut);font-weight:600;font-size:12.5px}
+.eng-toggle button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+body.swmm .eng-toggle button.on{background:var(--acc2);border-color:var(--acc2)}
+.unit-toggle button.on{background:#1e3a8a;color:#bfdbfe;border-color:#1e3a8a}
+.tiers{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0}
+.tiers button{padding:7px 4px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--mut);font-size:11.5px;font-weight:600}
+.tiers button.on{border-color:var(--ok);color:var(--ok)}
+.tiers button[data-t="Advanced"].on{border-color:var(--acc);color:var(--acc)}
+.tiers button[data-t="Expert"].on{border-color:#a855f7;color:#a855f7}
+
+/* stepper (fixed) */
+.stepper{display:flex;align-items:center;margin:6px 0 12px;flex-wrap:nowrap}
+.step{display:flex;align-items:center;gap:3px;background:var(--panel2);border:1px solid var(--line);color:var(--mut);border-radius:7px;padding:4px 5px;font-size:10px;font-weight:600;position:relative;white-space:nowrap}
+.step .n{width:14px;height:14px;border-radius:50%;background:#24355c;color:#9fb0d0;display:grid;place-items:center;font-size:9px}
+.step.done{border-color:rgba(34,197,94,.5);color:var(--ok)}
+.step.done .n{background:var(--ok);color:#052e12}
+.step.current{border-color:var(--acc);color:#93c5fd;box-shadow:0 0 0 1px var(--acc) inset}
+.step.current .n{background:var(--acc);color:#fff}
+.step.locked{opacity:.5;cursor:not-allowed}
+.step:not(.locked):hover{filter:brightness(1.25)}
+.step-arrow{color:var(--mut2);margin:0 2px;font-size:10px}
+/* legacy stepper */
+body.legacy .stepper .step{border:0;background:none;padding:3px 4px;box-shadow:none!important}
+body.legacy .stepper .step .n{display:none}
+body.legacy .stepper .step.done{color:var(--ok)}
+body.legacy .stepper .step.current{color:var(--txt)}
+body.legacy .stepper .step.locked{opacity:1;color:var(--txt)}
+body.legacy .step.done::before{content:"✓ "}
+body.legacy .step.current::before,body.legacy .step.locked::before{content:"● "}
+
+#q{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:#0a1326;color:var(--txt);font-size:12px;margin-bottom:10px}
+#q::placeholder{color:var(--mut2)}
+.sidenav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px}
+.sidenav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--mut);font-size:10.5px;font-weight:700;padding:7px 2px;text-transform:uppercase;letter-spacing:.3px}
+.sidenav button.on{color:var(--acc);border-bottom-color:var(--acc)}
+body.swmm .sidenav button.on{color:var(--acc2);border-bottom-color:var(--acc2)}
+.sect{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.sect>h{display:flex;align-items:center;gap:7px;padding:9px 11px;font-size:11.5px;font-weight:700;color:#aebbdd;cursor:pointer;user-select:none;text-transform:uppercase;letter-spacing:.4px}
+.sect>h .car{margin-left:auto;color:var(--mut2);font-size:10px}
+.sect .body{padding:10px;border-top:1px solid var(--line)}
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.presets button{padding:7px 4px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--mut);font-size:11px;font-weight:600}
+.presets button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+body.swmm .presets button.on{background:var(--acc2);border-color:var(--acc2)}
+.hint{font-size:10px;color:var(--mut2);margin-top:7px}
+
+/* legacy injected slot */
+#legacy-slot{display:none}
+body.legacy #legacy-slot{display:block}
+.cramped{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--panel2)}
+.cramped h4{font-size:11px;color:var(--mut);margin:8px 0 6px;text-transform:uppercase}
+.cramped .mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.cramped .mini{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 4px;text-align:center}
+.cramped .mini b{display:block;font-size:14px;color:var(--acc2)}
+.cramped .mini span{font-size:8px;color:var(--mut);text-transform:uppercase}
+.cramped pre{font:10px/1.5 "JetBrains Mono",monospace;color:#9fb0d0;max-height:340px;overflow:auto;white-space:pre}
+.cramped .cbar{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}
+.cramped .cbar button{font-size:10px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--mut)}
+
+/* ---------- main status ---------- */
+.statusbar{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel);font-size:12.5px;flex-wrap:wrap}
+.engpill{background:rgba(59,130,246,.15);border:1px solid rgba(59,130,246,.45);color:#93c5fd;border-radius:20px;padding:3px 11px;font-weight:700;font-size:11.5px}
+body.swmm .engpill{background:rgba(20,184,166,.13);border-color:rgba(20,184,166,.45);color:#5eead4}
+.statusbar .dotsep{color:var(--mut2)}
+.gen-time{margin-left:auto;color:var(--ok);font-size:12px;font-weight:600}
+.valchips{display:flex;align-items:center;gap:6px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.vchip{font-size:11px;font-weight:700;border-radius:20px;padding:4px 11px;border:1px solid}
+.vchip.ok{color:var(--ok);border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.09)}
+.vchip.skip{color:var(--mut);border-color:var(--line);background:var(--panel2)}
+.vchip .arr{color:var(--mut2);font-weight:400;margin-left:6px}
+[data-tip]{position:relative}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);background:#1a2748;border:1px solid var(--line);color:var(--txt);font-size:11px;font-weight:500;padding:7px 10px;border-radius:8px;width:230px;white-space:normal;z-index:2000;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.5);text-align:center;line-height:1.45}
+
+/* ---------- preview tabs ---------- */
+.ptabs{display:flex;gap:4px;padding:8px 16px 0;background:var(--panel);border-bottom:1px solid var(--line)}
+.ptabs button{background:transparent;border:1px solid transparent;border-bottom:0;color:var(--mut);font-size:12px;font-weight:600;padding:7px 14px;border-radius:9px 9px 0 0}
+.ptabs button.on{background:var(--bg);border-color:var(--line);color:var(--acc)}
+body.swmm .ptabs button.on{color:var(--acc2)}
+#content{flex:1;position:relative;overflow:auto;background:var(--bg)}
+.pane{display:none;height:100%}
+.pane.on{display:block}
+.callout{margin:12px 16px 0;padding:9px 14px;border:1px solid rgba(34,197,94,.4);background:rgba(34,197,94,.07);border-radius:10px;color:var(--ok);font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px}
+.callout .spacer{flex:1}
+.callout button{background:none;border:1px solid rgba(34,197,94,.45);color:var(--ok);border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700}
+
+/* map */
+#map{position:absolute;inset:0;background:#0a1120}
+.map-tools{position:absolute;top:12px;right:12px;z-index:800;display:flex;flex-direction:column;gap:8px}
+.toolrow{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:420px}
+.chip-toggle{border:1px solid var(--line);background:rgba(14,24,48,.92);color:var(--mut);font-size:11px;font-weight:600;padding:5px 11px;border-radius:20px;backdrop-filter:blur(4px)}
+.chip-toggle.on{border-color:var(--acc);color:#93c5fd;background:rgba(59,130,246,.18)}
+body.swmm .chip-toggle.on{border-color:var(--acc2);color:#5eead4;background:rgba(20,184,166,.16)}
+.chip-toggle:hover{filter:brightness(1.3)}
+.fitbtn{border:1px solid var(--line);background:rgba(14,24,48,.92);color:#aebbdd;font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;align-self:flex-end}
+.fitbtn:hover{border-color:var(--acc);color:#fff}
+/* plain-text legacy toggles */
+body.legacy .chip-toggle{border:0;background:none;padding:3px 4px;color:var(--txt);font-weight:500}
+body.legacy .chip-toggle.on{color:var(--txt)}
+body.legacy .chip-toggle::before{content:""}
+/* legend */
+#legend{position:absolute;top:12px;left:12px;z-index:800;background:rgba(10,17,32,.93);border:1px solid var(--line);border-radius:11px;min-width:158px;backdrop-filter:blur(5px);overflow:hidden}
+#legend .lhead{display:flex;align-items:center;gap:6px;padding:8px 11px;font-size:11.5px;font-weight:700;color:#aebbdd;cursor:pointer;user-select:none}
+#legend .lhead:hover{color:#fff}
+#legend .lhead .car{margin-left:auto;font-size:10px;color:var(--mut2);transition:transform .2s}
+#legend.closed .lhead .car{transform:rotate(-90deg)}
+#legend .lbody{padding:2px 11px 10px;max-height:420px;transition:max-height .25s,padding .25s}
+#legend.closed .lbody{max-height:0;padding:0 11px;overflow:hidden}
+#legend .lsec{font-size:9.5px;font-weight:700;color:var(--mut2);text-transform:uppercase;margin:8px 0 4px}
+#legend .lrow{display:flex;align-items:center;gap:7px;font-size:11px;color:#b9c6e4;padding:1.5px 0}
+#legend .sw{width:14px;height:4px;border-radius:2px;flex:none}
+#legend .sd{width:9px;height:9px;border-radius:50%;flex:none}
+#legend .sq{width:9px;height:9px;border-radius:2px;flex:none}
+body.legacy #legend .lhead{cursor:default}
+body.legacy #legend .lhead .car{display:none}
+
+/* stats */
+.stats-wrap{padding:16px;overflow:auto;height:100%}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:8px 0 18px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px 14px 11px}
+.stat b{display:block;font-size:24px;font-weight:800;color:#5eead4}
+body:not(.swmm) .stat b{color:#93c5fd}
+.stat span{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.stats-wrap h3{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 4px}
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px;margin-bottom:14px}
+.chart h4{font-size:12px;font-weight:700;color:#aebbdd;margin-bottom:10px}
+.bars{display:flex;align-items:flex-end;gap:14px;height:130px;padding:0 6px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:5px}
+.bar .fill{width:70%;border-radius:6px 6px 0 0;background:linear-gradient(180deg,#38bdf8,#1d4ed8)}
+.bar .v{font-size:10.5px;font-weight:700;color:#9fb0d0}
+.bar .k{font-size:9.5px;color:var(--mut2);text-align:center}
+
+/* inp */
+.inp-wrap{display:flex;flex-direction:column;height:100%}
+.inp-bar{position:sticky;top:0;z-index:10;display:flex;gap:8px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.inp-bar button{border:1px solid var(--line);background:var(--panel2);color:#aebbdd;font-size:12px;font-weight:600;padding:7px 14px;border-radius:8px}
+.inp-bar button:hover{border-color:var(--acc);color:#fff}
+.inp-bar .grow{flex:1}
+.inp-bar .fname{font:11px "JetBrains Mono",monospace;color:var(--mut2)}
+.inp-view{flex:1;overflow:auto;padding:14px 0}
+.inp-view pre{font:12px/1.62 "JetBrains Mono",monospace;color:#c4d0e8;counter-reset:ln;min-width:max-content}
+.inp-view .ln{padding:0 16px 0 0;counter-increment:ln;position:relative;padding-left:58px}
+.inp-view .ln::before{content:counter(ln);position:absolute;left:0;width:40px;text-align:right;color:#3a4a6e;font-size:10.5px}
+.inp-view .ln.sec{color:#5eead4;font-weight:600;background:rgba(20,184,166,.07)}
+body:not(.swmm) .inp-view .ln.sec{color:#93c5fd;background:rgba(59,130,246,.08)}
+.inp-view .ln.com{color:#5a6b8f}
+
+/* docs */
+.docs-wrap{padding:18px;overflow:auto;height:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-content:start}
+.doc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.doc h4{font-size:13.5px;margin-bottom:8px;color:#e6edf9}
+.doc li{font-size:12px;color:#9fb0d0;margin:5px 0 5px 16px;line-height:1.5}
+.doc p{font-size:12px;color:#9fb0d0;line-height:1.55}
+
+/* hgl / results svg */
+.fig-wrap{padding:16px;overflow:auto;height:100%}
+.fig{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.fig h4{font-size:12.5px;margin-bottom:4px;color:#e6edf9}
+.fig p{font-size:11px;color:var(--mut2);margin-bottom:8px}
+.fig svg{width:100%;height:auto;display:block}
+
+/* log / rpt */
+.term{height:100%;overflow:auto;padding:16px;font:12px/1.7 "JetBrains Mono",monospace;color:#9fb0d0}
+.term .t{color:#3a4a6e}
+.term .ok{color:var(--ok)}
+.term .warn{color:var(--warn)}
+.term .hd{color:#5eead4;font-weight:600}
+
+/* ai */
+.ai-wrap{display:flex;flex-direction:column;height:100%}
+.ai-note{margin:12px 16px 0;font-size:11px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 12px}
+.ai-note b{color:#aebbdd}
+.ai-msgs{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:74%;padding:11px 14px;border-radius:13px;font-size:12.8px;line-height:1.6}
+.msg.a{background:var(--panel2);border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px}
+.msg.u{background:#1e3a8a;align-self:flex-end;border-bottom-right-radius:4px;color:#dbeafe}
+body.swmm .msg.u{background:#0f3d38;color:#ccfbf1}
+.msg .who{font-size:10px;font-weight:700;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.sugs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 10px}
+.sugs button{border:1px dashed #2b3d68;background:none;color:#8fb8ff;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:20px}
+body.swmm .sugs button{color:#5eead4}
+.sugs button:hover{border-style:solid}
+.ai-input{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:var(--panel)}
+.ai-input input{flex:1;padding:10px 13px;border-radius:9px;border:1px solid var(--line);background:#0a1326;color:var(--txt);font-size:13px}
+.ai-input button{padding:10px 22px;border-radius:9px;border:0;background:var(--acc);color:#fff;font-weight:700}
+body.swmm .ai-input button{background:var(--acc2)}
+
+/* toast / modal / progress */
+#toasts{position:fixed;right:16px;bottom:16px;z-index:3000;display:flex;flex-direction:column;gap:8px}
+.toast{background:#16224a;border:1px solid var(--line);border-left:3px solid var(--acc2);color:var(--txt);font-size:12.5px;padding:11px 16px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:tin .25s}
+@keyframes tin{from{transform:translateY(8px);opacity:0}}
+#modal{position:fixed;inset:0;background:rgba(4,8,18,.7);z-index:2500;display:none;place-items:center}
+#modal.on{display:grid}
+.mbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;width:380px}
+.mbox h3{font-size:15px;margin-bottom:8px}
+.mbox p{font-size:12.5px;color:var(--mut);line-height:1.55;margin-bottom:16px}
+.mbox .row{display:flex;gap:8px;justify-content:flex-end}
+.mbox button{padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-weight:600;font-size:12.5px}
+.mbox button.go{background:var(--warn);border-color:var(--warn);color:#1a1200}
+#prog{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,#0ea5e9,#14b8a6);width:0;z-index:4000;transition:width .3s;box-shadow:0 0 12px rgba(20,184,166,.7)}
+.mk-pump{border:2px solid #f472b6;background:rgba(244,114,182,.25);width:12px!important;height:12px!important;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.mk-sq{border:2px solid #fb923c;background:rgba(251,146,60,.3);width:11px!important;height:11px!important;border-radius:2px}
+.mk-dia{border:2px solid #c084fc;background:rgba(192,132,252,.3);width:10px!important;height:10px!important;transform:rotate(45deg)}
+.leaflet-container{background:#0a1120;font-family:Inter}
+@media(max-width:900px){aside{display:none}}
+</style>
+</head>
+<body class="swmm">
+<div id="prog"></div>
+<header>
+  <div class="logo">🌧</div>
+  <h1 id="appTitle">SWMM 5.2.4 Generator <small>UX mockup — preview-pane fix</small></h1>
+  <div class="hspace"></div>
+  <div class="mode-switch" title="Compare current layout vs proposed fix">
+    <button id="mLegacy">Current v4.1</button>
+    <button id="mFixed" class="on fix">Fixed layout ✨</button>
+  </div>
+  <span class="verpill">v4.2-mockup · 2026-07-18</span>
+</header>
+
+<div id="fixbar">
+  <span>🔧</span>
+  <div class="chips">
+    <span class="fx">① Tabs render in main pane</span>
+    <span class="fx">② SWMM-aware legend</span>
+    <span class="fx">③ Solver chip explains itself</span>
+    <span class="fx">④ Collapsible legend</span>
+    <span class="fx">⑤ Fit-to-bounds</span>
+    <span class="fx">⑥ Numbered stepper</span>
+    <span class="fx">⑦ Tier tooltips</span>
+    <span class="fx">⑧ Big-preset confirm</span>
+    <span class="fx">⑨ Toggle chips</span>
+  </div>
+  <button onclick="document.getElementById('fixbar').style.display='none'" title="dismiss">✕</button>
+</div>
+
+<div id="app">
+  <!-- ============ SIDEBAR (settings only — always) ============ -->
+  <aside>
+    <div class="eng-toggle">
+      <button id="engE">💧 EPANET 2.3</button>
+      <button id="engS" class="on">🌧 SWMM 5.2.4</button>
+    </div>
+    <div class="unit-toggle">
+      <button class="on">🇺🇸 US Customary</button>
+      <button>🌍 SI / Metric</button>
+    </div>
+    <div class="tiers">
+      <button class="on" data-t="Simple" data-tip="Core grid + terrain only. Fastest path to a working model.">🟢 Simple</button>
+      <button data-t="Advanced" data-tip="Unlocks: demand patterns, water quality, RDII, groundwater, controls.">🔵 Advanced</button>
+      <button data-t="Expert" data-tip="Unlocks everything: LID, snow pack, transects, custom curves, solver tuning.">🟣 Expert</button>
+    </div>
+
+    <div class="stepper" id="stepper">
+      <button class="step done" data-s="0" data-tip="Settings are valid"><span class="n">✓</span>Configure</button><span class="step-arrow">›</span>
+      <button class="step done" data-s="1" data-tip="Network generated"><span class="n">✓</span>Generate</button><span class="step-arrow">›</span>
+      <button class="step current" data-s="2" data-tip="Click to run validation"><span class="n">3</span>Validate</button><span class="step-arrow">›</span>
+      <button class="step locked" data-s="3" data-tip="Locked until validation passes"><span class="n">4</span>Export</button>
+    </div>
+
+    <input id="q" placeholder="🔍 Search settings… (e.g. demand, rainfall, seed)">
+    <div class="sidenav">
+      <button class="on">Network</button><button>Hydraulics</button><button>Environment</button><button>Map &amp; Export</button>
+    </div>
+
+    <!-- legacy bug slot: in "Current v4.1" mode, tab content renders HERE -->
+    <div id="legacy-slot"></div>
+
+    <div class="sect" data-k="quick presets size nodes">
+      <h>⚡ Quick Presets <span class="car">▾</span></h>
+      <div class="body">
+        <div class="presets" id="presets">
+          <button data-n="7">Tiny (50)</button><button data-n="12">Small (150)</button><button data-n="27">Medium (750)</button>
+          <button data-n="32" class="on">Standard (1K)</button><button data-n="50">Large (2500)</button><button data-n="71">XL (5000)</button>
+          <button data-n="100">Mega (10K)</button><button data-n="224" data-big="1">Giant (50K)</button><button data-n="316" data-big="1">City (100K)</button>
+        </div>
+        <div class="hint">Giant / City show an estimated-time confirm before generating (fix ⑧).</div>
+      </div>
+    </div>
+
+    <div class="sect" data-k="grid topology rows columns branching loops">
+      <h>⊞ Grid &amp; Topology <span class="car">▾</span></h>
+      <div class="body"><div class="hint">Grid 32×32 · branching 12% · loop density 0.42 · seed 168140</div></div>
+    </div>
+
+    <div class="sect" data-k="terrain elevation dem slope">
+      <h>▲ Terrain &amp; Elevation <span class="car">▾</span></h>
+      <div class="body"><div class="hint">Synthetic DEM · relief 66 ft · drainage toward river</div></div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main>
+    <div class="statusbar">
+      <span class="engpill" id="engPill">🌧 SWMM 5.2.4</span>
+      <span>US Customary</span><span class="dotsep">·</span>
+      <span id="cntNodes">1,024 junctions</span><span class="dotsep">·</span>
+      <span id="cntLinks">2,046 conduits</span>
+      <span class="gen-time" id="genTime" title="">✓ Generated just now</span>
+    </div>
+
+    <div class="valchips" id="valchips"></div>
+
+    <div class="ptabs" id="ptabs">
+      <button data-tab="map" class="on">Map</button>
+      <button data-tab="stats">Stats</button>
+      <button data-tab="inp">INP</button>
+      <button data-tab="docs">Docs</button>
+      <button data-tab="hgl">HGL</button>
+      <button data-tab="log">Log</button>
+      <button data-tab="rpt">RPT</button>
+      <button data-tab="results">Results</button>
+      <button data-tab="ai">🤖 AI</button>
+    </div>
+
+    <div id="content">
+      <div class="pane on" id="pane-map">
+        <div id="map"></div>
+        <div class="map-tools">
+          <button class="fitbtn" id="fitBtn" data-tip="Re-frame the whole network (also runs automatically after each generate)">⤢ Fit to network</button>
+          <div class="toolrow" id="layerChips"></div>
+          <div class="toolrow" id="nodeChips"></div>
+        </div>
+        <div id="legend">
+          <div class="lhead" id="legHead">Map Legend <span class="car">▾</span></div>
+          <div class="lbody" id="legBody"></div>
+        </div>
+      </div>
+      <div class="pane" id="pane-stats"></div>
+      <div class="pane" id="pane-inp"></div>
+      <div class="pane" id="pane-docs"></div>
+      <div class="pane" id="pane-hgl"></div>
+      <div class="pane" id="pane-log"></div>
+      <div class="pane" id="pane-rpt"></div>
+      <div class="pane" id="pane-results"></div>
+      <div class="pane" id="pane-ai"></div>
+      <!-- legacy empty black pane -->
+      <div class="pane" id="pane-void" style="background:#05080f"></div>
+    </div>
+  </main>
+</div>
+
+<div id="modal"><div class="mbox">
+  <h3 id="mTitle">Large network</h3>
+  <p id="mText"></p>
+  <div class="row"><button id="mCancel">Cancel</button><button class="go" id="mGo">Generate anyway</button></div>
+</div></div>
+<div id="toasts"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/d3-delaunay@6"></script>
+<style>
+#content{display:flex;flex-direction:column}
+.pane{flex:1;min-height:0;height:auto}
+#pane-map{position:relative}
+.callout{flex:none;margin:10px 16px 0}
+</style>
+<script>
+/* ================= state & utils ================= */
+const S={engine:'swmm',legacy:false,n:32,seed:168140,nodes:[],links:[],sp:{},genAt:Date.now(),validated:false,tab:'map',vor:null};
+const $=id=>document.getElementById(id);
+const fmt=x=>x.toLocaleString('en-US');
+const PAL=['#3b82f6','#60a5fa','#22c55e','#eab308','#f97316'];
+const LAT0=33.720,DLAT=0.068,LNG0=-84.460,DLNG=0.115;
+function rng32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function toast(m,ms=3400){const t=document.createElement('div');t.className='toast';t.innerHTML=m;$('toasts').appendChild(t);setTimeout(()=>t.remove(),ms)}
+const DIAMS={swmm:['&lt; 21.6','21.6 – 31.2','31.2 – 40.8','40.8 – 50.4','&gt; 50.4'],epanet:['&lt; 7.2','7.2 – 8.4','8.4 – 9.6','9.6 – 10.8','&gt; 10.8']};
+
+/* ================= network generation ================= */
+function genNetwork(){
+  const n=S.n,r=rng32(S.seed+n*7+(S.engine==='swmm'?1:0));
+  S.nodes=[];S.links=[];
+  const cx=(n-1)/2;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    const lat=LAT0+DLAT*(1-i/(n-1))+(r()-0.5)*DLAT/n*0.5;
+    const lng=LNG0+DLNG*j/(n-1)+(r()-0.5)*DLNG/n*0.5;
+    const dc=Math.hypot(i-cx,j-cx)/(n/1.4);
+    const elev=190-dc*66-r()*14;                       // drains toward center-river
+    const ec=Math.max(0,Math.min(4,Math.floor((elev-100)/18)));
+    S.nodes.push({i,j,lat,lng,elev,ec});
+  }
+  const at=(i,j)=>i*n+j;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    const dc=Math.hypot(i-cx,j-cx)/(n/2);
+    const trunk=dc<0.45?2:(dc<0.75?1:0);               // downtown trunk mains
+    const cls=()=>Math.max(0,Math.min(4,trunk+Math.floor(r()*3)- (trunk?1:0)));
+    if(j<n-1&&r()<0.99)S.links.push({a:at(i,j),b:at(i,j+1),c:cls()});
+    if(i<n-1&&r()<0.99)S.links.push({a:at(i,j),b:at(i+1,j),c:cls()});
+    if(i<n-1&&j<n-1&&r()<0.03)S.links.push({a:at(i,j),b:at(i+1,j+1),c:Math.min(4,2+Math.floor(r()*3))});
+  }
+  const edge=[...Array(n).keys()].map(i=>at(i,0));     // river side
+  S.sp={};
+  if(S.engine==='swmm'){
+    S.sp.outfalls=[edge[8],edge[Math.floor(n/2)],edge[n-9]];
+    S.sp.storage=[at(5,n-6),at(n-6,6),at(Math.floor(n/2),Math.floor(n/2)+3)];
+    S.sp.pumps=[at(10,10),at(n-10,n-12),at(n-15,Math.floor(n/2))];
+  }else{
+    S.sp.reservoirs=[at(0,0),at(n-1,n-1)];
+    S.sp.tanks=[at(4,n-5),at(n-5,4),at(Math.floor(n/3),Math.floor(n/3)),at(Math.floor(2*n/3),Math.floor(2*n/3))];
+    S.sp.pumps=[at(10,10),at(n-10,n-12),at(n-15,Math.floor(n/2))];
+    S.sp.valves=[...Array(8)].map(()=>Math.floor(r()*S.nodes.length));
+    S.sp.emitters=[...Array(5)].map(()=>Math.floor(r()*S.nodes.length));
+  }
+  S.genAt=Date.now();
+}
+
+/* ================= map ================= */
+let map,baseTiles,labelTiles,linkL,juncL,specL,vorL;
+const LAYERS={city:true,network:true,labels:true,voronoi:false};
+const NODETOGGLE={};
+function initMap(){
+  map=L.map('map',{zoomControl:false,attributionControl:false,preferCanvas:true}).setView([33.752,-84.40],14);
+  L.control.zoom({position:'bottomleft'}).addTo(map);
+  baseTiles=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+  labelTiles=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+  linkL=L.layerGroup().addTo(map);juncL=L.layerGroup().addTo(map);specL=L.layerGroup().addTo(map);vorL=L.layerGroup();
+  $('fitBtn').onclick=()=>{fitNet();toast('⤢ Fit to network bounds')};
+  $('legHead').onclick=()=>{if(S.legacy)return;$('legend').classList.toggle('closed')};
+}
+function fitNet(){map.fitBounds(L.latLngBounds([LAT0,LNG0],[LAT0+DLAT,LNG0+DLNG]).pad(0.04))}
+const mkIcon=cls=>L.divIcon({className:cls,iconSize:[12,12]});
+const RND=L.canvas({padding:0.5});   // ONE shared canvas renderer — never L.canvas() per feature
+function drawNetwork(){
+  linkL.clearLayers();juncL.clearLayers();specL.clearLayers();vorL.clearLayers();S.vor=null;
+  const ns=S.nodes;
+  for(const l of S.links){
+    const a=ns[l.a],b=ns[l.b];
+    L.polyline([[a.lat,a.lng],[b.lat,b.lng]],{color:PAL[l.c],weight:1+l.c*0.8,opacity:0.85,renderer:RND}).addTo(linkL);
+  }
+  for(const p of ns)L.circleMarker([p.lat,p.lng],{radius:2.4,color:PAL[p.ec],weight:1,fillColor:PAL[p.ec],fillOpacity:0.9,renderer:RND}).addTo(juncL);
+  const sp=S.sp,circ=(p,r,col)=>L.circleMarker([ns[p].lat,ns[p].lng],{radius:r,color:col,weight:2,fillColor:col,fillOpacity:.5,renderer:RND}).addTo(specL);
+  if(S.engine==='swmm'){
+    (sp.outfalls||[]).forEach(p=>circ(p,5,'#22c55e'));
+    (sp.storage||[]).forEach(p=>L.marker([ns[p].lat,ns[p].lng],{icon:mkIcon('mk-sq')}).addTo(specL));
+    (sp.pumps||[]).forEach(p=>L.marker([ns[p].lat,ns[p].lng],{icon:mkIcon('mk-pump')}).addTo(specL));
+  }else{
+    (sp.reservoirs||[]).forEach(p=>circ(p,6,'#1d4ed8'));
+    (sp.tanks||[]).forEach(p=>L.marker([ns[p].lat,ns[p].lng],{icon:mkIcon('mk-sq')}).addTo(specL));
+    (sp.pumps||[]).forEach(p=>L.marker([ns[p].lat,ns[p].lng],{icon:mkIcon('mk-pump')}).addTo(specL));
+    (sp.valves||[]).forEach(p=>L.marker([ns[p].lat,ns[p].lng],{icon:mkIcon('mk-dia')}).addTo(specL));
+    (sp.emitters||[]).forEach(p=>circ(p,3,'#2dd4bf'));
+  }
+  setTimeout(()=>fitNet(),60);
+}
+function buildVoronoi(){
+  if(S.nodes.length>5200){toast('⚠ Voronoi overlay capped at 5K nodes in this demo');return false}
+  const pts=S.nodes.map(p=>[(p.lng-LNG0)/DLNG*1000,(p.lat-LAT0)/DLAT*1000]);
+  const v=d3.Delaunay.from(pts).voronoi([0,0,1000,1000]);
+  const polys=[];
+  for(let k=0;k<pts.length;k+=Math.ceil(pts.length/1500)){
+    const cell=v.cellPolygon(k);if(!cell)continue;
+    polys.push(cell.map(([x,y])=>[LAT0+y/1000*DLAT,LNG0+x/1000*DLNG]));
+  }
+  polys.forEach(pp=>L.polygon(pp,{color:'#3b82f6',weight:.6,fillColor:'#3b82f6',fillOpacity:.06,renderer:RND}).addTo(vorL));
+  return true;
+}
+
+/* ================= chips & legend ================= */
+function renderChips(){
+  const lc=[['city','City'],['network','Network'],['labels','Labels'],['voronoi','Voronoi']];
+  $('layerChips').innerHTML=lc.map(([k,t])=>`<button class="chip-toggle ${LAYERS[k]?'on':''}" data-l="${k}">${t}</button>`).join('');
+  document.querySelectorAll('#layerChips .chip-toggle').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.l;LAYERS[k]=!LAYERS[k];b.classList.toggle('on',LAYERS[k]);
+    if(k==='city')LAYERS[k]?baseTiles.addTo(map):baseTiles.remove();
+    if(k==='labels')LAYERS[k]?labelTiles.addTo(map):labelTiles.remove();
+    if(k==='network'){LAYERS[k]?(linkL.addTo(map),juncL.addTo(map),specL.addTo(map)):(linkL.remove(),juncL.remove(),specL.remove())}
+    if(k==='voronoi'){if(LAYERS[k]){if(buildVoronoi())vorL.addTo(map);else{LAYERS[k]=false;b.classList.remove('on')}}else vorL.remove()}
+  });
+  const types=S.engine==='swmm'&&!S.legacy?['Jct','Outfall','Storage','Pump']:['Jct','Res','Tank','Pump','Valve','Emit'];
+  $('nodeChips').innerHTML=types.map(t=>`<button class="chip-toggle on" data-nt="${t}">${t}</button>`).join('');
+  document.querySelectorAll('#nodeChips .chip-toggle').forEach(b=>b.onclick=()=>{
+    const on=!b.classList.contains('on');b.classList.toggle('on',on);
+    const t=b.dataset.nt;
+    if(t==='Jct')on?juncL.addTo(map):juncL.remove();else on?specL.addTo(map):specL.remove();
+  });
+}
+function elevBins(){
+  const es=S.nodes.map(p=>p.elev),mn=Math.min(...es),mx=Math.max(...es),st=(mx-mn)/5;
+  return [...Array(5)].map((_,k)=>`${Math.round(mn+k*st)} – ${Math.round(mn+(k+1)*st)}`);
+}
+function renderLegend(){
+  const fixed=!S.legacy;
+  const types=fixed&&S.engine==='swmm'
+    ?[['sd','#3b82f6','Junction'],['sd','#22c55e','Outfall'],['sq','#fb923c','Storage'],['sd','#f472b6','Pump']]
+    :[['sd','#3b82f6','Junction'],['sd','#22c55e','Reservoir'],['sq','#fb923c','Tank'],['sd','#f472b6','Pump'],['sd','#c084fc','Valve'],['sd','#2dd4bf','Emitter']];
+  $('legBody').innerHTML=
+    types.map(([c,col,t])=>`<div class="lrow"><span class="${c}" style="background:${col};border-color:${col}"></span>${t}</div>`).join('')+
+    `<div class="lsec">Nodes · Elevation (ft)</div>`+elevBins().map((b,k)=>`<div class="lrow"><span class="sw" style="background:${PAL[k]}"></span>${b}</div>`).join('')+
+    `<div class="lsec">${S.engine==='swmm'&&fixed?'Conduits':'Links'} · Diameter (in)</div>`+DIAMS[S.engine].map((b,k)=>`<div class="lrow"><span class="sw" style="background:${PAL[k]}"></span>${b}</div>`).join('');
+}
+
+/* ================= tab contents ================= */
+function statCards(){
+  const n=S.nodes.length,nl=S.links.length;
+  const topo=S.engine==='swmm'
+    ?[[fmt(n),'Junctions'],[S.sp.outfalls.length,'Outfalls'],[fmt(n-S.sp.outfalls.length),'Subcatchments'],[fmt(nl),'Conduits'],[S.sp.pumps.length,'Pumps'],[S.sp.pumps.length,'Force Mains']]
+    :[[fmt(n),'Junctions'],[S.sp.reservoirs.length,'Reservoirs'],[S.sp.tanks.length,'Tanks'],[fmt(nl),'Pipes'],[S.sp.pumps.length,'Pumps'],[S.sp.valves.length,'Valves']];
+  const zones=S.engine==='swmm'
+    ?[['SCS2','Storm'],['845','Residential'],['117','Mixed'],['32','Industrial'],['30','Commercial'],[`${Math.round(nl*0.72)} KB`,'INP Size']]
+    :[['24 h','Duration'],['845','Residential'],['117','Mixed'],['1.15','S/D Ratio'],['0.42','Loop Density'],[`${Math.round(nl*0.55)} KB`,'INP Size']];
+  return {topo,zones};
+}
+function barChart(title,labels,vals,color){
+  const mx=Math.max(...vals);
+  return `<div class="chart"><h4>${title}</h4><div class="bars">${vals.map((v,k)=>
+    `<div class="bar"><span class="v">${v}</span><div class="fill" style="height:${Math.round(v/mx*78)}%;background:linear-gradient(180deg,${color},#1d4ed8)"></div><span class="k">${labels[k]}</span></div>`).join('')}</div></div>`;
+}
+function renderStats(){
+  const {topo,zones}=statCards();
+  const dCounts=[0,0,0,0,0];S.links.forEach(l=>dCounts[l.c]++);
+  const eCounts=[0,0,0,0,0];S.nodes.forEach(p=>eCounts[p.ec]++);
+  return `<div class="stats-wrap">
+    <h3>Topology</h3><div class="stat-grid">${topo.map(([v,k])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('')}</div>
+    <h3>Zones &amp; Output</h3><div class="stat-grid">${zones.map(([v,k])=>`<div class="stat"><b>${v}</b><span>${k}</span></div>`).join('')}</div>
+    ${barChart((S.engine==='swmm'?'Conduit':'Pipe')+' diameter distribution (count per class)',DIAMS[S.engine].map(s=>s.replace(/&lt;|&gt;/g,m=>m==='&lt;'?'<':'>')),dCounts,'#38bdf8')}
+    ${barChart('Node elevation histogram (nodes per band)',elevBins(),eCounts,'#14b8a6')}
+  </div>`;
+}
+function buildINP(){
+  const n=S.nodes.length,nl=S.links.length,d=new Date(S.genAt).toISOString();
+  if(S.engine==='swmm')return `[TITLE]
+;;SWMM 5.2.4 Model — Generator v4.2-mockup
+;;Engine target: loads in EPA SWMM 5.2+
+;;Generated: ${d}
+;;Seed: ${S.seed}
+;;${n} junctions, 3 outfalls, ${n-3} subcatchments
+;;${nl} conduits, Grid: ${S.n}x${S.n}
+;;Storm: SCS2 4in, Routing: DYNWAVE
+;;Infiltration: HORTON, Pipe lengths: 1.3x street factor
+;;Water Quality: TSS, BOD, Washoff: EMC
+;;Shapes: Circ 45%, Rect 15%, Arch 8%, Egg 7%
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+LINK_OFFSETS         DEPTH
+FORCE_MAIN_EQUATION  H-W
+IGNORE_RAINFALL      NO
+IGNORE_GROUNDWATER   YES
+IGNORE_RDII          YES
+IGNORE_QUALITY       NO
+ALLOW_PONDING        NO
+START_DATE           01/01/2025
+END_DATE             01/02/2025
+REPORT_STEP          00:05:00
+WET_STEP             00:00:30
+ROUTING_STEP         00:00:10
+INERTIAL_DAMPING     PARTIAL
+VARIABLE_STEP        0.75
+[RAINGAGES]
+;;Name           Format    Interval  SCF  Source
+RG1              INTENSITY 0:30      1.0  TIMESERIES DesignStorm
+[SUBCATCHMENTS]
+;;Name           Rain Gage        Outlet           Area     %Imperv  Width    %Slope
+S1               RG1              J1                   4.45     37.9      516     0.10
+S2               RG1              J2                   4.41     61.8      500     0.10
+S3               RG1              J3                   4.74     73.2      463     0.10
+;; … ${n-6} more rows …
+[OUTFALLS]
+;;Name           Invert     Type       Stage Data
+O1               98.20      FREE                        NO
+O2               96.40      FREE                        NO
+O3               97.10      NORMAL      99.0            NO
+[END]`; 
+  return `[TITLE]
+;;EPANET 2.3 Model — Generator v4.2-mockup
+;;Generated: ${d}  ·  Seed: ${S.seed}
+;;${n} junctions, 2 reservoirs, 4 tanks, ${nl} pipes
+[JUNCTIONS]
+;;ID              Elev        Demand      Pattern
+J1               168.4       12.3        PAT1
+J2               171.2       9.8         PAT1
+J3               166.9       15.1        PAT2
+;; … ${n-3} more rows …
+[RESERVOIRS]
+R1               210.0       ;
+R2               206.5       ;
+[PIPES]
+;;ID              Node1    Node2    Length    Diameter  Roughness
+P1               J1       J2       640       8         100
+P2               J2       J3       612       8         100
+;; … ${nl-2} more rows …
+[OPTIONS]
+UNITS              GPM
+HEADLOSS           H-W
+QUALITY            NONE
+DEMAND MULTIPLIER  1.0
+[END]`;
+}
+function renderINP(){
+  const lines=buildINP().split('\n').map(l=>{
+    const esc=l.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const cls=/^\[.+\]/.test(l)?'sec':(l.startsWith(';;')?'com':'');
+    return `<div class="ln ${cls}">${esc||' '}</div>`;
+  }).join('');
+  return `<div class="inp-wrap">
+    <div class="inp-bar">
+      <button onclick="dlINP()">↓ Download .inp</button>
+      <button onclick="copyINP(this)">📋 Copy All</button>
+      <button onclick="toast('✅ INP validated — syntax OK, topology OK')">✓ Validate</button>
+      <span class="grow"></span><span class="fname">model_${S.engine}_${S.n}x${S.n}.inp · ${(buildINP().length/1024).toFixed(1)} KB shown</span>
+    </div>
+    <div class="inp-view"><pre>${lines}</pre></div>
+  </div>`;
+}
+function dlINP(){const b=new Blob([buildINP()],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`model_${S.engine}.inp`;a.click();toast('↓ model_'+S.engine+'.inp downloaded')}
+function copyINP(el){navigator.clipboard.writeText(buildINP()).then(()=>{el.textContent='✅ Copied';setTimeout(()=>el.textContent='📋 Copy All',1500)})}
+function renderDocs(){
+  const c=(t,items)=>`<div class="doc"><h4>${t}</h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+  return `<div class="docs-wrap">
+    ${c('📦 What gets generated',S.engine==='swmm'?['Junctions, outfalls, storage units & pumps on a jittered street grid','Subcatchments with SCS-CN runoff, Horton infiltration','DYNWAVE routing, SCS Type II design storm, TSS/BOD washoff','Conduit shape mix: circular, rectangular, arch, egg']:['Junctions, reservoirs, tanks, pumps, valves & emitters','Demand zones: residential, mixed, industrial, commercial','Hazen-Williams headloss, 24 h EPS with patterns','Elevation-graded pipe sizing from synthetic DEM'])}
+    ${c('✅ Validation pipeline',['<b>Syntax</b> — INP parses against engine schema','<b>Topology</b> — 100% connectivity, no orphan nodes','<b>Solver</b> — '+(S.engine==='swmm'?'not run in-browser (stated on the chip, not silent)':'24 h EPS run, balanced flows'),'<b>QA</b> — '+(S.engine==='swmm'?'pending solver':'pressure & velocity range checks')])}
+    ${c('⬇ Export formats',['.inp — loads directly in EPA '+(S.engine==='swmm'?'SWMM 5.2+':'EPANET 2.3+'),'GeoJSON — nodes & links with attributes','DEM.tif — synthetic terrain used for elevations','backdrop.png — city-underlay snapshot'])}
+    ${c('🌱 Reproducibility',['Every model carries its seed (current: '+S.seed+')','Same seed + same settings ⇒ byte-identical INP','Seed is printed in the INP header for audit trails'])}
+  </div>`;
+}
+function renderHGL(){
+  const pts=[[40,210],[160,196],[280,184],[400,170],[520,152],[640,138],[760,120],[880,104]];
+  const g=[[40,236],[160,222],[280,206],[400,196],[520,176],[640,162],[760,140],[880,120]];
+  const path=a=>'M'+a.map(p=>p.join(',')).join(' L');
+  return `<div class="fig-wrap"><div class="fig">
+    <h4>Hydraulic Grade Line — trunk profile (mock)</h4><p>Blue: HGL at peak hour · dashed: ground / conduit crown</p>
+    <svg viewBox="0 0 920 260">
+      ${[0,1,2,3,4].map(k=>`<line x1="40" y1="${60+k*45}" x2="900" y2="${60+k*45}" stroke="#1d2b4d"/><text x="6" y="${64+k*45}" fill="#54637f" font-size="10">${190-k*20}</text>`).join('')}
+      <path d="${path(g)}" stroke="#54637f" stroke-dasharray="6 5" fill="none" stroke-width="2"/>
+      <path d="${path(pts)}" stroke="#38bdf8" fill="none" stroke-width="3"/>
+      ${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#38bdf8"/>`).join('')}
+      <text x="880" y="90" fill="#22c55e" font-size="11" text-anchor="end">Outfall · 104 ft</text>
+      <text x="46" y="200" fill="#93c5fd" font-size="11">Tank T1 · 210 ft</text>
+    </svg></div></div>`;
+}
+function renderLog(){
+  const t=s=>{const d=new Date(S.genAt-s*1000);return d.toTimeString().slice(0,8)};
+  return `<div class="term">
+<div><span class="t">[${t(38)}]</span> seed=${S.seed} · engine=${S.engine==='swmm'?'SWMM 5.2.4':'EPANET 2.3'} · grid=${S.n}x${S.n}</div>
+<div><span class="t">[${t(37)}]</span> generating street grid … jitter=0.5, branching=12%</div>
+<div><span class="t">[${t(35)}]</span> terrain sampling … synthetic DEM, relief 66 ft</div>
+<div><span class="t">[${t(33)}]</span> ${S.engine==='swmm'?'subcatchments delineated (Voronoi) …':'demand zones assigned …'}</div>
+<div><span class="t">[${t(31)}]</span> link sizing … trunk boost near CBD</div>
+<div><span class="t">[${t(29)}]</span> <span class="ok">✓ syntax check passed</span></div>
+<div><span class="t">[${t(28)}]</span> <span class="ok">✓ topology: 100% connected</span></div>
+${S.engine==='swmm'?'<div><span class="t">['+t(28)+']</span> <span class="warn">○ solver: not run in-browser — see chip tooltip (fix ③)</span></div>':'<div><span class="t">['+t(26)+']</span> <span class="ok">✓ solver: EPS converged in 41 trials</span></div>\n<div><span class="t">['+t(25)+']</span> <span class="ok">✓ QA: pressures 38–92 psi, velocities 0.4–6.1 ft/s</span></div>'}
+<div><span class="t">[${t(24)}]</span> <span class="hd">done in 3.2 s — ${fmt(S.nodes.length)} nodes, ${fmt(S.links.length)} links</span></div>
+  </div>`;
+}
+function renderRPT(){
+  return `<div class="term">
+<div class="hd">  EPA ${S.engine==='swmm'?'SWMM 5.2.4':'EPANET 2.3'} — Status Report (mock)</div>
+<div>  *************************************</div>
+<div>  Network ......... ${fmt(S.nodes.length)} nodes / ${fmt(S.links.length)} links</div>
+<div>  Connectivity .... 100% (0 orphans)</div>
+${S.engine==='swmm'?'<div>  Routing ......... DYNWAVE · 10 s step · partial inertial damping</div>\n<div>  Runoff .......... SCS-CN · Horton infiltration</div>\n<div class="warn">  NOTE ........... hydraulic solver not executed in browser</div>':'<div>  Headloss ........ Hazen-Williams</div>\n<div>  EPS ............. 24 h · hydraulic step 1:00</div>\n<div class="ok">  Balanced ........ demand in = out ± 0.1%</div>'}
+<div>  Errors .......... 0</div>
+<div class="warn">  Warnings ........ 2 (short links &lt; 100 ft auto-lengthened)</div>
+  </div>`;
+}
+function renderResults(){
+  const inf=[],out=[];
+  for(let h=0;h<=24;h+=0.5){
+    const x=60+h*34;
+    inf.push([x,220-150*Math.exp(-Math.pow(h-6,2)/4)]);
+    out.push([x,220-90*Math.exp(-Math.pow(h-6.8,2)/9)]);
+  }
+  const path=a=>'M'+a.map(p=>`${p[0]},${p[1].toFixed(1)}`).join(' L');
+  return `<div class="fig-wrap">
+    <div class="stat-grid" style="margin-top:0">
+      <div class="stat"><b>182 cfs</b><span>Peak inflow</span></div>
+      <div class="stat"><b>96 cfs</b><span>Peak outfall flow</span></div>
+      <div class="stat"><b>47 min</b><span>Peak lag</span></div>
+      <div class="stat"><b>0</b><span>Flooded nodes</span></div>
+    </div>
+    <div class="fig"><h4>Outfall hydrograph — SCS Type II, 4 in (mock)</h4><p>Blue: system inflow · teal: outfall O2</p>
+    <svg viewBox="0 0 920 250">
+      ${[0,6,12,18,24].map(h=>`<text x="${60+h*34}" y="242" fill="#54637f" font-size="10" text-anchor="middle">${h}:00</text>`).join('')}
+      <path d="${path(inf)}" stroke="#3b82f6" fill="rgba(59,130,246,.12)" stroke-width="2.5"/>
+      <path d="${path(out)}" stroke="#14b8a6" fill="rgba(20,184,166,.10)" stroke-width="2.5"/>
+    </svg></div></div>`;
+}
+const AI_ANS={
+  'DYNWAVE':'<b>Why DYNWAVE?</b> Full dynamic-wave routing solves the complete St. Venant equations, so it captures backwater, flow reversal and surcharge — important here because the trunk conduits near the CBD run at &gt; 75% full during the SCS peak. Kinematic wave would miss the backwater off the outfalls.',
+  'SCS':'<b>SCS Type II storm:</b> a 24 h NRCS synthetic distribution peaking near hour 12 — appropriate for Atlantic/Gulf-influenced interiors like this grid. The 4 in depth maps to roughly a 10-yr event for this region. Try the Environment tab to swap in a 25-yr/6 in variant.',
+  'bottleneck':'<b>Bottlenecks:</b> the 3 conduits draining the central loop (classes 4–5, orange) carry ~62% of peak flow on 18% of capacity headroom. Upsizing C-0412→C-0415 by one class cuts peak depth ~14% in the mock results.',
+};
+function renderAI(){
+  const {topo}=statCards();
+  return `<div class="ai-wrap">
+    <div class="ai-note">🤖 <b>AI Assistant</b> · Claude · sees only a summary of the generated network — not your settings or files.</div>
+    <div class="ai-msgs" id="aiMsgs">
+      <div class="msg a"><div class="who">Assistant</div>Generated a ${S.engine==='swmm'?'SWMM 5.2.4 stormwater':'EPANET 2.3 water distribution'} model: <b>${topo[0][0]} ${topo[0][1].toLowerCase()}</b>, <b>${topo[3][0]} ${topo[3][1].toLowerCase()}</b>${S.engine==='swmm'?`, ${topo[2][0]} subcatchments`:''}. Topology is 100% connected${S.engine==='swmm'?'; solver not run in-browser (see chip tooltip)':' and the 24 h EPS balanced to ±0.1%'}. What would you like to dig into?</div>
+    </div>
+    <div class="sugs">
+      <button onclick="aiAsk('Why DYNWAVE routing?')">Why DYNWAVE routing?</button>
+      <button onclick="aiAsk('Explain the SCS storm')">Explain the SCS storm</button>
+      <button onclick="aiAsk('Where are the bottlenecks?')">Where are the bottlenecks?</button>
+    </div>
+    <div class="ai-input"><input id="aiIn" placeholder="Ask a question about this network…" onkeydown="if(event.key==='Enter')aiAsk(this.value)"><button onclick="aiAsk(document.getElementById('aiIn').value)">Ask</button></div>
+  </div>`;
+}
+function aiAsk(q){
+  q=(q||'').trim();if(!q)return;
+  const box=$('aiMsgs');if(!box)return;
+  box.insertAdjacentHTML('beforeend',`<div class="msg u"><div class="who">You</div>${q.replace(/</g,'&lt;')}</div>`);
+  $('aiIn').value='';
+  const key=Object.keys(AI_ANS).find(k=>q.toLowerCase().includes(k.toLowerCase()));
+  setTimeout(()=>{box.insertAdjacentHTML('beforeend',`<div class="msg a"><div class="who">Assistant</div>${AI_ANS[key]||'Based on the network summary: '+fmt(S.nodes.length)+' nodes, '+fmt(S.links.length)+' links, 100% connected. Ask about routing, the design storm, or bottlenecks for deeper mock analysis.'}</div>`);box.scrollTop=box.scrollHeight},650);
+  box.scrollTop=box.scrollHeight;
+}
+
+/* ================= chrome: chips, stepper, status ================= */
+function renderValChips(){
+  const ok=t=>`<span class="vchip ok">✅ ${t}</span>`;
+  const skip=(t,tip)=>S.legacy?`<span class="vchip skip">○ ${t}</span>`:`<span class="vchip skip" data-tip="${tip}">○ ${t} ⓘ</span>`;
+  const arr='<span style="color:var(--mut2)">→</span>';
+  $('valchips').innerHTML=S.engine==='epanet'||S.validated
+    ?[ok('Generated'),ok('Syntax'),ok('Topology'),ok('Solver'),ok('QA')].join(arr)
+    :[ok('Generated'),ok('Syntax'),ok('Topology'),skip('Solver','SWMM solver doesn’t run in-browser yet — open the exported .inp in EPA SWMM, or enable the planned WASM solver. Previously this failed silently.'),skip('QA','Runs automatically after the solver stage completes.')].join(arr);
+}
+function renderStatus(){
+  const sw=S.engine==='swmm';
+  $('engPill').textContent=sw?'🌧 SWMM 5.2.4':'💧 EPANET 2.3';
+  $('appTitle').innerHTML=(sw?'SWMM 5.2.4 Generator':'EPANET 2.3 Generator')+' <small>UX mockup — preview-pane fix</small>';
+  $('cntNodes').textContent=fmt(S.nodes.length)+' junctions';
+  $('cntLinks').textContent=fmt(S.links.length)+(sw?' conduits':' pipes');
+  document.querySelector('.logo').textContent=sw?'🌧':'💧';
+  const co=$('callout');if(co)co.outerHTML=calloutHTML();
+  updTime();
+}
+function updTime(){
+  const el=$('genTime'),s=(Date.now()-S.genAt)/1000;
+  if(S.legacy){el.textContent='✓ Generated '+new Date(S.genAt).toTimeString().slice(0,8);el.title=''}
+  else{el.textContent=s<60?'✓ Generated just now':'✓ Generated '+Math.floor(s/60)+' min ago';el.title='Absolute: '+new Date(S.genAt).toUTCString()}
+}
+setInterval(updTime,30000);
+
+/* ================= tabs ================= */
+const RENDER={stats:renderStats,inp:renderINP,docs:renderDocs,hgl:renderHGL,log:renderLog,rpt:renderRPT,results:renderResults,ai:renderAI};
+function calloutHTML(){
+  return `<div class="callout" id="callout">✅ ${fmt(S.nodes.length)} junctions · 100% connected${S.engine==='epanet'?' · S/D ratio 1.15':''}<span class="spacer"></span><button onclick="toast('Detail modal — node/link attribute table (not mocked)')">Details →</button></div>`;
+}
+function setTab(tab){
+  S.tab=tab;
+  document.querySelectorAll('#ptabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  $('legacy-slot').innerHTML='';
+  if(S.legacy&&tab!=='map'){
+    $('pane-void').classList.add('on');                     // bug ①: main goes black
+    const html=RENDER[tab]?RENDER[tab]():'';
+    const cramped=tab==='stats'
+      ?`<div class="cramped"><h4>Topology</h4><div class="mini-grid">${statCards().topo.map(([v,k])=>`<div class="mini"><b>${v}</b><span>${k}</span></div>`).join('')}</div><h4>Zones & Output</h4><div class="mini-grid">${statCards().zones.map(([v,k])=>`<div class="mini"><b>${v}</b><span>${k}</span></div>`).join('')}</div></div>`
+      :`<div class="cramped">${html.replace(/stats-wrap|inp-wrap|docs-wrap|fig-wrap|ai-wrap|term/g,'cramped-inner')}</div>`;
+    $('legacy-slot').innerHTML=cramped;
+    $('legacy-slot').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }else{
+    const pane=$('pane-'+tab);pane.classList.add('on');
+    if(tab!=='map'&&RENDER[tab])pane.innerHTML=RENDER[tab]();
+    if(tab==='map')setTimeout(()=>{map.invalidateSize()},60);
+  }
+}
+
+/* ================= engine, presets, stepper ================= */
+function refreshAll(){
+  document.body.classList.toggle('swmm',S.engine==='swmm');
+  renderStatus();renderValChips();renderChips();renderLegend();drawNetwork();setTab(S.tab==='map'?'map':S.tab);
+}
+function regenerate(n){
+  if(n){S.n=Math.min(n,100)}
+  genNetwork();S.validated=false;
+  resetStepper();refreshAll();
+  if(n&&n>100)toast('⚠ Demo caps rendering at 10K nodes — the confirm dialog itself is fix ⑧');
+  else toast(`✓ Generated ${fmt(S.nodes.length)} nodes · auto-fit map (fix ⑤)`);
+}
+function setEngine(e){
+  S.engine=e;
+  $('engE').classList.toggle('on',e==='epanet');
+  $('engS').classList.toggle('on',e==='swmm');
+  genNetwork();S.validated=false;resetStepper();refreshAll();
+  if(e==='swmm'&&!S.legacy)toast('🌧 SWMM mode — legend now shows outfalls/storage/conduits, not reservoirs & emitters (fix ②)');
+}
+function resetStepper(){
+  const steps=document.querySelectorAll('#stepper .step');
+  steps[0].className='step done';steps[0].querySelector('.n').textContent='✓';
+  steps[1].className='step done';steps[1].querySelector('.n').textContent='✓';
+  steps[2].className='step current';steps[2].querySelector('.n').textContent='3';steps[2].dataset.tip='Click to run validation';
+  steps[3].className='step locked';steps[3].querySelector('.n').textContent='4';steps[3].dataset.tip='Locked until validation passes';
+}
+document.querySelectorAll('#stepper .step').forEach(st=>st.onclick=()=>{
+  const s=+st.dataset.s;
+  if(S.legacy){toast('Stepper is decorative in Current v4.1');return}
+  if(s===2&&st.classList.contains('current')){
+    st.querySelector('.n').textContent='…';
+    setTimeout(()=>{st.className='step done';st.querySelector('.n').textContent='✓';
+      const ex=document.querySelector('#stepper .step[data-s="3"]');ex.className='step current';ex.querySelector('.n').textContent='4';ex.dataset.tip='Ready — click to export the bundle';
+      S.validated=true;renderValChips();toast('✅ Validation passed — 0 errors, 2 warnings')},700);
+  }else if(s===3){
+    if(st.classList.contains('locked')){toast('🔒 Run Validate first — the stepper now enforces order (fix ⑥)');return}
+    const p=$('prog');p.style.width='8%';
+    setTimeout(()=>p.style.width='55%',250);setTimeout(()=>p.style.width='100%',900);
+    setTimeout(()=>{p.style.width='0';st.className='step done';st.querySelector('.n').textContent='✓';toast('⬇ Export bundle ready — model.inp + DEM.tif + network.geojson (no more stuck 0%!)')},1600);
+  }else toast('Already complete ✓');
+});
+$('engE').onclick=()=>setEngine('epanet');
+$('engS').onclick=()=>setEngine('swmm');
+document.querySelectorAll('#presets button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#presets button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  const n=+b.dataset.n;
+  if(b.dataset.big&&!S.legacy){
+    $('mTitle').textContent=b.textContent+' nodes';
+    $('mText').textContent=`Estimated generation ≈ ${n>300?'95':'45'} s and heavy browser rendering. Large models are exported without full map preview. Continue?`;
+    $('modal').classList.add('on');
+    $('mGo').onclick=()=>{$('modal').classList.remove('on');regenerate(n)};
+    $('mCancel').onclick=()=>$('modal').classList.remove('on');
+  }else regenerate(n);
+});
+document.querySelectorAll('#ptabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+$('q').oninput=e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('.sect').forEach(s=>s.style.display=s.dataset.k.includes(v)?'':'none')};
+document.querySelectorAll('.tiers button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tiers button').forEach(x=>x.classList.remove('on'));b.classList.add('on');if(!S.legacy)toast(`Tier: ${b.dataset.t} — hover any tier to see what it unlocks (fix ⑦)`)});
+
+/* ================= mode switch (before/after) ================= */
+function setMode(legacy){
+  S.legacy=legacy;
+  document.body.classList.toggle('legacy',legacy);
+  $('mLegacy').classList.toggle('on',legacy);
+  $('mFixed').classList.toggle('on',!legacy);
+  $('mFixed').classList.add('fix');
+  $('legend').classList.remove('closed');
+  renderChips();renderLegend();renderValChips();updTime();setTab(S.tab);
+  toast(legacy?'👀 Current v4.1: click Stats / INP / AI — content renders crammed in the sidebar while the main pane stays black':'✨ Fixed layout: every tab renders full-width in the main pane. Try Stats, INP and AI.');
+}
+$('mLegacy').onclick=()=>setMode(true);
+$('mFixed').onclick=()=>setMode(false);
+
+/* ================= boot ================= */
+initMap();
+document.querySelector('#content').insertAdjacentHTML('afterbegin',calloutHTML());
+genNetwork();refreshAll();setTab('map');
+</script>
+</body>
+</html>
