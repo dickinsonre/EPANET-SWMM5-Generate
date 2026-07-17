@@ -604,11 +604,12 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
   z-index: 2100;
   width: 340px;
   max-width: calc(100vw - 32px);
-  transition: transform 0.3s ease;
+  transition: transform 0.3s ease, visibility 0.3s;
   font-family: 'DM Sans', sans-serif;
   pointer-events: none;
+  visibility: hidden; /* fully hidden until an export actually starts */
 }
-#exportProgress.visible { transform: translateX(-50%) translateY(0); }
+#exportProgress.visible { transform: translateX(-50%) translateY(0); visibility: visible; }
 #exportProgress .ep-title { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:13px; font-weight:600; color: var(--text-primary); margin-bottom:8px; }
 #exportProgress .ep-pct { font-family: 'JetBrains Mono', monospace; color: var(--accent-cyan); font-size:13px; }
 #exportProgress .ep-bar { height:8px; background: var(--border); border-radius:4px; overflow:hidden; }
@@ -1765,7 +1766,7 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         <button onclick="animateResults()" id="animBtn" style="background:none;border:1px solid var(--accent-cyan);color:var(--accent-cyan);border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">▶</button>
       </div>
     </div>
-      <div class="legend-row">
+      <div class="legend-row" id="legendRow">
         <span class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Jct</span>
         <span class="legend-item"><span class="legend-dot" style="background:#22c55e"></span>Res</span>
         <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Tank</span>
@@ -1774,7 +1775,6 @@ canvas#hglCanvas { display: block; width: 100%; height: 450px; }
         <span class="legend-item"><span class="legend-dot" style="background:#06b6d4"></span>Emit</span>
       </div>
     </div>
-  </div>
 
   <div id="tab-stats" style="display:none;flex:1;overflow-y:auto;padding:8px 0;"><div id="healthSummary" style="display:none;margin:0 0 12px;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;border:1px solid var(--border);"></div><div id="statsGrid"></div></div>
   <div id="tab-ai" style="display:none;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch;padding:10px 6px;">
@@ -3211,8 +3211,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v4.2', date: '2026-07-17' };
-const CHANGELOG_TOP = { version: 'v4.2', date: '2026-07-17' };
+const GEN_BUILD = { version: 'v4.3', date: '2026-07-17' };
+const CHANGELOG_TOP = { version: 'v4.3', date: '2026-07-17' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -3660,6 +3660,19 @@ function setupCanvasInspect() {
   const canvas = document.getElementById('networkCanvas');
   if (!canvas) return;
   canvas.addEventListener('click', (e) => {
+    // Legend collapse toggle — hit-test the legend header in internal canvas coords.
+    if (_legendRect) {
+      const rect = canvas.getBoundingClientRect();
+      const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const L = _legendRect;
+      if (cx >= L.x && cx <= L.x + L.w && cy >= L.y && cy <= L.y + (_legendCollapsed ? L.h : L.header)) {
+        _legendCollapsed = !_legendCollapsed;
+        try { localStorage.setItem('epswLegendCollapsed', _legendCollapsed ? '1' : '0'); } catch(e) {}
+        renderAll();
+        return;
+      }
+    }
     const { px, py, clientX, clientY } = getCanvasCoords(e);
     const hit = findNearestElement(px, py);
     if (hit) {
@@ -4247,6 +4260,9 @@ function bandIndex(val, bandInfo) {
   return Math.max(0, Math.min(4, idx));
 }
 
+// Collapsible canvas map legend — state persists across sessions.
+let _legendCollapsed = (() => { try { return localStorage.getItem('epswLegendCollapsed') === '1'; } catch(e) { return false; } })();
+let _legendRect = null; // canvas-space rect of the drawn legend (for click hit-testing)
 function drawNetworkOverlay(ctx,W,H,tx,ty,nd){
   const nm={};nd.nodes.forEach(n=>nm[n.id]=n);nd.reservoirs.forEach(r=>nm[r.id]={x:r.x,y:r.y});nd.tanks.forEach(t=>nm[t.id]={x:t.x,y:t.y});
 
@@ -4350,10 +4366,26 @@ function drawNetworkOverlay(ctx,W,H,tx,ty,nd){
   const showLinkLegend = linkParam !== 'none' && linkBandInfo && linkBandInfo.bands.length > 0;
   const showElemLegend = true;
 
-  const elemItems = [
+  // SWMM networks have no reservoirs/tanks/valves/emitters — outfalls render as the
+  // green circles and conduits as links, so the legend must use SWMM vocabulary.
+  const elemItems = currentMode === 'swmm' ? [
+    ['#3b82f6','●','Junction'],['#22c55e','●','Outfall'],['#ef4444','▲','Pump']
+  ] : [
     ['#3b82f6','●','Junction'],['#22c55e','●','Reservoir'],['#f59e0b','■','Tank'],
     ['#ef4444','▲','Pump'],['#a855f7','●','Valve'],['#06b6d4','●','Emitter']
   ];
+  if (_legendCollapsed) {
+    const cw = 118, chh = 24;
+    ctx.fillStyle = 'rgba(10,14,26,0.8)';
+    ctx.beginPath(); ctx.roundRect(lgX, lgY, cw, chh, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(lgX, lgY, cw, chh, 6); ctx.stroke();
+    ctx.textAlign = 'left'; ctx.font = 'bold 10px JetBrains Mono';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillText('Map Legend ▸', lgX + 8, lgY + 16);
+    _legendRect = { x: lgX, y: lgY, w: cw, h: chh, header: chh };
+    return;
+  }
   const elemH = 18 + elemItems.length * 13;
   const nodeH = showNodeLegend ? 22 + 5 * 13 + 8 : 0;
   const linkH = showLinkLegend ? 22 + 5 * 13 + 8 : 0;
@@ -4363,12 +4395,14 @@ function drawNetworkOverlay(ctx,W,H,tx,ty,nd){
   ctx.beginPath(); ctx.roundRect(lgX, lgY, lgW, totalH, 6); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.roundRect(lgX, lgY, lgW, totalH, 6); ctx.stroke();
+  _legendRect = { x: lgX, y: lgY, w: lgW, h: totalH, header: 22 };
 
   ctx.textAlign = 'left';
   ctx.font = 'bold 10px JetBrains Mono';
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   curY += 14;
   ctx.fillText('Map Legend', lgX + 8, curY);
+  ctx.fillText('▾', lgX + lgW - 16, curY);
   curY += 6;
 
   elemItems.forEach(([c,sym,label]) => {
@@ -6419,6 +6453,7 @@ function setMode(mode, regen) {
   document.getElementById('genBtn').textContent = mode==='epanet'
     ? '⚡ GENERATE NETWORK + MAP'
     : '🌧 GENERATE SWMM MODEL + MAP';
+  updateLegendRow();
   // Hide previous results
   document.getElementById('dlRow').style.display = 'none';
   document.getElementById('dlRow2').style.display = 'none';
@@ -6440,6 +6475,18 @@ function setMode(mode, regen) {
   // only passed by the toggle buttons — config restore on load calls setMode() without it so we
   // don't double-generate (the load path runs generateNetwork() once on its own).
   if (regen && changed) generateNetwork();
+}
+
+// The under-map mini legend must match the active engine's element vocabulary.
+// SWMM models contain junctions, outfalls (drawn green) and pumps only.
+function updateLegendRow() {
+  const el = document.getElementById('legendRow');
+  if (!el) return;
+  const items = currentMode === 'swmm'
+    ? [['#3b82f6','Jct'],['#22c55e','Outfall'],['#ef4444','Pump']]
+    : [['#3b82f6','Jct'],['#22c55e','Res'],['#f59e0b','Tank'],['#ef4444','Pump'],['#a855f7','Valve'],['#06b6d4','Emit']];
+  el.innerHTML = items.map(([c,l]) =>
+    `<span class="legend-item"><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join('');
 }
 
 // Reset the visible preview panels (map canvas + INP/RPT/results text) to a clean placeholder so
@@ -6482,7 +6529,15 @@ function renderStatusBar() {
   let state;
   if (!networkData) state = '<span class="sb-state none">○ Not generated</span>';
   else if (outputStale) state = '<span class="sb-state stale">⚠️ Stale — regenerate</span>';
-  else { const t = lastGenTime ? lastGenTime.toLocaleTimeString() : ''; state = `<span class="sb-state ok">✓ Generated${t ? ' ' + t : ''}</span>`; }
+  else {
+    // Humanized, unambiguous timestamp: relative ("2 min ago") with exact local time in the tooltip.
+    let t = '';
+    if (lastGenTime) {
+      const secs = Math.max(0, Math.floor((Date.now() - lastGenTime.getTime()) / 1000));
+      t = secs < 60 ? 'just now' : secs < 3600 ? `${Math.floor(secs/60)} min ago` : lastGenTime.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+    }
+    state = `<span class="sb-state ok" title="${lastGenTime ? esc('Generated ' + lastGenTime.toLocaleString()) : ''}">✓ Generated${t ? ' ' + t : ''}</span>`;
+  }
   el.innerHTML = chips.join('') + '<span class="sb-spacer"></span>' + state;
 }
 
@@ -11049,6 +11104,8 @@ window.addEventListener('load',()=>{
   setTimeout(()=>generateNetwork(),250);
   // First-visit walkthrough (skipped once completed/dismissed — localStorage flag)
   try { if (!localStorage.getItem('epswTourSeen')) setTimeout(()=>startTour(), 1200); } catch(e) {}
+  // Keep the relative "Generated N min ago" label fresh.
+  setInterval(() => { if (networkData && !outputStale) renderStatusBar(); }, 60000);
 });
 
 // ═══════ FIRST-VISIT WALKTHROUGH ═══════

@@ -93,7 +93,7 @@ whether the solver has verified it hydraulically. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.2 · 2026-07-17**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.3 · 2026-07-17**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -250,7 +250,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.2`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.3`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -480,7 +480,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v4.2",
+    "generator": "EPANET-SWMM Generator v4.3",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -650,6 +650,21 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v4.3 — 2026-07-17**
+- **Layout fix — preview tabs render in the main pane again:** a stray closing tag made every
+  preview tab except Map (Stats, INP, Docs, HGL, Log, RPT, Results, AI) render inside the
+  narrow left sidebar, leaving the main pane empty at desktop width. All tabs now fill the
+  main preview pane as intended.
+- **SWMM-correct map legends:** in SWMM mode, both the on-map legend and the mini legend under
+  the map now use SWMM vocabulary (Junction / Outfall / Pump) instead of EPANET's
+  Reservoir / Tank / Valve / Emitter, matching what the SWMM network actually contains.
+- **Collapsible map legend:** click the legend's header to collapse it into a small
+  "Map Legend ▸" pill (and click again to expand); the choice is remembered across sessions.
+- **Humanized generation timestamp:** the status bar now says "Generated just now" /
+  "Generated 12 min ago" (hover for the exact local date & time) instead of a bare clock time.
+- **Export-progress polish:** the "Exporting…" toast is now fully hidden unless an export is
+  actually running.
 
 **v4.2 — 2026-07-17**
 - **Richer progress tracker:** the Configure › Generate › Validate › Export stage strip now

@@ -1,0 +1,28 @@
+Nice, the update from v4.1 to v4.2 introduced several of the exact improvements discussed — most notably a much clearer progress tracker and an onboarding tour. [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/)
+
+## What Changed
+
+The workflow stepper now uses checkmarks and filled dots ("✓ Configure → ✓ Generate → ● Validate → ● Export") instead of plain empty circles, making it immediately clear which stages are done versus in progress. Below that, a detailed sub-status line shows granular pipeline health: "✅ Generated → ✅ Syntax → ✅ Topology → ○ Solver → ○ QA," which is exactly the kind of stage-by-stage visibility that reduces ambiguity during long operations. [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/)
+
+## New Onboarding Tour
+
+A first-run walkthrough now appears, labeled "1 · Your workflow at a glance," explaining that the strip tracks Configure › Generate › Validate › Export with a legend ("Green = done, a spinner = in progress") plus "Skip tour" and "Next →" controls. This directly addresses the earlier suggestion to add lightweight onboarding so new users understand the pipeline before diving into large network generation. [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/)
+
+## Other Visible Refinements
+
+A search box ("Search settings") has been added above the Network/Hydraulics/Environment/Map & Export tabs, which helps users quickly locate specific parameters in a dense settings panel. A results generation timestamp is now shown ("✓ Generated 3:04:04 PM") alongside live stats like "2,500 junctions · 5,049 conduits · 100% connected," giving immediate confirmation of run success. There's also a new "Details →" link and an "🤖 AI" tab in the Preview panel (Map/Stats/INP/Docs/HGL/RPT/Results), suggesting AI-assisted analysis is being layered into the results view. [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/)
+
+## Still Worth Considering
+
+Table below compares what's now resolved versus what remains from the earlier UX suggestions.
+
+| Suggested Improvement | Status in v4.2 |
+|---|---|
+| Color/icon-coded progress stepper | ✅ Done — checkmarks + dots for stage status  [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/) |
+| Live status during long ops | ✅ Partial — granular Solver/QA sub-stages shown  [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/) |
+| Onboarding walkthrough | ✅ Added — "workflow at a glance" tour with skip option  [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/) |
+| Settings search/filter | ✅ Added — "Search settings" input  [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/) |
+| Contextual tooltips on technical terms | Not yet visible in this snapshot  [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/) |
+| Progressive disclosure by complexity mode | Simple/Advanced/Expert toggle present, but panel contents not fully visible here  [epanet-swmm-5-generate.replit](https://epanet-swmm-5-generate.replit.app/) |
+
+Overall this is a solid iteration — the tour and richer status pipeline were the two highest-impact items from the earlier suggestions.
