@@ -1,0 +1,1141 @@
+These six ideas form a quality system around the app:
+
+1. **Solver-gated validation:** Don’t declare success until the engine runs.
+2. **Technical audit:** Verify that formulas, units, claims, and generated files are correct.
+3. **Task-oriented UX:** Organize the interface around user goals.
+4. **Regression evidence:** Prove updates did not break previously working behavior.
+5. **Accessibility criteria:** Ensure the complete workflow works for users with disabilities.
+6. **Reproducible builds:** Let others rebuild the exact application from its source.
+
+---
+
+# 1. What is solver-gated validation?
+
+A **gate** is a condition that must pass before the app can award a status or permit the next action.
+
+For this app, model generation and model validation are different:
+
+- **Generation:** JavaScript creates nodes, links, demands, curves, coordinates, and an INP file.
+- **Validation:** EPANET or SWMM parses and simulates that INP file and reports whether it can actually be solved.
+
+A connected network is not necessarily a hydraulically successful network. EPANET solves hydraulic heads and flows iteratively at each hydraulic timestep, and it can continue with warnings if convergence is not achieved, depending on the selected options. Therefore, “the solver completed” is itself not always sufficient—the status report and warnings must also be inspected. ([usepa.github.io](https://usepa.github.io/EPANET2.2/3_network_model.html?utm_source=openai))
+
+## Recommended validation pipeline
+
+```text
+Generate model
+      ↓
+Validate object references and numeric ranges
+      ↓
+Parse with official engine
+      ↓
+Run complete simulation
+      ↓
+Read errors, warnings, and continuity results
+      ↓
+Apply selected engineering QA criteria
+      ↓
+Assign final status
+```
+
+## Suggested validation levels
+
+### Level 1: Generated
+
+The application successfully created an INP file.
+
+This proves only that the generator completed.
+
+```text
+Status: GENERATED
+```
+
+### Level 2: Syntax passed
+
+The engine accepted the input file, and the app found:
+
+- No duplicate IDs
+- No missing object references
+- No illegal numeric values
+- No invalid curves
+- No prohibited connections
+- A valid`[END]` section
+
+```text
+Status: SYNTAX PASSED
+```
+
+### Level 3: Topology passed
+
+The graph-level checks passed:
+
+- Every EPANET junction has an open path to a source, where required
+- Every SWMM subcatchment has a valid outlet
+- Required outfalls exist
+- No links connect an object to itself
+- No isolated components exist unless intentionally allowed
+
+```text
+Status: TOPOLOGY PASSED
+```
+
+### Level 4: Solver passed
+
+EPANET or SWMM completed the entire simulation without a fatal error.
+
+For EPANET:
+
+```text
+73 of 73 hydraulic periods solved
+0 fatal errors
+```
+
+For SWMM:
+
+```text
+Simulation completed
+0 fatal routing errors
+```
+
+### Level 5: QA criteria passed
+
+The simulation results passed a defined quality profile.
+
+Example:
+
+```text
+Minimum pressure:           34.2 psi      PASS
+Maximum pressure:           78.1 psi      PASS
+Negative-pressure nodes:    0             PASS
+Maximum velocity:           5.8 ft/s      WARNING
+Unbalanced periods:         0             PASS
+Empty tanks:                1             FAIL
+Pump curve exceedances:     0             PASS
+```
+
+Final result:
+
+```text
+SOLVER PASSED
+ENGINEERING QA FAILED
+Reason: Tank T4 reached minimum level for 3.5 hours
+```
+
+## SWMM-specific gate
+
+A successful SWMM run should not automatically receive a green QA badge. SWMM’s official manual says that continuity errors represent differences between storage plus inflow and storage plus outflow, and that excessive continuity errors make the validity of results questionable. It gives 10% as an example of a level requiring concern, not as a universal “good model” threshold. ([epa.gov](https://www.epa.gov/system/files/documents/2022-04/swmm-users-manual-version-5.2.pdf?utm_source=openai))
+
+The app should display:
+
+```text
+Runoff continuity error:          0.8%
+Flow-routing continuity error:    2.1%
+Quality-routing continuity error: 0.4%
+Flooding volume:                  3.7 acre-ft
+Unstable periods:                 2
+```
+
+## What should be gated?
+
+The app should not show these badges until the required tests pass:
+
+- “Solver validated”
+- “Hydraulically passed”
+- “Routing passed”
+- “QA passed”
+- “Ready for calibration exercise”
+
+It should also consider preventing the following without a confirmation:
+
+- Saving a model as calibration truth before the solver passes
+- Scoring calibration against an invalid truth model
+- Producing a “validated model” report
+- Using failed results in the AI summary
+
+## Important limitation
+
+Solver-gated validation does **not** prove that the model represents a real utility or drainage system accurately. It proves something narrower:
+
+> The generated model was accepted by the specified engine, completed the simulation, and passed the selected computational and engineering-screening criteria.
+
+That distinction should appear in the UI.
+
+---
+
+# 2. What is the technical audit?
+
+A **technical audit** is a systematic examination of the app’s engineering logic, generated files, documentation, units, and claims.
+
+It is not merely a code review. It asks:
+
+> Does the app calculate, describe, export, and display the same engineering concept correctly everywhere?
+
+## Six parts of the audit
+
+## A. Engine semantics audit
+
+Check every statement about how EPANET and SWMM behave.
+
+Examples:
+
+- What units does a PRV setting use?
+- What does an EPANET reservoir represent?
+- What pump-curve forms are accepted?
+- What happens when hydraulics are unbalanced?
+- What constitutes a fatal error versus a warning?
+- What SWMM continuity errors mean
+- Which object connections are legal
+- Whether an option applies to DDA, PDA, EPS, or water quality
+
+Each claim should be classified as:
+
+```text
+ENGINE FACT
+GENERATOR HEURISTIC
+TYPICAL PRACTICE
+USER-DEFINED CRITERION
+REGULATORY VALUE — VERIFY LOCALLY
+```
+
+For example:
+
+> **Generator heuristic:** Create pressure-zone candidates when terrain relief exceeds 80 ft.
+
+That is better than presenting the 80-ft value as a universal engineering requirement.
+
+## B. Formula audit
+
+Review every implemented formula and its inputs, outputs, units, limits, and numerical behavior.
+
+Examples include:
+
+- Hazen-Williams headloss
+- Darcy-Weisbach headloss
+- Pump sizing
+- Pump-curve generation
+- Pressure/head conversion
+- Tank volume
+- Demand allocation
+- Supply-demand estimates
+- SWMM infiltration parameters
+- Design storm generation
+- D8 drainage routing
+- RDII distributions
+- DEM interpolation
+- US/SI conversions
+
+For each formula, create a specification:
+
+```text
+Function: pressurePsiFromHead
+Input:
+  totalHeadFt
+  elevationFt
+
+Equation:
+  pressurePsi = (totalHeadFt - elevationFt) × conversionFactor
+
+Expected behavior:
+  totalHead = elevation → 0 psi
+  totalHead < elevation → negative pressure
+  non-finite input → validation error
+```
+
+Then write tests using known examples.
+
+## C. Unit audit
+
+The audit should trace a value through the entire application:
+
+```text
+User input
+    ↓
+Internal storage
+    ↓
+Engineering calculation
+    ↓
+INP output
+    ↓
+Solver interpretation
+    ↓
+Displayed result
+```
+
+A PRV example:
+
+```text
+Downstream elevation:       155.0 ft
+Target pressure:             50.0 psi
+Equivalent pressure head:   approximately 115 ft
+Target HGL:                  approximately 270 ft
+Value written as PRV setting: 50.0 psi
+```
+
+The log may mention the target HGL, but the INP must contain the value expected by the engine for the selected unit system.
+
+Unit audit cases should include:
+
+- GPM ↔ LPS
+- CFS ↔ CMS
+- Feet ↔ meters
+- Inches ↔ millimeters
+- Acres ↔ hectares
+- psi ↔ pressure head
+- Roughness units under each headloss formula
+- Rainfall intensity and depth
+- Concentration units
+
+## D. Generated-file audit
+
+For a representative set of configurations:
+
+1. Generate the INP.
+2. Parse it using the intended engine.
+3. Verify every section.
+4. Run it.
+5. Inspect warnings.
+6. Compare the file against the generator log.
+7. Import it into supported third-party tools.
+8. Confirm that counts and essential properties survive.
+
+If the UI says:
+
+```text
+10 pumps
+5 valves
+1,045 junctions
+```
+
+the INP parser, solver, Stats tab, manifest, and exported report must all agree.
+
+## E. Documentation audit
+
+Review every educational and promotional statement for:
+
+- Technical correctness
+- Scope
+- Source
+- Date
+- Exceptions
+- Internal consistency
+- Appropriate level of certainty
+
+For example:
+
+```text
+Poor:
+EPANET requires three pump-curve points.
+
+Better:
+Three or more measured points are recommended for defensible
+pump modeling. The engine also supports an assumed curve derived
+from a single design point.
+```
+
+The same technical fact should not be manually repeated in five separate documentation sections. Store it once in a canonical fact library and generate the tooltip, reference text, and validation message from it.
+
+## F. Claims audit
+
+Audit product claims such as:
+
+- “Hydraulically valid”
+- “Calibration-ready”
+- “Compatible with”
+- “100% connected”
+- “Adequate supply”
+- “Industry standard”
+- “Loads in EPANET 2.2+”
+- “No dependencies”
+- “Exact reproducibility”
+
+Every claim needs a precise definition.
+
+For example:
+
+```text
+“Compatible with WNTR”
+```
+
+could mean:
+
+1. WNTR parses the file,
+2. WNTR preserves all generated sections,
+3. WNTR can simulate it,
+4. WNTR results match EPANET within a documented tolerance.
+
+Those are not equivalent.
+
+## Technical-audit deliverable
+
+The release should include a table such as:
+
+| Audit area | Checks | Passed | Failed | Not applicable |
+|---|---:|---:|---:|---:|
+| Engine semantics | 84 | 82 | 2 | 0 |
+| Unit conversions | 136 | 136 | 0 | 0 |
+| EPANET sections | 41 | 41 | 0 | 0 |
+| SWMM sections | 67 | 66 | 1 | 0 |
+| Documentation claims | 219 | 211 | 8 | 0 |
+| Export consistency | 48 | 48 | 0 | 0 |
+
+All failures should be resolved or documented before the release receives an A-level grade.
+
+---
+
+# 3. What does task-oriented UX mean here?
+
+The current interface is largely **feature-oriented**. It groups controls by engineering subject:
+
+- Terrain
+- Supply sources
+- Pipes and valves
+- Calibration
+- Rainfall and infiltration
+- RDII
+- LID
+- Groundwater
+- Water quality
+
+That organization is logical for an expert who already knows what model they need. It is harder for someone whose starting point is:
+
+> “I need a calibration exercise.”
+
+A **task-oriented UX** starts with the desired outcome and configures the necessary features for that outcome.
+
+## Proposed opening screen
+
+```text
+What do you want to do?
+
+[ Learn water-distribution modeling ]
+[ Create an EPANET planning network ]
+[ Build a calibration exercise ]
+[ Benchmark a hydraulic solver ]
+[ Create a stormwater model ]
+[ Create a sanitary/RDII model ]
+[ Test LID controls ]
+[ Configure everything manually ]
+```
+
+## Example: calibration exercise workflow
+
+Instead of requiring the user to discover emitters, tags, observation files, truth models, noise, and scoring across different panels, guide them through the task.
+
+### Step 1: Exercise type
+
+```text
+What should students calibrate?
+
+☑ Pipe roughness
+☑ Demand multipliers
+☐ Leakage/emitter coefficients
+☐ Pump curves
+☐ Valve settings
+```
+
+### Step 2: Network difficulty
+
+```text
+Beginner       150 nodes, 8 observations, 2 parameter groups
+Intermediate   750 nodes, 20 observations, 5 parameter groups
+Advanced       2,500 nodes, noisy data, multiple event datasets
+```
+
+### Step 3: Truth simulation
+
+```text
+Simulation duration: 72 hours
+Observation interval: 1 hour
+Measurement noise:
+  Pressure ± 1.0 psi
+  Flow ± 5%
+  Tank level ± 0.25 ft
+```
+
+### Step 4: Generate package
+
+The application automatically:
+
+- Generates the truth model
+- Runs and validates it
+- Selects observation locations
+- Produces synthetic observations
+- Corrupts selected calibration parameters
+- Produces a student model
+- Produces an instructor answer model
+- Creates scoring criteria
+- Exports everything as one ZIP
+
+That is task-oriented UX: one coherent job rather than a collection of unrelated controls.
+
+## Example: solver benchmark workflow
+
+Ask only:
+
+```text
+Node range:        1,000–100,000
+Increment:         5,000
+Hydraulic type:    Steady state / EPS
+Headloss formula:  H-W / D-W / C-M
+Replicates:        5
+Warm-up runs:      1
+Output format:     CSV + ZIP
+```
+
+Then automatically generate:
+
+- Fixed-seed models
+- Runtime measurements
+- Memory estimates
+- Convergence status
+- Model hashes
+- Result CSV
+- Charts
+
+## Progressive disclosure
+
+Task-oriented does not mean removing Expert mode.
+
+Use three levels:
+
+### Guided
+
+Plain language and recommended defaults.
+
+### Advanced
+
+Important engineering settings relevant to the selected task.
+
+### Expert
+
+Every supported input and override.
+
+The key principle is:
+
+> Users should not need to understand every feature before completing one useful job.
+
+---
+
+# 4. What is regression evidence?
+
+A **regression** is when a software change breaks behavior that previously worked.
+
+Examples:
+
+- Fixing SI units accidentally changes US-unit outputs.
+- Adding culverts breaks ordinary circular conduits.
+- Updating the solver changes pump statuses.
+- Changing map generation alters hydraulic topology.
+- Refactoring ZIP export removes`[CURVES]`.
+- Updating documentation defaults changes generated configurations.
+- A new random call makes fixed seeds produce different models.
+
+**Regression evidence** is the recorded test output proving that important behavior still works after a change.
+
+## Four main regression layers
+
+## A. Deterministic generation tests
+
+Given:
+
+```text
+Generator version: 4.1
+Mode: EPANET
+Grid: 32 × 32
+Seed: 42
+Units: GPM
+Configuration: fixed JSON
+```
+
+the canonicalized generated model should have the expected:
+
+- Object counts
+- Topology hash
+- Parameter hash
+- INP sections
+- Zone counts
+- Source locations
+- Pump and valve counts
+
+Exclude intentionally volatile fields such as the generation timestamp before hashing.
+
+## B. Golden-model tests
+
+A **golden model** is a known input with stored expected results.
+
+Example:
+
+```text
+/tests/golden/epanet/
+  tiny-gravity-us/
+  tanks-controls-si/
+  pumps-valves-us/
+  pda-low-pressure/
+  chlorine-eps/
+```
+
+Each folder contains:
+
+```text
+config.json
+expected.inp
+expected-manifest.json
+expected-summary.json
+expected-results.json
+```
+
+After a code change, CI regenerates each model and compares it with the expected outputs.
+
+Differences must be:
+
+- Expected and approved, or
+- Identified as a defect.
+
+## C. Native-versus-WASM tests
+
+Run the same INP through:
+
+1. The bundled WebAssembly engine
+2. The corresponding native command-line engine
+
+Compare:
+
+- Completion status
+- Errors and warnings
+- Node pressures and heads
+- Link flows and statuses
+- Tank levels
+- Pump operations
+- Water-quality results
+- SWMM depths and flows
+- Continuity errors
+
+Numeric results should use documented, variable-specific tolerances rather than requiring textual reports to be identical. Status changes, object counts, fatal errors, and missing references can usually be compared exactly.
+
+## D. Cross-version tests
+
+Before releasing version 4.2:
+
+```text
+Run all 4.1 golden configurations using 4.2
+```
+
+Classify changes:
+
+```text
+UNCHANGED
+EXPECTED CHANGE
+NUMERIC CHANGE WITHIN TOLERANCE
+UNEXPECTED REGRESSION
+```
+
+## Evidence should be published
+
+A public validation report might show:
+
+```text
+Release: 4.2.0
+Commit: abc1234
+Build hash: sha256:...
+
+Unit tests:                 1,284 / 1,284 passed
+Property tests:               420 / 420 passed
+Golden generation tests:       64 / 64 passed
+Native/WASM comparisons:        48 / 48 passed
+US/SI round-trip tests:         96 / 96 passed
+Import compatibility tests:     24 / 24 passed
+Accessibility checks:          112 / 116 passed
+Known exceptions:                4
+```
+
+This is “evidence” because users can see:
+
+- What was tested
+- With which version
+- Using which configuration
+- What tolerances were applied
+- What failed
+- Whether exceptions remain
+
+The EPA manuals themselves emphasize examining status reports, errors, warnings, and whether completed results remain reasonable; the regression suite should preserve that evidence instead of checking only whether the engine returned successfully. ([usepa.github.io](https://usepa.github.io/EPANET2.2/9_viewing_results.html?utm_source=openai))
+
+---
+
+# 5. What are the accessibility criteria?
+
+The recommended target is **WCAG 2.2 Level AA** for the complete generator workflow. Level AA means satisfying all applicable Level A and Level AA success criteria—not selecting only convenient criteria. Conformance applies to complete pages and complete processes, including responsive variations. ([w3.org](https://www.w3.org/TR/WCAG22/?utm_source=openai))
+
+For this app, accessibility should be evaluated in these practical categories.
+
+## A. Keyboard operation
+
+A keyboard-only user must be able to:
+
+- Change modes
+- Open and close panels
+- Enter values
+- Select presets
+- Generate a network
+- Run the solver
+- Change map variables
+- Navigate tabs
+- Inspect objects
+- Download exports
+- Cancel long operations
+
+There must be:
+
+- No keyboard traps
+- Logical tab order
+- Visible focus
+- Focus returned appropriately after dialogs close
+- Focus not hidden behind sticky headers or drawers
+
+## B. Names, roles, states, and values
+
+Every component needs a programmatic identity.
+
+Bad:
+
+```html
+<button>⚡</button>
+```
+
+Better:
+
+```html
+<button aria-label="Generate and validate network">
+  <span aria-hidden="true">⚡</span>
+  Generate network
+</button>
+```
+
+Custom tabs, accordions, sliders, switches, dialogs, and progress bars must expose their role, state, and current value. WCAG explicitly requires that interface component names, roles, states, and values be programmatically determinable. ([w3.org](https://www.w3.org/TR/WCAG22/?utm_source=openai))
+
+## C. Status messages
+
+Messages such as:
+
+- “Generation complete”
+- “Solver loaded”
+- “Validation failed”
+- “Exporting 43%”
+- “Configuration copied”
+- “Eight nodes are below 20 psi”
+
+must be announced to assistive technology without forcing keyboard focus to jump unexpectedly. WCAG 2.2 includes a Level AA criterion for programmatically identifiable status messages. ([w3.org](https://www.w3.org/TR/WCAG22/?utm_source=openai))
+
+For example:
+
+```html
+<div role="status" aria-live="polite">
+  Hydraulic simulation completed. Three warnings found.
+</div>
+```
+
+Fatal failures may use an assertive alert.
+
+## D. Color and contrast
+
+The application should satisfy at least:
+
+- Sufficient text contrast
+- Sufficient contrast for controls and meaningful graphics
+- Focus indicators that are easy to see
+- No information conveyed through color alone
+
+Do not use only:
+
+```text
+Green = pass
+Red = fail
+```
+
+Use:
+
+```text
+✅ Passed
+⚠ Warning
+❌ Failed
+```
+
+Result maps should offer:
+
+- Colorblind-safe palettes
+- Symbols or patterns
+- Numeric table alternatives
+- User-selectable classes
+- Clearly labeled legends
+
+## E. Reflow and zoom
+
+The controls and documentation should remain usable at high zoom and narrow viewport widths.
+
+WCAG 2.2’s Level AA reflow criterion generally requires content to work at a width equivalent to 320 CSS pixels without loss of information or functionality, except where a two-dimensional layout is essential. A hydraulic map may qualify for that exception, but the controls, warnings, legends, inspector, and data table should still reflow. ([w3.org](https://www.w3.org/TR/WCAG22/?utm_source=openai))
+
+## F. Forms and errors
+
+Every input needs:
+
+- A visible label
+- Programmatically associated instructions
+- Unit
+- Valid range
+- Clear error message
+- Suggested correction
+
+Bad:
+
+```text
+Invalid value
+```
+
+Better:
+
+```text
+Tank maximum level must be greater than the initial level.
+Current values: initial 20 ft, maximum 15 ft.
+```
+
+Errors should be summarized at the top and linked to affected fields.
+
+## G. Canvas and charts
+
+The canvas cannot be the only way to understand the model.
+
+Provide:
+
+- Searchable node/link table
+- Accessible summary
+- Selected-object property panel
+- Downloadable CSV
+- Text description of result extremes
+- Keyboard method for selecting objects
+- Optional list of warnings sorted by severity
+
+Example:
+
+```text
+Pressure results at hour 18:
+Minimum: 17.4 psi at J822
+Maximum: 91.2 psi at J104
+8 nodes below 20 psi
+14 nodes above 80 psi
+```
+
+## H. Motion and timing
+
+- Respect`prefers-reduced-motion`.
+- Avoid unnecessary flashing.
+- Allow users to pause animations.
+- Do not make animated result maps essential to understanding the data.
+- Allow sufficient time to read or respond to transient messages.
+
+## I. Testing requirements
+
+Accessibility cannot be established solely by an automated scanner. Use:
+
+- Automated checks
+- Keyboard-only testing
+- Screen-reader testing
+- Zoom and reflow testing
+- High-contrast testing
+- Color-vision simulation
+- Mobile accessibility testing
+- Manual review of canvas alternatives
+
+W3C’s accessibility testing materials include automated, semi-automated, and manual approaches; the ACT rules themselves are informative aids rather than a substitute for complete conformance evaluation. ([w3.org](https://www.w3.org/WAI/standards-guidelines/act/rules/?utm_source=openai))
+
+## Recommended test combinations
+
+At minimum:
+
+- Chrome + NVDA on Windows
+- Firefox + NVDA on Windows
+- Safari + VoiceOver on macOS
+- Safari + VoiceOver on iOS
+- Chrome + TalkBack on Android
+- Keyboard-only at 200% and 400% zoom
+
+---
+
+# 6. How are reproducible builds achieved?
+
+First, distinguish two different forms of reproducibility.
+
+## Model reproducibility
+
+```text
+Same seed + same model configuration + same generator version
+= same generated model
+```
+
+The app already aims to support this.
+
+## Build reproducibility
+
+```text
+Same source code + same build environment + same build instructions
+= byte-for-byte identical application artifact
+```
+
+The purpose is to let another party verify that the distributed HTML/WASM files were actually produced from the published source. Reproducible Builds defines the goal as allowing others to recreate byte-for-byte identical artifacts from the same source and build environment. ([reproducible-builds.org](https://reproducible-builds.org/docs/plans/?utm_source=openai))
+
+## Practical implementation
+
+## Step 1: Pin the source
+
+Every release must correspond to an immutable Git commit:
+
+```text
+Release: v4.2.0
+Source commit: abc1234...
+```
+
+Tag the commit and prohibit building a release from a working directory with uncommitted changes.
+
+## Step 2: Pin all dependencies
+
+Use exact versions and integrity hashes for:
+
+- JavaScript packages
+- Build tools
+- Minifiers
+- ZIP libraries
+- Test frameworks
+- Fonts and embedded assets
+- EPANET source
+- SWMM source
+- Emscripten
+- C/C++ libraries
+
+Do not use floating versions such as:
+
+```json
+"library": "^4.0.0"
+```
+
+for release builds.
+
+## Step 3: Pin the build environment
+
+Define the environment in a container or equivalent declarative system:
+
+```dockerfile
+FROM emscripten/emsdk:<exact-version-or-image-digest>
+```
+
+Pinning the image by digest is stronger than pinning only a human-readable tag.
+
+The environment should define:
+
+- Operating system image
+- Compiler
+- Linker
+- Node version
+- Python version, if used
+- Locale
+- Time zone
+- Build-path assumptions
+- Installed system packages
+
+Controlled containers or virtual machines are a standard way to define and distribute build environments, although the environment itself and its inputs should also be recorded and verified. ([reproducible-builds.org](https://reproducible-builds.org/docs/definition-strategies/?utm_source=openai))
+
+## Step 4: Remove variable timestamps
+
+Build output must not depend on the current clock.
+
+Use a fixed value derived from source history, commonly through:
+
+```bash
+SOURCE_DATE_EPOCH=<commit timestamp>
+```
+
+Remove or normalize timestamps in:
+
+- HTML comments
+- JavaScript banners
+- WASM metadata
+- ZIP entries
+- Source maps
+- Generated documentation
+- Manifest files
+
+The visible runtime model-generation date can still be dynamic. It just must not be embedded unpredictably into the compiled application artifact.
+
+## Step 5: Remove uncontrolled randomness
+
+Build-time randomness must either be eliminated or seeded deterministically.
+
+Watch for:
+
+- Random asset IDs
+- Random minifier names
+- UUIDs generated during compilation
+- Nondeterministic hash salts
+- Random ZIP metadata
+- Randomized test fixture ordering affecting generated output
+
+The reproducible-build guidance specifically identifies current time, filesystem ordering, randomness, locale, paths, and archive metadata as common sources of variance. ([reproducible-builds.org](https://reproducible-builds.org/docs/?utm_source=openai))
+
+## Step 6: Stabilize ordering
+
+Sort all inputs and outputs:
+
+- Source-file lists
+- Embedded assets
+- Object keys when serialized
+- Documentation sections
+- ZIP entries
+- Generated manifests
+- Export tables
+
+Never depend on filesystem enumeration order.
+
+## Step 7: Normalize environment-dependent data
+
+Control or strip:
+
+- Absolute build paths
+- Usernames
+- Hostnames
+- Locale-specific number formatting
+- Time zones
+- Filesystem timestamps
+- Operating-system line endings
+- Temporary directory names
+
+## Step 8: Build twice and compare
+
+CI should run:
+
+```text
+Build A:
+  clean environment
+  UTC
+  path /build/a
+
+Build B:
+  clean environment
+  different worker
+  path /build/b
+```
+
+Then compare:
+
+```bash
+sha256sum app.html
+sha256sum epanet.wasm
+sha256sum swmm.wasm
+```
+
+Expected result:
+
+```text
+Build A app.html hash == Build B app.html hash
+Build A EPANET WASM hash == Build B EPANET WASM hash
+Build A SWMM WASM hash == Build B SWMM WASM hash
+```
+
+For stronger evidence, intentionally vary harmless environmental factors such as build path, username, and host while expecting identical output. Reproducible-build guidance recommends rebuilding under environmental variations to reveal hidden nondeterminism. ([reproducible-builds.org](https://reproducible-builds.org/docs/plans/?utm_source=openai))
+
+## Step 9: Publish verification information
+
+Each release should publish:
+
+```text
+Source tag
+Source commit
+Build instructions
+Container image digest
+Dependency lockfiles
+Compiler versions
+SOURCE_DATE_EPOCH
+Artifact SHA-256 hashes
+SBOM
+Regression report
+```
+
+Example:
+
+```json
+{
+  "release": "4.2.0",
+  "sourceCommit": "abc1234",
+  "buildEnvironment": "sha256:container-image-digest",
+  "artifacts": {
+    "app.html": "sha256:...",
+    "epanet.wasm": "sha256:...",
+    "swmm.wasm": "sha256:..."
+  },
+  "reproducibleBuild": true
+}
+```
+
+## Step 10: Enable independent verification
+
+Provide a one-command rebuild:
+
+```bash
+git checkout v4.2.0
+./scripts/reproducible-build.sh
+./scripts/verify-release.sh release/4.2.0/
+```
+
+The second script should compare the locally generated hashes with published hashes.
+
+A strong release process has at least two independent CI jobs—or ideally an external party—produce matching artifacts.
+
+## Example release pipeline
+
+```text
+Source commit
+    ↓
+Locked container build
+    ↓
+Unit and property tests
+    ↓
+Native/WASM regression suite
+    ↓
+Accessibility tests
+    ↓
+Build artifact A
+    ↓
+Independent clean rebuild B
+    ↓
+Byte-for-byte comparison
+    ↓
+Generate hashes, SBOM, and provenance
+    ↓
+Sign and publish release
+```
+
+Signatures can be applied after the reproducibility comparison because signatures may include variable metadata.
+
+---
+
+# How the six concepts work together
+
+A professional release would operate like this:
+
+```text
+REPRODUCIBLE BUILD
+Proves which software was deployed
+           ↓
+TECHNICAL AUDIT
+Proves the implemented logic and claims were reviewed
+           ↓
+REGRESSION EVIDENCE
+Proves previously tested behavior still works
+           ↓
+SOLVER-GATED VALIDATION
+Proves each generated model was actually simulated
+           ↓
+TASK-ORIENTED UX
+Makes those capabilities understandable and usable
+           ↓
+ACCESSIBILITY CONFORMANCE
+Makes the complete workflow available to more users
+```
+
+The app reaches **A−** when the first four are implemented credibly and the UX is substantially simplified. It reaches a solid **A** when those controls are accompanied by published evidence, WCAG 2.2 AA conformance work, and independently reproducible release artifacts.
