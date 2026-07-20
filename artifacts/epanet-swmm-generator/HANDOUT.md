@@ -93,7 +93,7 @@ whether the solver has verified it hydraulically. Everything else is refinement.
 reasonable range — no need to leave the page or consult this handout.
 
 **Engine & version badges:** the header shows the bundled solver versions
-(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.5 · 2026-07-17**) so you can
+(**EPANET 2.3**, **SWMM 5.2.4**) and the generator build (**v4.6 · 2026-07-20**) so you can
 confirm compatibility with your desktop tools at a glance.
 
 **Keyboard shortcuts:**
@@ -250,7 +250,7 @@ RDII uses statistically rigorous **RTK** distributions.
 
 | Export | Format | Use |
 |--------|--------|-----|
-| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.5`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
+| **INP file** | `.inp` (compatible with EPANET 2.2+ / SWMM 5.2+) | Load into any standard solver. Includes full reporting and a documented `[TITLE]` block stamping the exact generator build (e.g. `v4.6`), the engine target (`loads in EPANET 2.2+` / `loads in EPA SWMM 5.2+`), the seed, the timestamp, and the run assumptions. The build string matches the header badge and the changelog verbatim. |
 | **Validate** | in-app check | Confirms required sections, node/link cross-references, duplicate IDs, and `[END]` — *without* running a solve. |
 | **GeoJSON** | `.geojson` | GIS import. Includes legacy CRS metadata (tagged EPSG:2913, US survey feet) for QGIS/ArcGIS. |
 | **DEM** | ASCII grid | IDW-interpolated elevation surface for ArcGIS/QGIS. |
@@ -480,7 +480,7 @@ self-contained ZIP. Either way, every ZIP contains:
 
   ```json
   {
-    "generator": "EPANET-SWMM Generator v4.5",
+    "generator": "EPANET-SWMM Generator v4.6",
     "mode": "epanet",
     "units": "US",
     "sweep": { "minNodes": 50, "maxNodes": 1000, "interval": 50, "models": 20 },
@@ -650,6 +650,23 @@ fitness-of-output disclaimer, not a usage restriction.
 ---
 
 ### Changelog
+
+**v4.6 — 2026-07-20**
+- **SWMM conduit slope correctness:** `makeConduit` no longer mutates shared node
+  invert elevations mid-loop. All conduit slope requirements are now reconciled in
+  a single post-pass that finds the most-demanding (lowest) required invert for each
+  node across all incoming conduits and applies it exactly once. Networks with flat
+  terrain or multiple conduits converging at the same node are now correct.
+- **SWMM outfall multi-inlet support:** outfall nodes now accept up to 4 upstream
+  conduits (raised from 1). This eliminates the dead-end conduits that appeared
+  near network boundaries where natural drainage paths converge at the same outfall.
+- **Solver warnings surfaced in the UI:** EPANET engine warnings (e.g. "Valves cannot
+  deliver enough flow", Warning 5) are now captured during every solve and shown as
+  an amber toast and amber "Solver ⚠" tier badge instead of disappearing silently
+  into the browser console. Both Quick Sim and auto-validation paths surface them.
+- **Mobile pinch-to-zoom restored:** removed `user-scalable=no` and `maximum-scale=1`
+  from the viewport meta tag. Pinch-zoom now works on all mobile browsers (WCAG 2.1
+  SC 1.4.4 / 1.4.10). The map canvas touch-action is unaffected.
 
 **v4.5 — 2026-07-17**
 - **3D view (new tab):** interactive 3D terrain + network visualization. The terrain surface

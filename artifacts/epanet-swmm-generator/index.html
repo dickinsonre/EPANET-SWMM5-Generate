@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EPANET 2.3 & SWMM 5.2.4 Network Generator</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
@@ -3244,8 +3244,8 @@ function safeMax(arr) { let m = -Infinity; for (let i = 0; i < arr.length; i++) 
 // The header badge, every exported [TITLE] block, and the runtime self-check
 // all read from GEN_BUILD. CHANGELOG_TOP mirrors the top entry of HANDOUT.md
 // and is asserted equal to GEN_BUILD on load so the three can never drift.
-const GEN_BUILD = { version: 'v4.5', date: '2026-07-17' };
-const CHANGELOG_TOP = { version: 'v4.5', date: '2026-07-17' };
+const GEN_BUILD = { version: 'v4.6', date: '2026-07-20' };
+const CHANGELOG_TOP = { version: 'v4.6', date: '2026-07-20' };
 const ENGINE_TARGET_EPANET = 'loads in EPANET 2.2+';
 const ENGINE_TARGET_SWMM = 'loads in EPA SWMM 5.2+';
 // Shared [TITLE] version line so EPANET (`;`) and SWMM (`;;`) stamps stay identical.
@@ -7048,9 +7048,17 @@ async function runTieredValidation() {
   setTier('solver', 'running', 'Running steady-state solve…');
   _solverBusy = true;
   try {
-    const pressures = await steadyStateSolve();
+    const { pressures, warnings } = await steadyStateSolve();
     if (rid !== _tierRunId) return; // a newer generation superseded this run — discard
-    setTier('solver', 'pass', 'Steady-state solve converged (OWA-EPANET WASM)');
+    // Surface engine warnings in the Solver tier badge and as a toast so users
+    // know about convergence issues even when the solve technically completed.
+    if (warnings && warnings.length) {
+      const warnText = warnings.map(w => w.replace(/^epanet-js\s*/i, '').trim()).filter(Boolean).join(' · ');
+      setTier('solver', 'warn', `Solve completed with warnings: ${warnText}`);
+      showToast('Solver warning: ' + warnText, 'warning', 7000);
+    } else {
+      setTier('solver', 'pass', 'Steady-state solve converged (OWA-EPANET WASM)');
+    }
     applyPressureQA(pressures);
   } catch (e) {
     console.error('Auto-validation solve error:', e);
@@ -7424,17 +7432,21 @@ async function generateSWMMNetwork(silent) {
 
   let culvertCount = 0;
 
+  // Minimum slope constant for SWMM conduits (0.5% = self-cleansing velocity guideline).
+  // NOTE: makeConduit does NOT mutate shared node.elev during the loop. Instead it records
+  // the required downstream invert on the conduit object (_reqToInvert / _toNodeId).
+  // A single reconciliation pass after all conduits are built applies the strictest
+  // requirement per node (minimum invert across all incoming conduits), so the result is
+  // order-independent and every conduit's slope claim remains valid.
+  const MIN_SLOPE = 0.005;
+
   function makeConduit(n1,n2) {
     const dx=n2.x-n1.x,dy=n2.y-n1.y;
     const len=Math.max(10,Math.round(Math.sqrt(dx*dx+dy*dy)*STREET_LENGTH_FACTOR));
     const from=n1.elev>=n2.elev?n1:n2, to=n1.elev>=n2.elev?n2:n1;
-    // Enforce minimum slope (0.5%) — adjust downstream invert if needed
-    const MIN_SLOPE = 0.005;
-    const naturalSlope = len > 0 ? (from.elev - to.elev) / len : 0;
-    if (naturalSlope < MIN_SLOPE && len > 0) {
-      to.elev = Math.round((from.elev - MIN_SLOPE * len) * 100) / 100;
-      to.maxDepth = Math.round((to.groundElev - to.elev) * 100) / 100;
-    }
+    // Compute required invert but do NOT write back to the shared node — the
+    // reconciliation pass below will do that once, correctly.
+    const reqToInvert = from.elev - MIN_SLOPE * len;
     const nx1=(from.col||0)/(cols-1||1), ny1=(from.row||0)/(rows-1||1);
     const cd=Math.sqrt((nx1-0.5)**2+(ny1-0.5)**2);
     let dia;
@@ -7461,10 +7473,19 @@ async function generateSWMMNetwork(silent) {
       diameter:geom1, diameterIn:dia,
       geom1, geom2:Math.round(geom2*100)/100, geom3, geom4,
       shape, culvertCode,
-      inOffset:0, outOffset:0
+      inOffset:0, outOffset:0,
+      _toNodeId: to.id,
+      _reqToInvert: reqToInvert
     });
   }
 
+  // Maximum number of upstream conduits allowed per outfall node.
+  // SWMM allows multiple conduits to drain into a single outfall (it is a terminal
+  // boundary, not a routing node). The previous hard cap of 1 caused interior grid
+  // nodes near low-elevation boundaries to become dead ends. 4 matches practical
+  // multi-catchment outfall designs while preventing every conduit from draining
+  // to a single outfall on small grids.
+  const MAX_OUTFALL_INLETS = 4;
   const outfallInletCount = {};
   outfalls.forEach(o => { outfallInletCount[o.id] = 0; });
 
@@ -7473,10 +7494,9 @@ async function generateSWMMNetwork(silent) {
     if (!o1 && !o2) return true;
     if (o1 && o2) return false;
     const outId = o1 ? n1.id : n2.id;
-    const fromN = n1.elev >= n2.elev ? n1 : n2;
     const toN = n1.elev >= n2.elev ? n2 : n1;
     if (toN.type !== 'outfall') return false;
-    if (outfallInletCount[outId] >= 1) return false;
+    if (outfallInletCount[outId] >= MAX_OUTFALL_INLETS) return false;
     outfallInletCount[outId]++;
     return true;
   }
@@ -7496,6 +7516,30 @@ async function generateSWMMNetwork(silent) {
   for(let d=0;d<dgC;d++){
     const r=Math.floor(rng()*(rows-1)),c=Math.floor(rng()*(cols-1)),dir=rng()>0.5?1:-1,c2=c+dir;
     if(c2>=0&&c2<cols){const n1=nG[r][c],n2=nG[r+1][c2];if(n1&&n2&&n1.id!==n2.id&&canConnectOutfall(n1,n2))makeConduit(n1,n2);}
+  }
+
+  // ── Slope reconciliation pass ──────────────────────────────────────────────
+  // For each node, find the lowest invert required across ALL conduits that flow
+  // INTO it, then lower node.elev to that value (if needed) exactly once.
+  // This replaces the old per-conduit mutation which depended on loop order.
+  {
+    const nodeMinInvert = {}; // nodeId → minimum required invert (ft)
+    conduits.forEach(c => {
+      if (c._reqToInvert === undefined) return;
+      const cur = nodeMinInvert[c._toNodeId];
+      if (cur === undefined || c._reqToInvert < cur) nodeMinInvert[c._toNodeId] = c._reqToInvert;
+    });
+    const nodeMap = {};
+    nodes.forEach(n => { nodeMap[n.id] = n; });
+    outfalls.forEach(o => { nodeMap[o.id] = o; });
+    Object.entries(nodeMinInvert).forEach(([id, reqInvert]) => {
+      const n = nodeMap[id];
+      if (!n || reqInvert >= n.elev) return; // only lower, never raise
+      n.elev = Math.round(reqInvert * 100) / 100;
+      if (n.groundElev != null) {
+        n.maxDepth = Math.max(0.5, Math.round((n.groundElev - n.elev) * 100) / 100);
+      }
+    });
   }
 
   setProgress(pf,pl,60,'Adding pump stations...');await sleep(5);
@@ -11336,9 +11380,12 @@ async function swmmEnsembleExport() {
 // ═══════ QUICK SIM (Pressure Heatmap) ═══════
 let quickSimPressures = null;
 
-// Shared steady-state solve: loads the EPANET WASM engine if needed, solves the
-// current generatedINP, and returns a {nodeId: pressure} map. Used by Quick Sim
-// (heatmap) and by the auto-validation badge ladder. Caller manages _solverBusy.
+// steadyStateSolve — loads the EPANET WASM engine if needed, solves the
+// current generatedINP, and returns
+// { pressures, warnings }.  warnings[] contains any EPANET Warning messages
+// (e.g. "Valves cannot deliver enough flow", Warning 5) that the WASM engine
+// emits via console.warn.  Callers should surface these to the user rather
+// than silently discarding them.
 async function steadyStateSolve() {
   if (!solverModule || solverModule.type !== 'epanet-js') {
     await loadEpanetEngine();
@@ -11348,14 +11395,24 @@ async function steadyStateSolve() {
   const model = new window.__EpanetProject(ws);
   ws.writeFile('quicksim.inp', generatedINP);
   model.open('quicksim.inp', 'quicksim.rpt', 'quicksim.out');
+
+  // Temporarily capture console.warn so EPANET engine warnings are visible in the UI.
+  const solverWarnings = [];
+  const _origWarn = console.warn;
+  console.warn = (...args) => {
+    solverWarnings.push(args.map(a => (typeof a === 'string' ? a : String(a))).join(' '));
+    _origWarn.apply(console, args); // still forward to DevTools
+  };
+
   try {
     model.solveH();
     const pressures = {};
     for (let i = 1; i <= model.getCount(0); i++) {
       pressures[model.getNodeId(i)] = model.getNodeValue(i, 11);
     }
-    return pressures;
+    return { pressures, warnings: solverWarnings };
   } finally {
+    console.warn = _origWarn; // always restore, even on throw
     try { model.close(); } catch (e) {}
   }
 }
@@ -11374,16 +11431,23 @@ async function quickSim() {
     setSolverStatus('Quick Sim: running steady-state...');
     markExportIndeterminate('Quick Sim: running steady-state…', qsTok);
     const qsRid = _tierRunId;
-    const pressures = await steadyStateSolve();
+    const { pressures, warnings } = await steadyStateSolve();
     const junctions = networkData.nodes.filter(n => n.type === 'junction');
     quickSimPressures = pressures;
     if (qsRid === _tierRunId) { // only stamp tiers if no newer generation superseded this solve
-      setTier('solver', 'pass', 'Steady-state solve converged (Quick Sim)');
+      if (warnings && warnings.length) {
+        const warnText = warnings.map(w => w.replace(/^epanet-js\s*/i, '').trim()).filter(Boolean).join(' · ');
+        setTier('solver', 'warn', `Solve completed with warnings: ${warnText}`);
+        showToast('Solver warning: ' + warnText, 'warning', 7000);
+      } else {
+        setTier('solver', 'pass', 'Steady-state solve converged (Quick Sim)');
+      }
       applyPressureQA(pressures);
     }
     document.getElementById('showResults').checked = false;
     renderAll();
-    setSolverStatus(`✓ Quick Sim complete — pressure heatmap displayed (${junctions.length} nodes)`);
+    const warnSuffix = (warnings && warnings.length) ? ' (see solver warning)' : '';
+    setSolverStatus(`✓ Quick Sim complete — pressure heatmap displayed (${junctions.length} nodes)${warnSuffix}`);
     showToast('Pressure heatmap displayed on map', 'success');
     const mapTabBtn = document.querySelector('.preview-header .tab-btn');
     switchTab('map', mapTabBtn);
