@@ -8089,9 +8089,9 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
     a('[LID_CONTROLS]');
     const lidDefs = {
       BC:  ['Bio-Retention Cell',  'BC','SURFACE\t6\t0.15\t0.1\t1.0\t5','SOIL\t18\t0.45\t0.20\t0.10\t0.5\t10.0\t3.5','STORAGE\t12\t0.40\t0.5\t0','DRAIN\t0\t0.5\t6\t6\t0\t0'],
-      PP:  ['Permeable Pavement',  'PP','SURFACE\t0\t0.0\t0.01\t1.0\t5','PAVEMENT\t6\t0.15\t100\t40\t0','SOIL\t0\t0.5\t0.2\t0.1\t0.5\t10\t3.5','STORAGE\t12\t0.40\t0.5\t0','DRAIN\t0\t0.5\t6\t6\t0\t0'],
+      PP:  ['Permeable Pavement',  'PP','SURFACE\t0\t0.0\t0.01\t1.0\t5','PAVEMENT\t6\t0.15\t0\t100\t0','SOIL\t0\t0.5\t0.2\t0.1\t0.5\t10\t3.5','STORAGE\t12\t0.40\t0.5\t0','DRAIN\t0\t0.5\t6\t6\t0\t0'],
       IT:  ['Infiltration Trench', 'IT','SURFACE\t0\t0.0\t0.01\t1.0\t5','STORAGE\t36\t0.40\t0.5\t0','DRAIN\t0\t0.5\t6\t6\t0\t0'],
-      RB:  ['Rain Barrel',         'RB','STORAGE\t36\t0.0\t0\t0','DRAIN\t1\t0.5\t0\t6\t0\t0'],
+      RB:  ['Rain Barrel',         'RB','STORAGE\t36\t0.75\t0\t0','DRAIN\t1\t0.5\t0\t6\t0\t0'],
       VS:  ['Vegetative Swale',    'VS','SURFACE\t12\t0.15\t0.24\t1.0\t5'],
       GR:  ['Green Roof',          'GR','SURFACE\t3\t0.15\t0.1\t1.0\t5','SOIL\t6\t0.45\t0.20\t0.10\t0.5\t10.0\t3.5','DRAINMAT\t3\t0.4\t0.1'],
       RG:  ['Rain Garden',         'RG','SURFACE\t12\t0.15\t0.1\t1.0\t5','SOIL\t24\t0.45\t0.20\t0.10\t0.5\t10.0\t3.5','STORAGE\t6\t0.40\t0.5\t0']
@@ -8100,7 +8100,7 @@ function buildSWMMINP(cfg, swmm, nodes, outfalls, subcatchments, conduits, storm
       const def = lidDefs[lt];
       if(!def) return;
       a(`;;${def[0]}`);
-      a(`${def[1]}               ${lt==='PP'?'PP':'BC'==='BC'?'BC':lt==='IT'?'IT':lt==='RB'?'RB':lt==='VS'?'VS':lt==='GR'?'GR':'RG'}`);
+      a(`${def[1]}               ${lt}`);
       for(let i=2;i<def.length;i++) a(`${def[1]}               ${def[i]}`);
       nl();
     });
