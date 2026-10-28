@@ -652,6 +652,18 @@ fitness-of-output disclaimer, not a usage restriction.
 ### Changelog
 
 **v4.6 — 2026-07-20**
+- **SWMM LID export correction (2026-10-28; build label unchanged):**
+  `[LID_CONTROLS]` now writes the correct type code for all seven controls:
+  bio-retention cell (BC), permeable pavement (PP), infiltration trench (IT),
+  rain barrel (RB), vegetative swale (VS), green roof (GR), and rain garden (RG).
+  Previously, IT, RB, VS, GR, and RG were incorrectly labeled BC.
+  Permeable pavement now uses `PAVEMENT 6 0.15 0 100 0`, correcting the
+  impervious fraction and permeability columns. Rain barrels now use
+  `STORAGE 36 0.75 0 0`, replacing the invalid zero storage void ratio.
+  Export-text checks passed for each type individually, all seven together,
+  and LID-disabled output; a full SWMM simulation was not run for this correction.
+  Regenerate affected INP files to include these fixes; previously downloaded
+  files are not updated automatically.
 - **SWMM conduit slope correctness:** `makeConduit` no longer mutates shared node
   invert elevations mid-loop. All conduit slope requirements are now reconciled in
   a single post-pass that finds the most-demanding (lowest) required invert for each
